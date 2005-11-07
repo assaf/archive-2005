@@ -1,0 +1,103 @@
+= Reliable Messaging for Ruby
+
+This package provides reliable messaging and persistent queues for
+building asynchronous applications in Ruby.
+
+This release provides the following features:
+
+* Simple API.
+
+* Transction processing.
+
+* Disk-based and MySQL message stores.
+
+* Best effort, repeated and once-only delivery semantics.
+
+* Priority queues, message expiration, dead-letter queue.
+
+* Message selectors.
+
+* Local and remote queue managers using DRb.
+
+
+== Download
+
+The latest version of Reliable Messaging can be found at
+
+[TODO: change this]
+* http://rubyforge.org/project/showfiles.php?group_id=50
+* http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
+
+For online resources see
+
+* Wiki/bug tracking: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
+
+
+== Installation
+
+You can download the sources directly, or install the GEM package
+(recommended) with
+
+  gem install --remote reliable-msg
+
+To create the configuration file and queues using the disk-based
+adapter
+
+  queues install disk [--path <path>]
+
+The +path+ option specifies the directory for storing the queue index
+and messages. The default path is <tt>./queues</tt>.
+
+To create the configuration file and queues using the MySQL adapter
+
+  queues install mysql <host> <database> <user> <password>
+         [--port <port>] [--socket <socket>] [--prefix <prefix>]
+
+You must have MySQL libraries installed in order to use this adapter.
+It uses the supplied connection properties and creates tables in your
+database using the specified prefix. The default prefix is
++reliable_msg_+.
+
+For example
+
+  queues install mysql localhost my-db user secret
+
+The installation process creates a configuration file
+(<tt>queues.cfg</tt>) located in the same directory as the Gem. You
+can specify a different location with the +config+ option.
+
+Reliable messaging requires a UUID generator that is able to create
+universally unique identifiers. The UUID generator uses the
+<tt>uuid.state</tt> file to hold a unique machine identifier and a
+rolling sequence number. The <tt>uuid.state</tt> file is also created
+in the Gem directory.
+
+The unique machine identifier is obtained from one of the network
+card's MAC address, using either +ipconfig+ or +ifconfig+. If no MAC
+address can be found, you must edit the <tt>uuid.state</tt> file
+manually.
+
+
+== Simple Example
+
+Start the queue manager server
+
+  queues start
+
+Use the queue API in your application
+
+  require 'reliable-msg'
+
+  queue = Queue.new 'my-queue'
+  queue.put obj
+  msg = queue.get
+  assert msg.object == obj
+
+
+== License
+
+This package is licensed under the MIT license and/or the {Creative
+Commons Attribution-ShareAlike}[http://creativecommons.org/licenses/by-sa/2.5/legalcode].
+
+:include: MIT-LICENSE
+
