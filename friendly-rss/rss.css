@@ -1,0 +1,106 @@
+a {
+	color: #147;
+	text-decoration: none;
+}
+
+a:hover {
+	color: #08f; /* 0c4 */
+	text-decoration: underline;
+}
+
+a img {
+	border: none;
+	text-decoration: none;
+}
+
+abbr, acronym, .help {
+	border-bottom: 1px dotted #333;
+	cursor: help;
+}
+
+
+body, rss {
+	font-family: Verdana, 'Lucida Grande', Arial, Sans-Serif;
+	color: #333;
+	margin: 0px;
+	display:block;
+}
+
+channel {
+	width: 800px;
+	color: #000;
+	margin-left: auto;
+	margin-right: auto; 
+	font-size: 10pt;
+	background-color: white;
+	padding: 20px;
+	border: 2px solid #aaa;
+	border-top: 0px;
+	display:block;
+}
+
+channel title {
+	font-size: 140%;
+	font-weight: bold;
+	margin-bottom: 20px;
+	display:block;
+}
+
+channel description {
+	display:block;
+}
+
+channel item {
+	margin: 0 0 15px 0;
+	display:block;
+}
+
+channel item title {
+	font-size: 16px;
+	font-weight: bold;
+	margin: 5px 0 10px 0;
+	display: block;
+}
+
+description {
+	margin-left: 20px;
+	margin-bottom: 5px;
+}
+
+description blockquote {
+	margin-left: 10px;
+	background: #F4F4F4;
+	font-style: italic;
+	padding: 5px;
+}
+
+
+description p {
+	margin-top: 0px;
+	margin-bottom: 10px;
+}
+
+channel item category {
+	margin-right: 10px;
+	font-style: italic;
+}
+
+channel link, channel language, channel copyright, channel managingEditor, channel webMaster, channel docs, channel lastBuildDate, channel ttl {
+	display:none;
+}
+
+channel item link, channel item guid {
+	display:none;
+}
+
+.subscriptions {
+	margin: 0 50px 50px 50px;
+}
+
+.subscriptions p {
+	margin-bottom: 5px;
+}
+
+.subscriptions img {
+	vertical-align: middle;
+}

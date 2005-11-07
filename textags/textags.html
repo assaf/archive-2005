@@ -1,0 +1,50 @@
+<html>
+  <head>
+    <title>Textags help</title>
+    <meta name="copyright" content="&copy; 2005 Assaf Arkin">
+    <link rel="license" href="http://creativecommons.org/licenses/by-sa/2.5/" title="Creative Commons Attribution-ShareAlike" />
+    <style type="text/css">
+pre {
+  margin-left: 20px;
+	background: #F4F4F4;
+	font-style: italic;
+	padding: 10px;
+}
+    </style>
+  </head>
+  <body>
+    <h2>What are Textags?</h2>
+    <p><a href="http://www.labnotes.org/textags">Textags</a> are simple textual markups that use the first word in a line to indicate the meaning of what follows. They make it incredibly easy to create posts with rich data: events, people, tags.</p>
+    <p>Textags are plain text, they work in your browser, your e-mail, you can SMS them or write them on a piece of paper. But on the Web they acquire special formatting that software (search engines, browsers) can understand.</p>
+    <p>The rules are very simple. The Textag comes first on the line, followed by a colon and all the relevant information. Textags can be lower or upper case.</p>
+    <h3>The <kbd>tags:</kbd> Textag</h3>
+    <p>Use the <kbd>tags:</kbd> Textag to tag a post with one or more tags. Multiple tags can be separated with spaces or commas. If you want the tag to include spaces, enclose it in quotes. For example:</p>
+    <pre>tags: textags microformat wp-plugins</pre>
+    <h3>The <kbd>links:</kbd> Textag</h3>
+    <p>For quick links use the <kbd>links:</kbd> Textag. It takes a URL, which you can follow with a description. For example:</p>
+    <pre>link: http://www.labnotes.org/textags Check out Textags</pre>
+    <h3>Event Textags</h3>
+    <p>An event is defined by the Textag <kbd>when:</kbd>, which tells you when the event will happen. For example:</p>
+    <pre>when: September 5, 2005
+when: 9/5/2005 3pm
+when: saturday</pre>
+    <p>If you know when the event ends, follow the <kbd>when:</kbd> Textag with <kbd>ends:</kbd>. For example:</p>
+    <pre>when: September 5, 2005 5pm
+ends: 7pm</pre>
+    <p>You can provide a summary of the event using the <kbd>what:</kbd> Textag, which may come before or after <kbd>when:</kbd>/<kbd>ends:</kbd>. You can also use the following event Textags after the <kbd>when:</kbd>/<kbd>ends:</kbd>. These Textags are optional and may come in any order.</p>
+    <ul>
+    <li><kbd>url:</kbd> A URL for the event, e.g. a link to a site with more information</li>
+    <li><kbd>where:</kbd> The event's location, usually an address. You can put the venue, street address, city and state on separate lines.</li>
+    <li><kbd>contact:</kbd> Contact information, and just like location you can use several lines.</li>
+    </ul>
+    <p>For example:</p>
+    <pre>what: San Francisco Metroblogging Meet
+when: Friday, August 5, 2005 7:00 PM
+where: House of Shields
+39 New Montgomery St.
+San Francisco, CA
+url: http://upcoming.org/event/25962/</pre>
+    <h2>More Information</h2>
+    <p>Find out about updates and get involved on the <a href="http://www.labnotes.org/textags">Textags page</a>.<p>
+  </body>
+</html>
