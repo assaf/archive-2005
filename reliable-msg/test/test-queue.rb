@@ -1,21 +1,21 @@
 require 'test/unit'
-require 'rubysteps/queues/queue'
+require 'reliable-msg'
 
 class TestQueue < Test::Unit::TestCase
-
-    include RubySteps
 
     class AbortTransaction < Exception
     end
 
     def setup
-        @queue = Queue.new 'test-queue'
-        @dlq = Queue.new Queue::DLQ
-        Queue.manager
+        @queue = ReliableMsg::Queue.new 'test-queue'
+        @dlq = ReliableMsg::Queue.new ReliableMsg::Queue::DLQ
+        @manager = ReliableMsg::QueueManager.new
+        @manager.start
         clear
     end
 
     def teardown
+        @manager.stop
         clear
     end
 
@@ -49,9 +49,9 @@ class TestQueue < Test::Unit::TestCase
         # contrary to queue order.
         id1 = @queue.put 'first test message', :name=>"foo"
         id2 = @queue.put 'second test message', :name=>"bar"
-        msg = @queue.get(Queue.selector { name == 'bar' })
+        msg = @queue.get(ReliableMsg::Queue.selector { name == 'bar' })
         assert msg && msg.id == id2, "Failed to retrieve message by selector"
-        msg = @queue.get(Queue.selector { name == 'foo' })
+        msg = @queue.get(ReliableMsg::Queue.selector { name == 'foo' })
         assert msg && msg.id == id1, "Failed to retrieve message by selector"
         assert @queue.get.nil?, "Phantom message in queue"
     end

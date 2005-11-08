@@ -1,18 +1,16 @@
 $:.unshift File.join(File.dirname(__FILE__), "lib")
-require 'queues'
-#require_gem 'rubysteps-queues'
+require 'reliable-msg'
+#require_gem 'reliable-msg'
 #load 'queues'
 
-
-require 'rubysteps/queues/queuemanager'
-manager = RubySteps::Queues::QueueManager.new
+manager = ReliableMsg::QueueManager.new
 manager.start
 
 def benchmark text
     threads = []
     iters = 1000
     5.times do
-        queue = RubySteps::Queue.new "test"
+        queue = ReliableMsg::Queue.new "test"
         threads << Thread.new do
             begin
                 mid = queue.put text
@@ -43,7 +41,7 @@ class AbortTransaction < Exception
 end
 
 
-queue = RubySteps::Queue.new 'test'
+queue = ReliableMsg::Queue.new 'test'
 # cleanup
 while queue.get ; end
 mid = queue.put 'my-message'

@@ -2,7 +2,7 @@
 # = selector.rb - Deferred expression evaluation selector
 #
 # Author:: Assaf Arkin assaf.arkin@gmail.com
-# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubySteps
+# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
 # Copyright:: Copyright (c) 2005 Assaf Arkin
 # License:: Creative Commons Attribution-ShareAlike
 #
@@ -13,11 +13,9 @@
 # Changes:
 #++
 
-module RubySteps
+module ReliableMsg
 
-    module Queues
-
-        class Selector #:nodoc:
+    class Selector
 
             # We're using DRb. Unless we support respond_to? and instance_eval?, DRb will
             # refuse to marshal the selector as an argument and attempt to create a remote
@@ -40,7 +38,6 @@ module RubySteps
                 end
             end
 
-        end
 
         class Deferred #:nodoc:
 

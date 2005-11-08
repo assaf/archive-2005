@@ -2,7 +2,7 @@
 # = queue.rb - Reliable queue
 #
 # Author:: Assaf Arkin assaf.arkin@gmail.com
-# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubySteps
+# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
 # Copyright:: Copyright (c) 2005 Assaf Arkin
 # License:: Creative Commons Attribution-ShareAlike
 #
@@ -11,10 +11,10 @@
 #++
 
 require 'drb'
-require 'rubysteps/queues/selector'
+require 'reliable-msg/selector'
 
 
-module RubySteps
+module ReliableMsg
 
     # Use the Queue object to put messages in queues, or get messages from queues.
     #
@@ -38,10 +38,6 @@ module RubySteps
     #
     # See Queue.get and Queue.put for more examples.
     class Queue
-
-        PACKAGE = "RubySteps Queues"
-
-        VERSION = '1.0.9'
 
         ERROR_INVALID_SELECTOR = 'Selector must be message identifier (String), set of header name/value pairs (Hash), or nil' # :nodoc:
 
@@ -70,7 +66,7 @@ module RubySteps
         DEFAULT_MAX_RETRIES = 4;
 
         # Thread.current entry for queue transaction.
-        THREAD_CURRENT_TX = :rubysteps_queue_tx #:nodoc:
+        THREAD_CURRENT_TX = :reliable_msg_tx #:nodoc:
 
         # DRb URI for queue manager. You can override this to change the URI globally,
         # for all Queue objects that are not instantiated with an alternative URI.
@@ -265,7 +261,7 @@ module RubySteps
                 selector = case selector
                     when String
                         {:id=>selector}
-                    when Hash, Array, Queues::Selector
+                    when Hash, Array, Selector
                         selector
                     when nil
                         @selector
@@ -364,7 +360,7 @@ module RubySteps
         #   queue.selector { ... } -> selector
         #
         def selector &block
-            block ? Queues::Selector.new(&block) : @selector
+            block ? Selector.new(&block) : @selector
         end
 
         # Sets a default selector for this Queue. Affects all calls to Queue.get on this
@@ -386,10 +382,10 @@ module RubySteps
         def selector= value = nil, &block
             raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK if (value && block)
             if value
-                raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK unless value.instance_of?(Queues::Selector)
+                raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK unless value.instance_of?(Selector)
                 @selector = value
             elsif block
-                @selector = Queues::Selector.new &block
+                @selector = Selector.new &block
             else
                 @selector = nil
             end
@@ -403,7 +399,7 @@ module RubySteps
         #
         def self.selector &block
             raise ArgumentError, ERROR_NO_SELECTOR_BLOCK unless block
-            Queues::Selector.new &block
+            Selector.new &block
         end
 
     private

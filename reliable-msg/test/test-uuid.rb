@@ -1,9 +1,7 @@
 require 'test/unit'
-require 'rubysteps/uuid'
+require 'uuid'
 
 class TestUUID < Test::Unit::TestCase
-
-    include RubySteps
 
     def setup
     end
