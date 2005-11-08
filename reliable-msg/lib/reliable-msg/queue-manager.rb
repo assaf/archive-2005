@@ -21,29 +21,83 @@ require 'reliable-msg/message-store'
 
 module ReliableMsg
 
-    class Configuration #:nodoc:
+    class Config #:nodoc:
 
-        CONFIGURATION_FILE = "queues.cfg"
+        CONFIG_FILE = "queues.cfg"
 
-        def initialize file, config
-            @file = file
-            @config = config || {}
+        DEFAULT_STORE = MessageStore::Disk
+
+        DEFAULT_DRB = {
+            "port"=>Queue::DRB_PORT,
+            "acl"=>"allow 127.0.0.1"
+        }
+
+        def initialize logger = nil, file = nil
+            @logger = logger
+            # If no file specified, attempt to look for file in current directory.
+            # If not found in current directory, look for file in Gem directory.
+            unless file
+                file = if File.exist?(CONFIG_FILE)
+                    CONFIG_FILE
+                else
+                    file = File.expand_path(File.join(File.dirname(__FILE__), '..'))
+                    File.basename(file) == 'lib' ? File.join(file, '..', CONFIG_FILE) : File.join(file, CONFIG_FILE)
+                end
+            end
+            @file = File.expand_path(file)
+            @config = {}
+        end
+
+        def load_or_create
+            if File.exist?(@file)
+                @config= {}
+                File.open @file, "r" do |input|
+                    YAML.load_documents input do |doc|
+                        @config.merge! doc
+                    end
+                end
+                if @logger
+                    @logger.info "Loading queues configuration file from: #{@file}"
+                else
+                    warn "#{PACKAGE}: Loading queues configuration file from: #{@file}"
+                end
+            else
+                @config = {
+                    "store" => DEFAULT_STORE.configuration,
+                    "drb" => DEFAULT_DRB
+                }
+                save
+                if @logger
+                    @logger.info "Created queues configuration file in: #{@file}"
+                else
+                    warn "#{PACKAGE}: Created queues configuration file in: #{@file}"
+                end
+            end
+        end
+
+        def create_if_none
+            if File.exist?(@file)
+                puts "Found existing queues configuration file: #{@file}"
+                false
+            else
+                @config = {
+                    "store" => DEFAULT_STORE.configuration,
+                    "drb" => DEFAULT_DRB
+                }.merge(@config)
+                save
+                puts "Created queues configuration file: #{@file}"
+                true
+            end
+        end
+
+        def exist?
+            File.exist?(@file)
         end
 
         def save
-            File.open @file, "w" do |file|
-                YAML::dump @config, file
+            File.open @file, "w" do |output|
+                YAML::dump @config, output
             end
-        end
-
-        def Configuration.load file = CONFIGURATION_FILE
-            config = {}
-            File.exist?(file) and File.open file, "r" do |file|
-                YAML.load_documents file do |doc|
-                    config.merge! doc
-                end
-            end
-            Configuration.new file, config
         end
 
         def method_missing symbol, *args
@@ -56,14 +110,12 @@ module ReliableMsg
 
     end
 
+    Config.new nil, nil
+
 
     class QueueManager
 
         TX_TIMEOUT_CHECK_EVERY = 30
-
-        DEFAULT_STORE = "Disk"
-
-        DEFAULT_DRB_ACL = "allow 127.0.0.1"
 
         ERROR_SEND_MISSING_QUEUE = "You must specify a destination queue for the message" #:nodoc:
 
@@ -77,61 +129,39 @@ module ReliableMsg
 
         ERROR_INVALID_MESSAGE_STORE = "No or invalid message store configuration" #:nodoc:
 
-        ERROR_INVALID_MESSAGE_STORE_ADAPTER = "No message store adapter '%s' (note: case is not important)" #:nodoc:
-
         def initialize config = nil
             config ||= {}
-            begin
-                # Locks prevent two transactions from seeing the same message. We use a mutex
-                # to ensure that each transaction can determine the state of a lock before
-                # setting it.
-                @mutex = Mutex.new
-                @locks = {}
-                # Transactions use this hash to hold all inserted messages (:inserts), deleted
-                # messages (:deletes) and the transaction timeout (:timeout) until completion.
-                @transactions = {}
-                @configuration = Configuration.load
-                @logger = config[:logger]
-            rescue Exception=>error
-                puts error
-                raise error
-            end
+            # Locks prevent two transactions from seeing the same message. We use a mutex
+            # to ensure that each transaction can determine the state of a lock before
+            # setting it.
+            @mutex = Mutex.new
+            @locks = {}
+            # Transactions use this hash to hold all inserted messages (:inserts), deleted
+            # messages (:deletes) and the transaction timeout (:timeout) until completion.
+            @transactions = {}
+            @logger = config[:logger]
+            @config = Config.new @logger
+            @config.load_or_create
         end
 
         def start
             @mutex.synchronize do
                 return if @started
-                # Get the class used for the message store, followed by any configuration properties
-                # intended for that message store.
-                store_cls = ReliableMsg::MessageStore
-                store_cfg = @configuration.store || {"adapter"=>DEFAULT_STORE}
-                raise RuntimeError, ERROR_INVALID_MESSAGE_STORE unless store_cfg && store_cfg["adapter"]
-                store_cfg["adapter"].split('::').each do |part|
-                    part.downcase!
-                    name = store_cls.constants.find { |name| name.downcase == part }
-                    raise RuntimeError, format(ERROR_INVALID_MESSAGE_STORE_ADAPTER, part) unless name
-                    store_cls = store_cls.const_get name
-                end
-                @store = store_cls.new @logger, store_cfg
+                store = @config.store || DEFAULT_STORE.configuration
+                @store = MessageStore.get store, @logger
                 if @logger
-                    @logger.info "Using message store #{store_cfg['adapter']}"
+                    @logger.info "Using message store #{@store.class.store_type}"
                 else
-                    warn "#{PACKAGE}: Using message store #{store_cfg['adapter']}"
+                    warn "#{PACKAGE}: Using message store #{@store.class.store_type}"
                 end
 
                 # Get the DRb URI (or default) and create a DRb server.
-                if @configuration.drb
-                    port = @configuration.drb["port"] || Queue::DRB_PORT
-                    acl = @configuration.drb["acl"] || DEFAULT_DRB_ACL
-                else
-                    acl = DEFAULT_DRB_ACL
-                    port = Queue::DRB_PORT
-                end
-                @drb_server = DRb::DRbServer.new "druby://localhost:#{port}", self, :tcp_acl=>ACL.new(acl.split(' '), ACL::ALLOW_DENY), :verbose=>true
+                drb = Config::DEFAULT_DRB.merge(@config.drb)
+                @drb_server = DRb::DRbServer.new "druby://localhost:#{drb['port']}", self, :tcp_acl=>ACL.new(drb['acl'].split(' '), ACL::ALLOW_DENY), :verbose=>true
                 if @logger
-                    @logger.info "Accepting requests at 'druby://localhost:#{port}'"
+                    @logger.info "Accepting requests at 'druby://localhost:#{drb['port']}'"
                 else
-                    warn "#{PACKAGE}: Accepting requests at 'druby://localhost:#{port}'"
+                    warn "#{PACKAGE}: Accepting requests at 'druby://localhost:#{drb['port']}'"
                 end
 
                 # Create a background thread to stop timed-out transactions.
@@ -178,6 +208,10 @@ puts 'BLAFKJADFKADJFDAKJ'
                     warn "#{PACKAGE}: Stopped queue manager at '#{drb_uri}'"
                 end
             end
+        end
+
+        def alive?
+            @drb_server.alive?
         end
 
         def queue args

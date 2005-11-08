@@ -16,16 +16,31 @@ require 'reliable-msg/queue'
 
 module ReliableMsg
 
-    module MessageStore #:nodoc:
+    module MessageStore
+
+        ERROR_INVALID_MESSAGE_STORE = "No message store '%s' available (note: case is not important)" #:nodoc:
+
+        def self.get config, logger = nil
+            cls = Base.from_name(config["type"])
+            raise RuntimeError, format(ERROR_INVALID_MESSAGE_STORE, config["type"]) unless cls
+            cls.new config, logger
+        end
+
 
         class Base #:nodoc:
 
-            def initialize logger
+            @@stores = {}
+
+            def initialize logger = nil
                 @logger = logger
                 @mutex = Mutex.new
                 @queues = {Queue::DLQ=>[]}
                 # TODO: proper cache
                 @cache = {}
+            end
+
+            def self.from_name name
+                @@stores[name]
             end
 
             def transaction &block
@@ -114,17 +129,30 @@ module ReliableMsg
                 require 'active_record/vendor/mysql'
             end
 
-            DEFAULT_PREFIX = 'reliable_msg_';
 
             class MySQL < Base #:nodoc:
 
+                DEFAULT_PREFIX = 'reliable_msg_';
+
                 THREAD_CURRENT_MYSQL = :reliable_msg_mysql #:nodoc:
 
-                def initialize logger, config
+                TYPE = self.name.split('::').last.downcase
+
+                @@stores[TYPE] = self
+
+                def initialize config, logger
                     super logger
                     @connect = [config['host'], config['username'], config['password'], config['database'], config['port'], config['socket']]
                     @prefix = config['prefix'] || DEFAULT_PREFIX
                     load_index
+                end
+
+                def self.store_type
+                    TYPE
+                end
+
+                def self.configuration host, database, username, password
+                    {"type"=>TYPE, "host"=>host, "database"=>database, "username"=>username, "password"=>password}
                 end
 
             protected
@@ -191,7 +219,12 @@ module ReliableMsg
         rescue LoadError
         end
 
+
         class Disk < Base #:nodoc:
+
+            TYPE = self.name.split('::').last.downcase
+
+            @@stores[TYPE] = self
 
             DEFAULT_PATH = 'queues'
 
@@ -199,7 +232,7 @@ module ReliableMsg
 
             MAX_OPEN_FILES = 20
 
-            def initialize logger, config
+            def initialize config, logger
                 super logger
                 @version = VERSION
                 @fsync = config['fsync']
@@ -227,8 +260,19 @@ module ReliableMsg
                     @last_block = @last_block_end = 8
                     # Save. This just prevents us from starting with an empty file, and to
                     # enable load_index().
-                    update [], []
+                    update [], [], []
                 end
+            end
+
+            def install
+            end
+
+            def self.configuration
+                {"type"=>TYPE, "path"=>File.expand_path(DEFAULT_PATH)}
+            end
+
+            def self.store_type
+                TYPE
             end
 
         protected

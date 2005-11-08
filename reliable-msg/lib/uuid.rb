@@ -240,7 +240,7 @@ module UUID
     # Works for UNIX (ifconfig) and Windows (ipconfig). Creates the uuid.state file in the
     # installation directory (typically the GEM's lib).
     def self.setup
-        file = File.expand_path(File.join(File.dirname(__FILE__), '..', '..'))
+        file = File.expand_path(File.dirname(__FILE__))
         if File.basename(file) == 'lib'
             file = File.join(file, '..', STATE_FILE)
         else
@@ -296,7 +296,7 @@ private
             state_file = if File.exist? STATE_FILE
                 STATE_FILE
             else
-                file = File.expand_path(File.join(File.dirname(__FILE__), '..', '..'))
+                file = File.expand_path(File.dirname(__FILE__))
                 if File.basename(file) == 'lib'
                     file = File.join(file, '..', STATE_FILE)
                 else
