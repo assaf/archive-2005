@@ -53,7 +53,12 @@ EOF
                             manager.stop
                         end
                     when 'stop'
-                        DRbObject.new(nil, Queue::DEFAULT_DRB_URI).stop
+                        drb_uri = Queue::DEFAULT_DRB_URI
+                        begin
+                            DRbObject.new(nil, drb_uri).stop
+                        rescue DRb::DRbConnError =>error
+                            puts "No queue manager at #{drb_uri}"
+                        end
                     else
                         raise InvalidUsage
                     end

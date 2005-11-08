@@ -241,13 +241,10 @@ module UUID
     # installation directory (typically the GEM's lib).
     def self.setup
         file = File.expand_path(File.dirname(__FILE__))
-        if File.basename(file) == 'lib'
-            file = File.join(file, '..', STATE_FILE)
-        else
-            file = File.join(file, STATE_FILE)
-        end
+        file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
+        file = File.expand_path(file)
         if File.exist? file
-            puts "#{PACKAGE}: Found an existing UUID state file: #{File.expand_path file}"
+            puts "#{PACKAGE}: Found an existing UUID state file: #{file}"
         else
             puts "#{PACKAGE}: No UUID state file found, attempting to create one for you:"
             # Run ifconfig for UNIX, or ipconfig for Windows.
@@ -277,9 +274,10 @@ module UUID
                     output.puts "mac_addr: #{addresses[0]}"
                     output.puts format("sequence: \"0x%04x\"", rand(0x10000))
                 end
-                puts "Created a new UUID state file: #{File.expand_path file}"
+                puts "Created a new UUID state file: #{file}"
             end
         end
+        file
     end
 
 private
@@ -293,17 +291,12 @@ private
         # If called from configuration, use the specified or default state file.
         state_file = (config && config[:state_file]) || @@state_file
         unless state_file
-            state_file = if File.exist? STATE_FILE
+            state_file = if File.exist?(STATE_FILE)
                 STATE_FILE
             else
                 file = File.expand_path(File.dirname(__FILE__))
-                if File.basename(file) == 'lib'
-                    file = File.join(file, '..', STATE_FILE)
-                else
-                    file = File.join(file, STATE_FILE)
-                end
-                setup if !File.exist?(file)
-                File.exist?(file) ? file : STATE_FILE
+                file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
+                setup unless File.exist?(file)
             end
         end
         begin
