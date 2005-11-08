@@ -19,7 +19,7 @@ require 'logger'
 
 
 
-# === Generating UUIDs
+# == Generating UUIDs
 #
 # Call UUID.new to generate and return a new UUID. The method returns a string in one of three
 # formats. The default format is 36 characters long, and contains the 32 hexadecimal octets and
@@ -31,24 +31,8 @@ require 'logger'
 #    p UUID.new
 #  end
 #
-# === Configuring the UUID generator
-#
-# The UUID generator requires a state file which maintains the MAC address and next sequence
-# number to use. By default, the UUID generator will use the file <tt>uuid.state</tt> contained
-# in the current directory, or in the installation directory.
-#
-# Use UUID.config to specify a different location for the UUID state file. If the UUID state file
-# does not exist, you can create one manually, or use UUID.config with the options <tt>:sequence</tt>
-# and <tt>:mac_addr</tt>.
-#
-# A UUID state file looks like:
-#   ---
-#   last_clock: "0x28227f76122d80"
-#   mac_addr: 08-0E-46-21-4B-35
-#   sequence: "0x1639"
-#
 # ---
-# === UUIDs in Brief
+# == UUIDs in Brief
 #
 # UUID (universally unique identifier) are guaranteed to be unique across time and space.
 #
@@ -73,6 +57,22 @@ require 'logger'
 # colon, e.g. '<tt>08-0E-46-21-4B-35</tt>'
 #
 # For more information see {RFC 4122}[http://www.ietf.org/rfc/rfc4122.txt].
+#
+# == Configuring the UUID generator
+#
+# The UUID generator requires a state file which maintains the MAC address and next sequence
+# number to use. By default, the UUID generator will use the file <tt>uuid.state</tt> contained
+# in the current directory, or in the installation directory.
+#
+# Use UUID.config to specify a different location for the UUID state file. If the UUID state file
+# does not exist, you can create one manually, or use UUID.config with the options <tt>:sequence</tt>
+# and <tt>:mac_addr</tt>.
+#
+# A UUID state file looks like:
+#   ---
+#   last_clock: "0x28227f76122d80"
+#   mac_addr: 08-0E-46-21-4B-35
+#   sequence: "0x1639"
 #
 #
 #--

@@ -1,5 +1,5 @@
 #
-# = queuemanager.rb - Reliable queue manager
+# = queue-manager.rb - Queue manager
 #
 # Author:: Assaf Arkin assaf.arkin@gmail.com
 # Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM

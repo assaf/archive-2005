@@ -1,5 +1,5 @@
 #
-# = masterindex.rb - Reliable queue manager
+# = message-store.rb - Queue manager storage adapters
 #
 # Author:: Assaf Arkin assaf.arkin@gmail.com
 # Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM

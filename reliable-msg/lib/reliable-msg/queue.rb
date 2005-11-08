@@ -1,5 +1,5 @@
 #
-# = queue.rb - Reliable queue
+# = queue.rb - Reliable queue client API
 #
 # Author:: Assaf Arkin assaf.arkin@gmail.com
 # Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
@@ -16,6 +16,8 @@ require 'reliable-msg/selector'
 
 module ReliableMsg
 
+    # == Reliable Messaging Client API
+    #
     # Use the Queue object to put messages in queues, or get messages from queues.
     #
     # You can create a Queue object that connects to a single queue by passing the
@@ -248,6 +250,8 @@ module ReliableMsg
         #   queue.get([selector]) -> msg or nil
         #   queue.get([selector]) {|msg| ... } -> obj
         #
+        # See: Message
+        #
         def get selector = nil, &block
             tx = old_tx = Thread.current[THREAD_CURRENT_TX]
             # If block, begin a new transaction.
@@ -443,9 +447,10 @@ module ReliableMsg
     end
 
 
-    # A message retrieved from the Queue.
+    # == Retrieved Message
     #
-    # Provides access to the message identifier, headers and object.
+    # Returned from Queue.get holding the last message retrieved from the
+    # queue and providing access to the message identifier, headers and object.
     #
     # For example:
     #   while queue.get do |msg|

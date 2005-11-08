@@ -13,7 +13,7 @@
 # Changes:
 #++
 
-module ReliableMsg
+module ReliableMsg #:nodoc:
 
     class Selector
 
