@@ -20,27 +20,64 @@ module ReliableMsg
 
         ERROR_INVALID_MESSAGE_STORE = "No message store '%s' available (note: case is not important)" #:nodoc:
 
-        def self.get config, logger = nil
-            cls = Base.from_name(config["type"])
-            raise RuntimeError, format(ERROR_INVALID_MESSAGE_STORE, config["type"]) unless cls
-            cls.new config, logger
-        end
+        # Base class for message store.
+        class Base
 
+            ERROR_INVALID_MESSAGE_STORE = "No message store '%s' available (note: case is not important)" #:nodoc:
 
-        class Base #:nodoc:
+            @@stores = {} #:nodoc:
 
-            @@stores = {}
-
-            def initialize logger = nil
+            def initialize logger
                 @logger = logger
-                @mutex = Mutex.new
-                @queues = {Queue::DLQ=>[]}
-                # TODO: proper cache
-                @cache = {}
             end
 
-            def self.from_name name
-                @@stores[name]
+            # Returns the message store type name.
+            #
+            # :call-seq:
+            #   store.type -> string
+            #
+            def type
+                raise RuntimeException, "Not implemented"
+            end
+
+            # Set up the message store. Create files, database tables, etc.
+            #
+            # :call-seq:
+            #   store.setup
+            #
+            def setup
+            end
+
+            # Returns the message store configuration as a hash.
+            #
+            # :call-seq:
+            #   store.configuration -> hash
+            #
+            def configuration
+                raise RuntimeException, "Not implemented"
+            end
+
+            # Activates the message store. Call this method before using the
+            # message store.
+            #
+            # :call-seq:
+            #   store.activate
+            #
+            def activate
+                @mutex = Mutex.new
+                @queues = {Queue::DLQ=>[]}
+                @cache = {}
+                # TODO: add recovery logic
+            end
+
+            # Deactivates the message store. Call this method when done using
+            # the message store.
+            #
+            # :call-seq:
+            #   store.deactivate
+            #
+            def deactivate
+                @mutex = @queues = @cache = nil
             end
 
             def transaction &block
@@ -48,11 +85,7 @@ module ReliableMsg
                 begin
                     update inserts, deletes, dlqs unless inserts.empty? && deletes.empty? && dlqs.empty?
                 rescue Exception=>error
-                    if @logger
-                        @logger.error error
-                    else
-                        warn "#{PACKAGE}: #{error}"
-                    end
+                    @logger.error error
                     # If an error occurs, the queue may be out of synch with the store.
                     # Empty the cache and reload the queue, before raising the error.
                     @cache = {}
@@ -75,6 +108,19 @@ module ReliableMsg
                     end
                 end
                 return nil
+            end
+
+            # Returns a message store from the specified configuration (previously
+            # created with configure).
+            #
+            # :call-seq:
+            #   Base::configure(config, logger) -> store
+            #
+            def self.configure config, logger
+                type = config["type"].downcase
+                cls = @@stores[type]
+                raise RuntimeError, format(ERROR_INVALID_MESSAGE_STORE, type) unless cls
+                cls.new config, logger
             end
 
         protected
@@ -122,119 +168,25 @@ module ReliableMsg
         end
 
 
-        begin
-            begin
-                require 'mysql'
-            rescue LoadError
-                require 'active_record/vendor/mysql'
-            end
-
-
-            class MySQL < Base #:nodoc:
-
-                DEFAULT_PREFIX = 'reliable_msg_';
-
-                THREAD_CURRENT_MYSQL = :reliable_msg_mysql #:nodoc:
-
-                TYPE = self.name.split('::').last.downcase
-
-                @@stores[TYPE] = self
-
-                def initialize config, logger
-                    super logger
-                    @connect = [config['host'], config['username'], config['password'], config['database'], config['port'], config['socket']]
-                    @prefix = config['prefix'] || DEFAULT_PREFIX
-                    load_index
-                end
-
-                def self.store_type
-                    TYPE
-                end
-
-                def self.configuration host, database, username, password
-                    {"type"=>TYPE, "host"=>host, "database"=>database, "username"=>username, "password"=>password}
-                end
-
-            protected
-
-                def update inserts, deletes, dlqs
-                    mysql = connection
-                    mysql.query "BEGIN"
-                    begin
-                        inserts.each do |insert|
-                            mysql.query "INSERT INTO `#{@prefix}queues` (id,queue,headers,object) VALUES('#{connection.quote  insert[:id]}','#{connection.quote insert[:queue]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
-                        end
-                        ids = deletes.collect {|delete| "'#{delete[:id]}'" }
-                        if !ids.empty?
-                            mysql.query "DELETE FROM `#{@prefix}queues` WHERE id IN (#{ids.join ','})"
-                        end
-                        dlqs.each do |dlq|
-                            mysql.query "UPDATE `#{@prefix}queues` SET queue='#{Queue::DLQ}' WHERE id='#{connection.quote dlq[:id]}'"
-                        end
-                        mysql.query "COMMIT"
-                    rescue Exception=>error
-                        mysql.query "ROLLBACK"
-                        raise error
-                    end
-                    super
-                end
-
-                def load_index
-                    connection.query "SELECT id,queue,headers FROM `#{@prefix}queues`" do |result|
-                        while row = result.fetch_row
-                            queue = @queues[row[1]] ||= []
-                            headers = Marshal::load row[2]
-                            # Add element based on priority, higher priority comes first.
-                            priority = headers[:priority]
-                            if priority > 0
-                                queue.each_index do |idx|
-                                    if queue[idx][:priority] < priority
-                                        queue[idx, 0] = headers
-                                        break
-                                    end
-                                end
-                            else
-                                queue << headers
-                            end
-                        end
-                    end
-                end
-
-                def load id, queue
-                    message = nil
-                    connection.query "SELECT object FROM `#{@prefix}queues` WHERE id='#{id}'" do |result|
-                        message = if row = result.fetch_row
-                            row[0]
-                        end
-                    end
-                    message
-                end
-
-                def connection
-                    Thread.current[THREAD_CURRENT_MYSQL] ||= Mysql.new *@connect
-                end
-
-            end
-
-        rescue LoadError
-        end
-
-
         class Disk < Base #:nodoc:
 
             TYPE = self.name.split('::').last.downcase
 
             @@stores[TYPE] = self
 
+            # Default path where index and messages are stored.
             DEFAULT_PATH = 'queues'
 
-            VERSION = '1.0'
-
+            # Maximum number of open files.
             MAX_OPEN_FILES = 20
+
+            DEFAULT_CONFIG = {
+                "type"=>TYPE,
+                "path"=>DEFAULT_PATH
+            }
 
             def initialize config, logger
                 super logger
-                @version = VERSION
                 @fsync = config['fsync']
                 # file_map maps messages (by ID) to files. The value is a two-item array: the file
                 # name and, if opened, the File object. file_free keeps a list of all currently
@@ -242,13 +194,34 @@ module ReliableMsg
                 @file_map = {}
                 @file_free = []
                 # Make sure the path points to the queue directory, and the master index is writeable.
-                path = config['path'] || DEFAULT_PATH
-                Dir.mkdir path unless File.exist?(path)
-                raise RuntimeError, "The path '#{path}' is not a directory" unless File.directory?(path)
-                @path = path
-                index = "#{path}/master.idx"
+                @path = File.expand_path(config['path'] || DEFAULT_PATH)
+            end
+
+            def type
+                TYPE
+            end
+
+            def setup
+                if File.exist?(@path)
+                    raise RuntimeError, "The path '#{@path}' is not a directory" unless File.directory?(@path)
+                    false
+                else
+                    Dir.mkdir @path
+                    true
+                end
+            end
+
+            def configuration
+                { "type"=>TYPE, "path"=>@path }
+            end
+
+            def activate
+                super
+                Dir.mkdir @path unless File.exist?(@path)
+                raise RuntimeError, "The path '#{@path}' is not a directory" unless File.directory?(@path)
+                index = "#{@path}/master.idx"
                 if File.exist? index
-                    raise RuntimeError, "Cannot write to master index file '#{path}'" unless File.writable?(path)
+                    raise RuntimeError, "Cannot write to master index file '#{index}'" unless File.writable?(index)
                     @file = File.open index, "r+"
                     @file.flock File::LOCK_EX
                     @file.binmode # Things break if you forget binmode on Windows.
@@ -264,15 +237,16 @@ module ReliableMsg
                 end
             end
 
-            def install
-            end
-
-            def self.configuration
-                {"type"=>TYPE, "path"=>File.expand_path(DEFAULT_PATH)}
-            end
-
-            def self.store_type
-                TYPE
+            def deactivate
+                @file.close
+                @file_map.each_pair do |id, map|
+                    map[1].close if map[1]
+                end
+                @file_free.each do |map|
+                    map[1].close if map[1]
+                end
+                @file_map = @file_free = nil
+                super
             end
 
         protected
@@ -383,6 +357,151 @@ module ReliableMsg
                 file.sysread file.stat.size
             end
 
+        end
+
+
+        begin
+
+            # Make sure we have a MySQL library before creating this class,
+            # worst case we end up with a disk-based message store. Try the
+            # native MySQL library, followed by the Rails MySQL library.
+            begin
+                require 'mysql'
+            rescue LoadError
+                require 'active_record/vendor/mysql'
+            end
+
+            class MySQL < Base #:nodoc:
+
+                TYPE = self.name.split('::').last.downcase
+
+                @@stores[TYPE] = self
+
+                # Default prefix for tables in the database.
+                DEFAULT_PREFIX = 'reliable_msg_';
+
+                # Reference to an open MySQL connection held in the current thread.
+                THREAD_CURRENT_MYSQL = :reliable_msg_mysql #:nodoc:
+
+                def initialize config, logger
+                    super logger
+                    @config = { :host=>config['host'], :username=>config['username'], :password=>config['password'],
+                        :database=>config['database'], :port=>config['port'], :socket=>config['socket'] }
+                    @prefix = config['prefix'] || DEFAULT_PREFIX
+                    @queues_table = "#{@prefix}queues"
+                end
+
+                def type
+                    TYPE
+                end
+
+                def setup
+                    mysql = connection
+                    exists = false
+                    mysql.query "SHOW TABLES" do |result|
+                        while row = result.fetch_row
+                            exists = true if row[0] == @queues_table
+                        end
+                    end
+                    if exists
+                        false
+                    else
+                        sql = File.open File.join(File.dirname(__FILE__), "mysql.sql"), "r" do |input|
+                            input.readlines.join
+                        end
+                        sql.gsub! DEFAULT_PREFIX, @prefix
+                        mysql.query sql
+                        true
+                    end
+                end
+
+                def configuration
+                    config = { "type"=>TYPE, "host"=>@config[:host], "username"=>@config[:username],
+                        "password"=>@config[:password], "database"=>@config[:database] }
+                    config["port"] = @config[:port] if @config[:port]
+                    config["socket"] = @config[:socket] if @config[:socket]
+                    config["prefix"] = @config[:prefix] if @config[:prefix]
+                    config
+                end
+
+                def activate
+                    super
+                    load_index
+                end
+
+                def deactivate
+                    Thread.list.each do |thread|
+                        if conn = thread[THREAD_CURRENT_MYSQL]
+                            thread[THREAD_CURRENT_MYSQL] = nil
+                            conn.close
+                        end
+                    end
+                    super
+                end
+
+            protected
+
+                def update inserts, deletes, dlqs
+                    mysql = connection
+                    mysql.query "BEGIN"
+                    begin
+                        inserts.each do |insert|
+                            mysql.query "INSERT INTO `#{@queues_table}` (id,queue,headers,object) VALUES('#{connection.quote  insert[:id]}','#{connection.quote insert[:queue]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
+                        end
+                        ids = deletes.collect {|delete| "'#{delete[:id]}'" }
+                        if !ids.empty?
+                            mysql.query "DELETE FROM `#{@queues_table}` WHERE id IN (#{ids.join ','})"
+                        end
+                        dlqs.each do |dlq|
+                            mysql.query "UPDATE `#{@queues_table}` SET queue='#{Queue::DLQ}' WHERE id='#{connection.quote dlq[:id]}'"
+                        end
+                        mysql.query "COMMIT"
+                    rescue Exception=>error
+                        mysql.query "ROLLBACK"
+                        raise error
+                    end
+                    super
+                end
+
+                def load_index
+                    connection.query "SELECT id,queue,headers FROM `#{@queues_table}`" do |result|
+                        while row = result.fetch_row
+                            queue = @queues[row[1]] ||= []
+                            headers = Marshal::load row[2]
+                            # Add element based on priority, higher priority comes first.
+                            priority = headers[:priority]
+                            if priority > 0
+                                queue.each_index do |idx|
+                                    if queue[idx][:priority] < priority
+                                        queue[idx, 0] = headers
+                                        break
+                                    end
+                                end
+                            else
+                                queue << headers
+                            end
+                        end
+                    end
+                end
+
+                def load id, queue
+                    message = nil
+                    connection.query "SELECT object FROM `#{@queues_table}` WHERE id='#{id}'" do |result|
+                        message = if row = result.fetch_row
+                            row[0]
+                        end
+                    end
+                    message
+                end
+
+                def connection
+                    Thread.current[THREAD_CURRENT_MYSQL] ||= Mysql.new @config[:host], @config[:username], @config[:password],
+                        @config[:database], @config[:port], @config[:socket]
+                end
+
+            end
+
+        rescue LoadError
         end
 
     end

@@ -25,14 +25,14 @@ module ReliableMsg
 
         CONFIG_FILE = "queues.cfg"
 
-        DEFAULT_STORE = MessageStore::Disk
+        DEFAULT_STORE = MessageStore::Disk::DEFAULT_CONFIG
 
         DEFAULT_DRB = {
             "port"=>Queue::DRB_PORT,
             "acl"=>"allow 127.0.0.1"
         }
 
-        def initialize logger = nil, file = nil
+        def initialize file, logger = nil
             @logger = logger
             # If no file specified, attempt to look for file in current directory.
             # If not found in current directory, look for file in Gem directory.
@@ -56,42 +56,36 @@ module ReliableMsg
                         @config.merge! doc
                     end
                 end
-                if @logger
-                    @logger.info "Loading queues configuration file from: #{@file}"
-                else
-                    warn "#{PACKAGE}: Loading queues configuration file from: #{@file}"
-                end
+                @logger.info "Loaded queues configuration from: #{@file}"
             else
                 @config = {
-                    "store" => DEFAULT_STORE.configuration,
+                    "store" => DEFAULT_STORE,
                     "drb" => DEFAULT_DRB
                 }
                 save
-                if @logger
-                    @logger.info "Created queues configuration file in: #{@file}"
-                else
-                    warn "#{PACKAGE}: Created queues configuration file in: #{@file}"
-                end
+                @logger.info "Created queues configuration file in: #{@file}"
             end
         end
 
         def create_if_none
             if File.exist?(@file)
-                puts "Found existing queues configuration file: #{@file}"
                 false
             else
                 @config = {
-                    "store" => DEFAULT_STORE.configuration,
+                    "store" => DEFAULT_STORE,
                     "drb" => DEFAULT_DRB
                 }.merge(@config)
                 save
-                puts "Created queues configuration file: #{@file}"
                 true
             end
         end
 
         def exist?
             File.exist?(@file)
+        end
+
+        def path
+            @file
         end
 
         def save
@@ -110,8 +104,6 @@ module ReliableMsg
 
     end
 
-    Config.new nil, nil
-
 
     class QueueManager
 
@@ -127,10 +119,8 @@ module ReliableMsg
 
         ERROR_NO_TRANSACTION = "Transaction %s has completed, or was aborted" #:nodoc:
 
-        ERROR_INVALID_MESSAGE_STORE = "No or invalid message store configuration" #:nodoc:
-
-        def initialize config = nil
-            config ||= {}
+        def initialize options = nil
+            options ||= {}
             # Locks prevent two transactions from seeing the same message. We use a mutex
             # to ensure that each transaction can determine the state of a lock before
             # setting it.
@@ -139,30 +129,25 @@ module ReliableMsg
             # Transactions use this hash to hold all inserted messages (:inserts), deleted
             # messages (:deletes) and the transaction timeout (:timeout) until completion.
             @transactions = {}
-            @logger = config[:logger]
-            @config = Config.new @logger
-            @config.load_or_create
+            @logger = options[:logger] || Logger.new(STDOUT)
+            @config = Config.new options[:config], @logger
         end
 
         def start
             @mutex.synchronize do
                 return if @started
-                store = @config.store || DEFAULT_STORE.configuration
-                @store = MessageStore.get store, @logger
-                if @logger
-                    @logger.info "Using message store #{@store.class.store_type}"
-                else
-                    warn "#{PACKAGE}: Using message store #{@store.class.store_type}"
-                end
 
-                # Get the DRb URI (or default) and create a DRb server.
-                drb = Config::DEFAULT_DRB.merge(@config.drb)
-                @drb_server = DRb::DRbServer.new "druby://localhost:#{drb['port']}", self, :tcp_acl=>ACL.new(drb['acl'].split(' '), ACL::ALLOW_DENY), :verbose=>true
-                if @logger
-                    @logger.info "Accepting requests at 'druby://localhost:#{drb['port']}'"
-                else
-                    warn "#{PACKAGE}: Accepting requests at 'druby://localhost:#{drb['port']}'"
-                end
+                # Get the message store based on the configuration, or default store.
+                @store = MessageStore::Base.configure(@config.store || Config::DEFAULT_STORE, @logger)
+                @logger.info "Using message store #{@store.type}"
+                @store.activate
+
+                # Get the DRb URI from the configuration, or use the default. Create a DRb server.
+                drb = Config::DEFAULT_DRB
+                drb.merge(@config.drb) if @config.drb
+                drb_uri = "druby://localhost:#{drb['port']}"
+                @drb_server = DRb::DRbServer.new drb_uri, self, :tcp_acl=>ACL.new(drb["acl"].split(" "), ACL::ALLOW_DENY), :verbose=>true
+                @logger.info "Accepting requests at '#{drb_uri}'"
 
                 # Create a background thread to stop timed-out transactions.
                 @timeout_thread = Thread.new do
@@ -172,11 +157,7 @@ module ReliableMsg
                             @transactions.each_pair do |tid, tx|
                                 if tx[:timeout] <= time
                                     begin
-                                        if @logger
-                                            @logger.warn "Timeout: aborting transaction #{tid}"
-                                        else
-                                            warn "#{PACKAGE}: Timeout: aborting transaction #{tid}"
-                                        end
+                                        @logger.warn "Timeout: aborting transaction #{tid}"
                                         abort tid
                                     rescue
                                     end
@@ -185,7 +166,6 @@ module ReliableMsg
                             sleep TX_TIMEOUT_CHECK_EVERY
                         end
                     rescue Exception=>error
-puts 'BLAFKJADFKADJFDAKJ'
                         retry
                     end
                 end
@@ -199,19 +179,22 @@ puts 'BLAFKJADFKADJFDAKJ'
         def stop
             @mutex.synchronize do
                 return unless @started
+
+                # Prevent transactions from timing out while we take down the server.
+                @timeout_thread.terminate
+                # Shutdown DRb server to prevent new requests from being processed.
                 drb_uri = @drb_server.uri
                 @drb_server.stop_service
-                @timeout_thread.terminate
-                if @logger
-                    @logger.info "Stopped queue manager at '#{drb_uri}'"
-                else
-                    warn "#{PACKAGE}: Stopped queue manager at '#{drb_uri}'"
-                end
+                # Deactivate the message store.
+                @store.deactivate
+                @store = nil
+                @drb_server = @store = @timeout_thread = nil
+                @logger.info "Stopped queue manager at '#{drb_uri}'"
             end
         end
 
         def alive?
-            @drb_server.alive?
+            @drb_server && @drb_server.alive?
         end
 
         def queue args
@@ -397,11 +380,7 @@ puts 'BLAFKJADFKADJFDAKJ'
                 end
             end
             @transactions.delete tid
-            if @logger
-                @logger.warn "Transaction #{tid} aborted"
-            else
-                warn "#{PACKAGE}: Transaction #{tid} aborted"
-            end
+            @logger.warn "Transaction #{tid} aborted"
         end
 
     private

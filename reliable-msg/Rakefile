@@ -154,7 +154,3 @@ task :update_version => [:prerelease] do
 end
 
 
-desc "Install the application"
-task :install do
-  ruby "install.rb"
-end

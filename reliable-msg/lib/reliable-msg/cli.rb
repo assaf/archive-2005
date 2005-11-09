@@ -21,13 +21,26 @@ module ReliableMsg
     class CLI
 
         USAGE = <<-EOF
-Usage:
-  queues server start?
-  queues server stop
-  queues install disk <path>?
-  queues install mysql <host> <database> <username> <password>
+Start the queue manager as a standalone server
+  queues manager start
 
-Note: other features not implemented yet.
+Stop a queue manager running on this machine
+  queues manager stop
+
+Configure the queue manager to use disk-based message store
+  queues install disk <path>?
+
+Where <path> points to the directory holding the messages.
+By default it creates and uses the directory 'queues'.
+
+Configure the queue manager to use MySQL for message store
+  queues install mysql <host> <username> <password> <database>
+
+The following options are also available
+  --port    Specify which port to use
+  --socket  Specify which socket to use
+  --prefix  Specify prefix for database tables (the default
+            is reliable_msg_)
 EOF
 
         class InvalidUsage  < Exception
@@ -40,7 +53,7 @@ EOF
             begin
                 raise InvalidUsage if ARGV.length < 1
                 case ARGV[0]
-                when 'server'
+                when 'manager'
                     case ARGV[1]
                     when 'start', nil
                         manager = QueueManager.new
@@ -62,26 +75,33 @@ EOF
                     else
                         raise InvalidUsage
                     end
+
                 when 'install'
+                    config = Config.new nil, nil
                     case ARGV[1]
                     when 'disk'
-                        config = Config.new
-                        config.store = MessageStore::Disk.configuration
+                        store = MessageStore::Disk.new({}, nil)
+                        config.store = store.configuration
                         if config.create_if_none
-                            store = MessageStore.get config.store
-                            store.install
+                            store.setup
+                            puts "Created queues configuration file: #{config.path}"
+                        else
+                            puts "Found existing queues configuration file: #{config.path}"
                         end
-=begin
                     when 'mysql'
-                        config = Config.new
-                        host, database, username, password = ARGV[2], ARGV[3], ARGV[4], ARGV[5]
+                        host, username, password, database = ARGV[2], ARGV[3], ARGV[4], ARGV[5]
                         raise InvalidUsage unless host && database && username && password
-                        config.store = MessageStore::MySQL.configuration(host, database, username, password)
+                        conn = { "host"=>host, "username"=>username, "password"=>password, "database"=>database }
+                        store = MessageStore::MySQL.new(conn, nil)
+                        config.store = store.configuration
                         if config.create_if_none
-                            store = MessageStore.get config.store
-                            store.install
+                            puts "Created queues configuration file: #{config.path}"
+                            if store.setup
+                                puts "Created queue manager tables in database '#{database}'"
+                            end
+                        else
+                            puts "Found existing queues configuration file: #{config.path}"
                         end
-=end
                     else
                         raise InvalidUsage
                     end
