@@ -48,6 +48,18 @@ module ReliableMsg
             @config = {}
         end
 
+        def load_no_create
+            if File.exist?(@file)
+                @config= {}
+                File.open @file, "r" do |input|
+                    YAML.load_documents input do |doc|
+                        @config.merge! doc
+                    end
+                end
+                true
+            end
+        end
+
         def load_or_create
             if File.exist?(@file)
                 @config= {}

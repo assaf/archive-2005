@@ -40,49 +40,67 @@ You can download the sources directly, or install the GEM package
 
   gem install --remote reliable-msg
 
-To create the configuration file and queues using the disk-based
-adapter
+To create the configuration file and queues for use with the disk-based
+message store
 
-  queues install disk [--path <path>]
+  queues install disk [<path>]
 
-The +path+ option specifies the directory for storing the queue index
-and messages. The default path is <tt>./queues</tt>.
+The optional <tt>path</tt> argument specifies the directory in which
+queue index and messages are store. The default directory is
+<tt>queues</tt>.
 
-To create the configuration file and queues using the MySQL adapter
+To create the configuration file and queues for use with the MySQL
+message store
 
-  queues install mysql <host> <database> <user> <password>
+  queues install mysql <host> <user> <password> <database>
          [--port <port>] [--socket <socket>] [--prefix <prefix>]
 
-You must have MySQL libraries installed in order to use this adapter.
+You must have MySQL libraries installed in order to use this message
+store, either native MySQL libraries or the Rails pure-Ruby adapter.
 It uses the supplied connection properties and creates tables in your
 database using the specified prefix. The default prefix is
-+reliable_msg_+.
+<tt>reliable_msg_</tt>.
 
 For example
 
   queues install mysql localhost my-db user secret
 
+=== Configuration file
+
 The installation process creates a configuration file
-(<tt>queues.cfg</tt>) located in the same directory as the Gem. You
-can specify a different location with the +config+ option.
+(<tt>queues.cfg</tt>) located in the same directory as the library.
+You can specify a different location for the configuration file using
+the option <tt>-c</tt> of <tt>--config</tt>.
+
+When you use the queue manager, it looks for a specified configuration
+file, or if no configuration file is specified it looks for the
+<tt>queues.cfg</tt> file, first in the local directory and then in the
+installation directory. If no file exists, it will create a default one
+to use the disk-based message store.
+
+=== UUID state file
 
 Reliable messaging requires a UUID generator that is able to create
 universally unique identifiers. The UUID generator uses the
 <tt>uuid.state</tt> file to hold a unique machine identifier and a
-rolling sequence number. The <tt>uuid.state</tt> file is also created
-in the Gem directory.
+rolling sequence number.
+
+On the first usage, a <tt>uuid.state</tt> file is created in the
+installation directory. An existing state file will be used if one
+exists in the local directory or the installation directory.
 
 The unique machine identifier is obtained from one of the network
-card's MAC address, using either +ipconfig+ or +ifconfig+. If no MAC
-address can be found, you must edit the <tt>uuid.state</tt> file
+card's MAC address on your machine, using either the +ipconfig+ or
++ifconfig+ commands. If no MAC address can be found, or you want to
+pick a specific MAC address, create a <tt>uuid.state</tt> file
 manually.
 
 
 == Simple Example
 
-Start the queue manager server
+Start the queue manager as a standalone server
 
-  queues start
+  queues manager start
 
 Use the queue API in your application
 
@@ -92,6 +110,10 @@ Use the queue API in your application
   queue.put obj
   msg = queue.get
   assert msg.object == obj
+
+Stop the queue manager
+
+  queues manager stop
 
 
 == License

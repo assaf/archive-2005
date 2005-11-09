@@ -18,29 +18,47 @@ require 'reliable-msg/queue-manager'
 
 module ReliableMsg
 
-    class CLI
+    class CLI #:nodoc:
 
         USAGE = <<-EOF
-Start the queue manager as a standalone server
-  queues manager start
+usage:  queues [-c config] command [args]
 
-Stop a queue manager running on this machine
-  queues manager stop
+To see list of available commands and options
+  queues help
+EOF
 
-Configure the queue manager to use disk-based message store
-  queues install disk <path>?
+        HELP = <<-EOF
+usage:  queues [-c config] command [args]
 
-Where <path> points to the directory holding the messages.
-By default it creates and uses the directory 'queues'.
+Reliable messaging queue manager, version #{VERSION}
 
-Configure the queue manager to use MySQL for message store
-  queues install mysql <host> <username> <password> <database>
+Available commands:
 
-The following options are also available
-  --port    Specify which port to use
-  --socket  Specify which socket to use
-  --prefix  Specify prefix for database tables (the default
-            is reliable_msg_)
+help
+  Display this help message.
+
+manager start
+  Start the queue manager as a standalone server
+
+manager stop
+  Stop a running queue manager.
+
+install disk [<path>]
+  Configure queue manager to use disk-based message store
+  using the specified directory. Uses 'queues' by default.
+
+install mysql <host> <username> <password> <database> [options]
+              [--port <port>] [--socket <socket>] [--prefix <prefix>]
+  Configure queue manager to use MySQL for message store,
+  using the specified connection properties. Updates database
+  schema.
+
+Options for install mysql are (defaults apply if missing):
+
+--port    Port to connect to
+--socket  Socket to connect to
+--prefix  Prefix for table names
+
 EOF
 
         class InvalidUsage  < Exception
@@ -51,12 +69,29 @@ EOF
 
         def run
             begin
-                raise InvalidUsage if ARGV.length < 1
-                case ARGV[0]
+                config_file = nil
+                opts = OptionParser.new
+                opts.on("-c FILE", "--config FILE", String) { |value| config_file = value }
+                opts.on("-v", "--version") do
+                    puts "Reliable messaging queue manager, version #{VERSION}"
+                    exit
+                end
+                opts.on("-h", "--help") do
+                    puts HELP
+                    exit
+                end
+
+                args = opts.parse(ARGV)
+
+                raise InvalidUsage if args.length < 1
+                case args[0]
+                when 'help'
+                    puts HELP
+
                 when 'manager'
-                    case ARGV[1]
+                    case args[1]
                     when 'start', nil
-                        manager = QueueManager.new
+                        manager = QueueManager.new({:config=>config_file})
                         manager.start
                         begin
                             while manager.alive?
@@ -66,7 +101,18 @@ EOF
                             manager.stop
                         end
                     when 'stop'
-                        drb_uri = Queue::DEFAULT_DRB_URI
+                        if config_file
+                            config = Config.new config_file, nil
+                            unless config.load_no_create || config_file.nil?
+                                puts "Could not find configuration file #{config.path}"
+                                exit
+                            end
+                            drb = Config::DEFAULT_DRB
+                            drb.merge(config.drb) if config.drb
+                            drb_uri = "druby://localhost:#{drb['port']}"
+                        else
+                            drb_uri = Queue::DEFAULT_DRB
+                        end
                         begin
                             DRbObject.new(nil, drb_uri).stop
                         rescue DRb::DRbConnError =>error
@@ -77,8 +123,8 @@ EOF
                     end
 
                 when 'install'
-                    config = Config.new nil, nil
-                    case ARGV[1]
+                    config = Config.new config_file, nil
+                    case args[1]
                     when 'disk'
                         store = MessageStore::Disk.new({}, nil)
                         config.store = store.configuration
@@ -87,9 +133,10 @@ EOF
                             puts "Created queues configuration file: #{config.path}"
                         else
                             puts "Found existing queues configuration file: #{config.path}"
+                            puts "No changes made"
                         end
                     when 'mysql'
-                        host, username, password, database = ARGV[2], ARGV[3], ARGV[4], ARGV[5]
+                        host, username, password, database = args[2], args[3], args[4], args[5]
                         raise InvalidUsage unless host && database && username && password
                         conn = { "host"=>host, "username"=>username, "password"=>password, "database"=>database }
                         store = MessageStore::MySQL.new(conn, nil)
@@ -101,6 +148,7 @@ EOF
                             end
                         else
                             puts "Found existing queues configuration file: #{config.path}"
+                            puts "No changes made"
                         end
                     else
                         raise InvalidUsage
