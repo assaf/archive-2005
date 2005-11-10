@@ -22,8 +22,9 @@ Rake::TestTask.new :test_queue do |test|
     test.test_files = ['test/test-queue.rb']
 end
 desc "Run all test cases"
-Rake::TestTask.new :tests=>[:test_uuid, :test_queues] do |test|
+Rake::TestTask.new :tests=>[:test_uuid, :test_queue] do |test|
     test.verbose = true
+    test.test_files = []
     #test.warning = true
 end
 
