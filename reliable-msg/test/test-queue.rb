@@ -1,3 +1,14 @@
+#
+# = test-queue.rb - Queue manager test cases
+#
+# Author:: Assaf Arkin  assaf@labnotes.org
+# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging
+# Copyright:: Copyright (c) 2005 Assaf Arkin
+# License:: MIT and/or Creative Commons Attribution-ShareAlike
+#
+#--
+#++
+
 require 'test/unit'
 require 'reliable-msg'
 

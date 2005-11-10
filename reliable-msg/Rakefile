@@ -97,8 +97,8 @@ gem_spec = Gem::Specification.new do |spec|
         stores and more.
 EOF
     spec.author = "Assaf Arkin"
-    spec.email = "assaf.arkin@gmail.com"
-    spec.homepage = "http://blog.labnotes.org"
+    spec.email = "assaf@labnotes.org"
+    spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging"
 
     spec.files = FileList["{bin,test,lib,docs}/**/*", "README", "MIT-LICENSE", "Rakefile"].to_a
     spec.require_path = "lib"

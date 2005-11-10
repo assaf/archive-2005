@@ -1,10 +1,10 @@
 #
 # = selector.rb - Deferred expression evaluation selector
 #
-# Author:: Assaf Arkin assaf.arkin@gmail.com
-# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
+# Author:: Assaf Arkin  assaf@labnotes.org
+# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging
 # Copyright:: Copyright (c) 2005 Assaf Arkin
-# License:: Creative Commons Attribution-ShareAlike
+# License:: MIT and/or Creative Commons Attribution-ShareAlike
 #
 # Credit to Jim Weirich who provided the influence. Ideas borrowed from his
 # presentation on domain specific languages, and the BlankSlate source code.

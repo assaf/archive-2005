@@ -25,12 +25,8 @@ This release provides the following features:
 The latest version of Reliable Messaging can be found at
 
 [TODO: change this]
+* http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging
 * http://rubyforge.org/project/showfiles.php?group_id=50
-* http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
-
-For online resources see
-
-* Wiki/bug tracking: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
 
 
 == Installation

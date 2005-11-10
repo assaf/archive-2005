@@ -1,10 +1,10 @@
 #
 # = cli.rb - Reliable messaging command-line interface
 #
-# Author:: Assaf Arkin assaf.arkin@gmail.com
-# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyRM
+# Author:: Assaf Arkin  assaf@labnotes.org
+# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging
 # Copyright:: Copyright (c) 2005 Assaf Arkin
-# License:: Creative Commons Attribution-ShareAlike
+# License:: MIT and/or Creative Commons Attribution-ShareAlike
 #
 #--
 # Changes:
