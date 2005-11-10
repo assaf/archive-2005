@@ -27,7 +27,6 @@ class TestQueue < Test::Unit::TestCase
 
     def teardown
         @manager.stop
-        clear
     end
 
     def test_order

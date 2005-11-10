@@ -143,6 +143,7 @@ module ReliableMsg
             @transactions = {}
             @logger = options[:logger] || Logger.new(STDOUT)
             @config = Config.new options[:config], @logger
+            @config.load_or_create
         end
 
         def start
@@ -194,7 +195,8 @@ module ReliableMsg
 
                 # Prevent transactions from timing out while we take down the server.
                 @timeout_thread.terminate
-                # Shutdown DRb server to prevent new requests from being processed.
+                # Shutdown DRb server to prevent new requests from being processed.\
+                Queue.send :qm=, nil
                 drb_uri = @drb_server.uri
                 @drb_server.stop_service
                 # Deactivate the message store.
