@@ -7,13 +7,22 @@ require 'rake/rdoctask'
 require 'rake/gempackagetask'
 
 
-# Default tasks runs tests, creates RDoc.
 desc "Default Task"
-task :default => [:alltests, :rdoc]
+task :default => [:tests, :rdoc]
 
 
-# Run all tests.
-Rake::TestTask.new :alltests do |test|
+desc "Run test case for UUID generator"
+Rake::TestTask.new :test_uuid do |test|
+    test.verbose = true
+    test.test_files = ['test/test-uuid.rb']
+end
+desc "Run test case for Queue API generator"
+Rake::TestTask.new :test_queue do |test|
+    test.verbose = true
+    test.test_files = ['test/test-queue.rb']
+end
+desc "Run all test cases"
+Rake::TestTask.new :tests=>[:test_uuid, :test_queues] do |test|
     test.verbose = true
     #test.warning = true
 end
@@ -128,9 +137,7 @@ end
 # Creating a release
 
 desc "Make a new release"
-#  :alltests,
-#
-task :release => [:prerelease, :clobber, :update_version, :package] do
+task :release => [:tests, :prerelease, :clobber, :update_version, :package] do
     puts
     puts "**************************************************************"
     puts "* Release #{version.number} Complete."
