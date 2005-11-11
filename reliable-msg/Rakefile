@@ -145,9 +145,6 @@ task :release => [:tests, :prerelease, :clobber, :update_version, :package] do
     puts "* Packages ready to upload."
     puts "**************************************************************"
     puts
-
-    files = FileList["pkg/*.gem", "pkg/*.tgz", "pkg/*.zip"]
-    sh "svn commit #{files.join(' ')} -m \"Release #{version.next}\""
 end
 
 task :prerelease do
