@@ -34,44 +34,38 @@ Reliable messaging queue manager, version #{VERSION}
 
 Available commands:
 
-help
-  Display this help message.
+  help
+    Display this help message.
 
-manager start
-  Start the queue manager as a standalone server
+  manager start
+    Start the queue manager as a standalone server
 
-manager stop
-  Stop a running queue manager.
+  manager stop
+    Stop a running queue manager.
 
-install disk [<path>]
-  Configure queue manager to use disk-based message store
-  using the specified directory. Uses 'queues' by default.
+  install disk [<path>]
+    Configure queue manager to use disk-based message store
+    using the specified directory. Uses 'queues' by default.
 
-install mysql <host> <username> <password> <database> [options]
-              [--port <port>] [--socket <socket>] [--prefix <prefix>]
-  Configure queue manager to use MySQL for message store,
-  using the specified connection properties. Updates database
-  schema.
+  install mysql <host> <username> <password> <database> [options]
+                [--port <port>] [--socket <socket>] [--prefix <prefix>]
+    Configure queue manager to use MySQL for message store,
+    using the specified connection properties. Updates database
+    schema.
 
-Options for install mysql are (defaults apply if missing):
-
---port    Port to connect to
---socket  Socket to connect to
---prefix  Prefix for table names
-
-list [<queue>]
-
-  Lists the non-empty queues in the queue manager, or list
-  messages in the named queue.
+  --port  Port to connect to
+  --socket  Socket to connect to
+  --prefix  Prefix for table names
 
 
 Available options:
 
--v --version
-  Show version number.
+  -v --version
+    Show version number.
 
--c --config <path>
-  Points to the queue manager configuration file.
+  -c --config <path>
+    Points to the queue manager configuration file.
+
 EOF
 
         class InvalidUsage  < Exception
