@@ -8,6 +8,8 @@
 #
 #--
 # Changes:
+# 11/11/05
+#   Fixed: Stop/start queue manager.
 #++
 
 require 'singleton'
@@ -192,6 +194,7 @@ module ReliableMsg
         def stop
             @mutex.synchronize do
                 return unless @started
+                @started = false
 
                 # Prevent transactions from timing out while we take down the server.
                 @timeout_thread.terminate

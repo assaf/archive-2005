@@ -22,28 +22,44 @@ class TestQueue < Test::Unit::TestCase
         @dlq = ReliableMsg::Queue.new ReliableMsg::Queue::DLQ
         @manager = ReliableMsg::QueueManager.new
         @manager.start
-        clear
+        clear false
+        @restart = proc do
+            @manager.stop
+            @manager.start
+        end
     end
 
     def teardown
+        clear true
         @manager.stop
     end
 
     def test_order
-        clear
+        # Run test case without restrating queue manager (from cache).
+        _test_order
+        # Run test case by restarting queue manager (test recovery).
+        _test_order @restart
+    end
+
+    def _test_order restart = nil
         # Put two messages, test that they are retrieved in order.
         id1 = @queue.put 'first test message'
         id2 = @queue.put 'second test message'
+        restart.call if restart
+        # TODO: order is not really guaranteed here.
         msg = @queue.get
-        assert msg && msg.id == id1, "Failed to retrieve message in order"
+        assert msg && (msg.id == id1 || msg.id == id2), "Failed to retrieve message in order"
+        seen = msg.id
         msg = @queue.get
-        assert msg && msg.id == id2, "Failed to retrieve message in order"
+        assert msg && (msg.id == id1 || msg.id == id2), "Failed to retrieve message in order"
+        assert msg.id != seen, "Retrieved the same message twice"
         assert @queue.get.nil?, "Phantom message in queue"
 
         # Put three messages with priority, test that they are retrieved in order.
         id1 = @queue.put 'priority one message', :priority=>1
         id2 = @queue.put 'priority three message', :priority=>3
         id3 = @queue.put 'priority two message', :priority=>2
+        restart.call if restart
         msg = @queue.get
         assert msg && msg.id == id2, "Failed to retrieve message in order"
         msg = @queue.get
@@ -54,11 +70,18 @@ class TestQueue < Test::Unit::TestCase
     end
 
     def test_selector
-        clear
+        # Run test case without restrating queue manager (from cache).
+        _test_selector
+        # Run test case by restarting queue manager (test recovery).
+        _test_selector @restart
+    end
+
+    def _test_selector restart = nil
         # Test that we can retrieve message based on specific header value,
         # contrary to queue order.
         id1 = @queue.put 'first test message', :name=>"foo"
         id2 = @queue.put 'second test message', :name=>"bar"
+        restart.call if restart
         msg = @queue.get(ReliableMsg::Queue.selector { name == 'bar' })
         assert msg && msg.id == id2, "Failed to retrieve message by selector"
         msg = @queue.get(ReliableMsg::Queue.selector { name == 'foo' })
@@ -67,12 +90,19 @@ class TestQueue < Test::Unit::TestCase
     end
 
     def test_non_delivered
-        clear
+        # Run test case without restrating queue manager (from cache).
+        _test_non_delivered
+        # Run test case by restarting queue manager (test recovery).
+        _test_non_delivered @restart
+    end
+
+    def _test_non_delivered restart = nil
         # Test that we can receive message that has not yet expired (30 second delay),
         # but cannot receive message that has expires (1 second, we wait for 2), and
         # that message has been moved to the DLQ.
         id1 = @queue.put 'first test message', :expires=>30, :delivery=>:repeated
         id2 = @queue.put 'second test message', :expires=>1, :delivery=>:repeated
+        restart.call if restart
         msg = @queue.get :id=>id1
         assert msg, "Failed to retrieve message that did not expire"
         sleep 2
@@ -84,6 +114,7 @@ class TestQueue < Test::Unit::TestCase
         # Test that we can receive message more than once, but once we try more than
         # max_deliveries, the message moves to the DLQ.
         id1 = @queue.put 'test message', :max_retries=>1, :delivery=>:repeated
+        restart.call if restart
         begin
             @queue.get do |msg|
                 assert msg && msg.id == id1, "Block called without the message"
@@ -106,6 +137,7 @@ class TestQueue < Test::Unit::TestCase
 
         # Test that message discarded when delivery mode is best_effort.
         id1 = @queue.put 'test message', :max_retries=>0, :delivery=>:best_effort
+        restart.call if restart
         begin
             @queue.get do |msg|
                 assert msg && msg.id == id1, "Block called without the message"
@@ -119,6 +151,7 @@ class TestQueue < Test::Unit::TestCase
 
         # Test that message is moved to DLQ when delivery mode is exactly_once.
         id1 = @queue.put 'test message', :max_retries=>2, :delivery=>:once
+        restart.call if restart
         begin
             @queue.get do |msg|
                 assert msg && msg.id == id1, "Block called without the message"
@@ -134,10 +167,14 @@ class TestQueue < Test::Unit::TestCase
     end
 
 private
-    def clear
+    def clear complain
         # Empty test queue and DLQ.
-        while @queue.get ; end
-        while @dlq.get ; end
+        while @queue.get
+            flunk "Found message in queue during clear" if complain
+        end
+        while @dlq.get
+            flunk "Found message in DLQ queue during clear" if complain
+        end
     end
 
 end

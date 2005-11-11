@@ -8,6 +8,8 @@
 #
 #--
 # Changes:
+# 11/11/05
+#   Fixed: Messages retrieved in order after queue manager recovers when using MySQL.
 #++
 
 require 'thread'
@@ -132,17 +134,15 @@ module ReliableMsg
                         headers = insert[:headers]
                         # Add element based on priority, higher priority comes first.
                         priority = headers[:priority]
-                        if priority > 0
-                            queue.each_index do |idx|
-                                if queue[idx][:priority] < priority
-                                    queue[idx, 0] = headers
-                                    break
-                                end
+                        added = false
+                        queue.each_index do |idx|
+                            if queue[idx][:priority] < priority
+                                queue[idx, 0] = headers
+                                added = true
+                                break
                             end
-                            queue << headers
-                        else
-                            queue << headers
                         end
+                        queue << headers unless added
                         @cache[insert[:id]] = insert[:message]
                     end
                     deletes.each do |delete|
@@ -470,16 +470,15 @@ module ReliableMsg
                             headers = Marshal::load row[2]
                             # Add element based on priority, higher priority comes first.
                             priority = headers[:priority]
-                            if priority > 0
-                                queue.each_index do |idx|
-                                    if queue[idx][:priority] < priority
-                                        queue[idx, 0] = headers
-                                        break
-                                    end
+                            added = false
+                            queue.each_index do |idx|
+                                if queue[idx][:priority] < priority
+                                    queue[idx, 0] = headers
+                                    added = true
+                                    break
                                 end
-                            else
-                                queue << headers
                             end
+                            queue << headers unless added
                         end
                     end
                 end

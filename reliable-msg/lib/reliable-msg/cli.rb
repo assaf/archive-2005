@@ -59,6 +59,11 @@ Options for install mysql are (defaults apply if missing):
 --socket  Socket to connect to
 --prefix  Prefix for table names
 
+list [<queue>]
+
+  Lists the non-empty queues in the queue manager, or list
+  messages in the named queue.
+
 EOF
 
         class InvalidUsage  < Exception
@@ -101,22 +106,10 @@ EOF
                             manager.stop
                         end
                     when 'stop'
-                        if config_file
-                            config = Config.new config_file, nil
-                            unless config.load_no_create || config_file.nil?
-                                puts "Could not find configuration file #{config.path}"
-                                exit
-                            end
-                            drb = Config::DEFAULT_DRB
-                            drb.merge(config.drb) if config.drb
-                            drb_uri = "druby://localhost:#{drb['port']}"
-                        else
-                            drb_uri = Queue::DEFAULT_DRB
-                        end
                         begin
-                            DRbObject.new(nil, drb_uri).stop
+                            queue_manager(config_file).stop
                         rescue DRb::DRbConnError =>error
-                            puts "No queue manager at #{drb_uri}"
+                            puts "Cannot access queue manager: is it running?"
                         end
                     else
                         raise InvalidUsage
@@ -153,12 +146,29 @@ EOF
                     else
                         raise InvalidUsage
                     end
+
                 else
                     raise InvalidUsage
-                end
+            end
             rescue InvalidUsage
                 puts USAGE
             end
+        end
+
+        def queue_manager config_file
+            if config_file
+                config = Config.new config_file, nil
+                unless config.load_no_create || config_file.nil?
+                    puts "Could not find configuration file #{config.path}"
+                    exit
+                end
+                drb = Config::DEFAULT_DRB
+                drb.merge(config.drb) if config.drb
+                drb_uri = "druby://localhost:#{drb['port']}"
+            else
+                drb_uri = Queue::DEFAULT_DRB_URI
+            end
+            DRbObject.new(nil, drb_uri)
         end
 
     end
