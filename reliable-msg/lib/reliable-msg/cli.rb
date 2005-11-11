@@ -21,14 +21,14 @@ module ReliableMsg
     class CLI #:nodoc:
 
         USAGE = <<-EOF
-usage:  queues [-c config] command [args]
+usage:  queues command [args] [options]
 
 To see list of available commands and options
   queues help
 EOF
 
         HELP = <<-EOF
-usage:  queues [-c config] command [args]
+usage:  queues command [args] [options]
 
 Reliable messaging queue manager, version #{VERSION}
 
@@ -64,6 +64,14 @@ list [<queue>]
   Lists the non-empty queues in the queue manager, or list
   messages in the named queue.
 
+
+Available options:
+
+-v --version
+  Show version number.
+
+-c --config <path>
+  Points to the queue manager configuration file.
 EOF
 
         class InvalidUsage  < Exception

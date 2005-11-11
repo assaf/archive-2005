@@ -26,7 +26,7 @@ The latest version of Reliable Messaging can be found at
 
 * http://rubyforge.org/projects/reliable-msg/
 
-For more information (wiki, bug reports)
+For more information
 
 * http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging
 
@@ -36,7 +36,7 @@ For more information (wiki, bug reports)
 You can download the sources directly, or install the GEM package
 (recommended) with
 
-  gem install --remote reliable-msg
+  gem install reliable-msg
 
 To create the configuration file and queues for use with the disk-based
 message store
