@@ -1,5 +1,5 @@
 #
-# = test-queue.rb - Queue manager test cases
+# = test-queue.rb - Queue API test cases
 #
 # Author:: Assaf Arkin  assaf@labnotes.org
 # Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging

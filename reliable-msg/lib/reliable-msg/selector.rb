@@ -10,7 +10,6 @@
 # presentation on domain specific languages, and the BlankSlate source code.
 #
 #--
-# Changes:
 #++
 
 module ReliableMsg #:nodoc:

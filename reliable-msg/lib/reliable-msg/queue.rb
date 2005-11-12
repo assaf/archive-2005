@@ -7,10 +7,10 @@
 # License:: MIT and/or Creative Commons Attribution-ShareAlike
 #
 #--
-# Changes:
 #++
 
 require 'drb'
+require 'reliable-msg/client'
 require 'reliable-msg/selector'
 
 
@@ -22,8 +22,7 @@ module ReliableMsg
     #
     # You can create a Queue object that connects to a single queue by passing the
     # queue name to the initialized. You can also access other queues by specifying
-    # the destination queue when putting a message, or selecting from a queue when
-    # retrieving the message.
+    # the destination queue when putting a message.
     #
     # For example:
     #   queue = Queue.new 'my-queue'
@@ -39,55 +38,17 @@ module ReliableMsg
     #   end
     #
     # See Queue.get and Queue.put for more examples.
-    class Queue
+    class Queue < Client
 
-        ERROR_INVALID_SELECTOR = 'Selector must be message identifier (String), set of header name/value pairs (Hash), or nil' # :nodoc:
-
-        ERROR_INVALID_TX_TIMEOUT = 'Invalid transaction timeout: must be a non-zero positive integer' # :nodoc:
-
-        ERROR_INVALID_CONNECT_COUNT = 'Invalid connection count: must be a non-zero positive integer' # :nodoc:
-
-        ERROR_SELECTOR_VALUE_OR_BLOCK = 'You can either pass a Selector object, or use a block' # :nodoc:
-
-        # The default DRb port used to connect to the queue manager.
-        DRB_PORT = 6438
-
-        DEFAULT_DRB_URI = "druby://localhost:#{DRB_PORT}" #:nodoc:
-
-        # The name of the dead letter queue (<tt>DLQ</tt>). Messages that expire or fail
-        # to process are automatically sent to the dead letter queue.
-        DLQ = DEAD_LETTER_QUEUE = 'dlq'
-
-        # Number of times to retry a connecting to the queue manager.
-        DEFAULT_CONNECT_RETRY = 5
-
-        # Default transaction timeout.
-        DEFAULT_TX_TIMEOUT = 120
-
-        # Default number of re-delivery attempts.
-        DEFAULT_MAX_RETRIES = 4;
-
-        # Thread.current entry for queue transaction.
-        THREAD_CURRENT_TX = :reliable_msg_tx #:nodoc:
-
-        # DRb URI for queue manager. You can override this to change the URI globally,
-        # for all Queue objects that are not instantiated with an alternative URI.
-        @@drb_uri = DEFAULT_DRB_URI
-
-        # Reference to the local queue manager. Defaults to a DRb object, unless
-        # the queue manager is running locally.
-        @@qm = nil #:nodoc:
-
-        # Cache of queue managers referenced by their URI.
-        @@qm_cache = {} #:nodoc:
+        INIT_OPTIONS = [:expires, :delivery, :priority, :max_retries, :selector, :drb_uri, :tx_timeout, :connect_count]
 
         # The optional argument +queue+ specifies the queue name. The application can
         # still put messages in other queues by specifying the destination queue
-        # name in the header, or get from other queues by specifying the queue name
-        # in the selector.
+        # name in the header.
         #
         # TODO: document options
         # * :expires
+        # * :delivery
         # * :priority
         # * :max_retries
         # * :selector
@@ -100,17 +61,19 @@ module ReliableMsg
         #
         def initialize queue = nil, options = nil
             options.each do |name, value|
+                raise RuntimeError, format(ERROR_INVALID_OPTION, name) unless INIT_OPTIONS.include?(name)
                 instance_variable_set "@#{name.to_s}".to_sym, value
             end if options
             @queue = queue
         end
+
 
         # Put a message in the queue.
         #
         # The +message+ argument is required, but may be +nil+
         #
         # Headers are optional. Headers are used to provide the application with additional
-        # information about the message, and can be used to retrieve messages (see Queue.put
+        # information about the message, and can be used to retrieve messages (see Queue.get
         # for discussion of selectors). Some headers are used to handle message processing
         # internally (e.g. <tt>:priority</tt>, <tt>:expires</tt>).
         #
@@ -121,7 +84,7 @@ module ReliableMsg
         # The following headers have special meaning:
         # * <tt>:delivery</tt> -- The message delivery mode.
         # * <tt>:queue</tt> -- Puts the message in the named queue. Otherwise, uses the queue
-        #   specified when creating the Queue object.
+        #   specified when creating this Queue object.
         # * <tt>:priority</tt> -- The message priority. Messages with higher priority are
         #   retrieved first.
         # * <tt>:expires</tt> -- Message expiration in seconds. Messages do not expire unless
@@ -159,6 +122,7 @@ module ReliableMsg
             headers.fetch(:priority, @priority || 0)
             headers.fetch(:expires, @expires)
             headers.fetch(:max_retries, @max_retries || DEFAULT_MAX_RETRIES)
+            headers.fetch(:delivery, @delivery || :best_effort)
             # Serialize the message before sending to queue manager. We need the
             # message to be serialized for storage, this just saves duplicate
             # serialization when using DRb.
@@ -172,6 +136,7 @@ module ReliableMsg
             end
         end
 
+
         # Get a message from the queue.
         #
         # Call with no arguments to retrieve the next message in the queue. Call with a message
@@ -179,8 +144,8 @@ module ReliableMsg
         # that matches.
         #
         # Selectors specify which headers to match. For example, to retrieve all messages in the
-        # queue 'my-queue' with priority 2:
-        #   msg = queue.get :queue=>'my-queue', :priority=>2
+        # with priority 2:
+        #   msg = queue.get :priority=>2
         # To put and get the same message:
         #   mid = queue.put obj
         #   msg = queue.get mid # or queue.get :id=>mid
@@ -265,7 +230,7 @@ module ReliableMsg
                 selector = case selector
                     when String
                         {:id=>selector}
-                    when Hash, Array, Selector
+                    when Hash, Selector
                         selector
                     when nil
                         @selector
@@ -305,196 +270,13 @@ module ReliableMsg
             result
         end
 
-        # Returns the transaction timeout (in seconds).
-        #
-        # :call-seq:
-        #   queue.tx_timeout -> numeric
-        #
-        def tx_timeout
-            @tx_timeout || DEFAULT_TX_TIMEOUT
-        end
 
-        # Sets the transaction timeout (in seconds). Affects future transactions started
-        # by Queue.get. Use +nil+ to restore the default timeout.
-        #
-        # :call-seq:
-        #   queue.tx_timeout = timeout
-        #   queue.tx_timeout = nil
-        #
-        def tx_timeout= timeout
-            if timeout
-                raise ArgumentError, ERROR_INVALID_TX_TIMEOUT unless timeout.instance_of?(Integer) and timeout > 0
-                @tx_timeout = timeout
-            else
-                @tx_timeout = nil
-            end
-        end
-
-        # Returns the number of connection attempts, before operations fail.
-        #
-        # :call-seq:
-        #   queue.connect_count -> numeric
-        #
-        def connect_count
-            @connect_count || DEFAULT_CONNECT_RETRY
-        end
-
-        # Sets the number of connection attempts, before operations fail. The minimum is one.
-        # Use +nil+ to restore the default connection count.
-        #
-        # :call-seq:
-        #   queue.connect_count = count
-        #   queue.connect_count = nil
-        #
-        def connect_count= count
-            if count
-                raise ArgumentError, ERROR_INVALID_CONNECT_COUNT unless count.instance_of?(Integer) and count > 0
-                @connect_count = count
-            else
-                @connect_count = nil
-            end
-        end
-
-        # If called with no block, returns the selector associated with this Queue
-        # (see Queue.selector=). If called with a block, creates and returns a new
-        # selector (similar to Queue::selector).
-        #
-        # :call-seq:
-        #   queue.selector -> selector
-        #   queue.selector { ... } -> selector
-        #
-        def selector &block
-            block ? Selector.new(&block) : @selector
-        end
-
-        # Sets a default selector for this Queue. Affects all calls to Queue.get on this
-        # Queue object that do not specify a selector.
-        #
-        # You can pass a Selector object, a block expression, or +nil+ if you no longer
-        # want to use the default selector. For example:
-        #   queue.selector= { priority >= 2 and received > Time.new.to_i - 60 }
-        #   10.times do
-        #     p queue.get
-        #   end
-        #   queue.selector= nil
-        #
-        # :call-seq:
-        #   queue.selector = selector
-        #   queue.selector = { ... }
-        #   queue.selector = nil
-        #
-        def selector= value = nil, &block
-            raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK if (value && block)
-            if value
-                raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK unless value.instance_of?(Selector)
-                @selector = value
-            elsif block
-                @selector = Selector.new &block
-            else
-                @selector = nil
-            end
-        end
-
-        # Create and return a new selector based on the block expression. For example:
-        #   selector = Queue.selector { priority >= 2 and received > Time.new.to_i - 60 }
-        #
-        # :call-seq:
-        #   Queue.selector { ... }  -> selector
-        #
-        def self.selector &block
-            raise ArgumentError, ERROR_NO_SELECTOR_BLOCK unless block
-            Selector.new &block
-        end
-
-    private
-
-        # Returns the active queue manager. You can override this method to implement
-        # load balancing.
-        def qm
-            if uri = @drb_uri
-                # Queue specifies queue manager's URI: use that queue manager.
-                @@qm_cache[uri] ||= DRbObject.new(nil, uri)
-            else
-                # Use the same queue manager for all queues, and cache it.
-                # Create only the first time.
-                @@qm ||= DRbObject.new(nil, @@drb_uri || DEFAULT_DRB_URI)
-            end
-        end
-
-        # Called to execute the operation repeatedly and avoid connection failures. This only
-        # makes sense if we have a load balancing algorithm.
-        def repeated &block
-            count = connect_count
-            begin
-                block.call qm
-            rescue DRb::DRbConnError=>error
-                warn error
-                warn error.backtrace
-                retry if (count -= 1) > 0
-                raise error
-            end
-        end
-
-        class << self
-        private
-            # Sets the active queue manager. Used when the queue manager is running in the
-            # same process to bypass DRb calls.
-            def qm= qm
-                @@qm = qm
-            end
+        # Returns the queue name.
+        def name
+            @queue
         end
 
     end
-
-
-    # == Retrieved Message
-    #
-    # Returned from Queue.get holding the last message retrieved from the
-    # queue and providing access to the message identifier, headers and object.
-    #
-    # For example:
-    #   while queue.get do |msg|
-    #     print "Message #{msg.id}"
-    #     print "Headers: #{msg.headers.inspect}"
-    #     print msg.object
-    #     true
-    #   end
-    class Message
-
-
-        def initialize id, headers, object # :nodoc:
-            @id, @object, @headers = id, object, headers
-        end
-
-        # Returns the message identifier.
-        #
-        # :call-seq:
-        #   msg.id -> id
-        #
-        def id
-            @id
-        end
-
-        # Returns the message object.
-        #
-        # :call-seq:
-        #   msg.object -> obj
-        #
-        def object
-            @object
-        end
-
-        # Returns the message headers.
-        #
-        # :call-seq:
-        #   msg.headers -> hash
-        #
-        def headers
-            @headers
-        end
-
-    end
-
 
 end
 

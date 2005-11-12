@@ -7,7 +7,6 @@
 # License:: MIT and/or Creative Commons Attribution-ShareAlike
 #
 #--
-# Changes:
 #++
 
 

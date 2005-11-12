@@ -7,9 +7,6 @@
 # License:: MIT and/or Creative Commons Attribution-ShareAlike
 #
 #--
-# Changes:
-# 11/11/05
-#   Fixed: Stop/start queue manager.
 #++
 
 require 'singleton'
@@ -18,8 +15,9 @@ require 'drb/acl'
 require 'thread'
 require 'yaml'
 require 'uuid'
-require 'reliable-msg/queue'
+require 'reliable-msg/client'
 require 'reliable-msg/message-store'
+
 
 module ReliableMsg
 
@@ -30,7 +28,7 @@ module ReliableMsg
         DEFAULT_STORE = MessageStore::Disk::DEFAULT_CONFIG
 
         DEFAULT_DRB = {
-            "port"=>Queue::DRB_PORT,
+            "port"=>Client::DRB_PORT,
             "acl"=>"allow 127.0.0.1"
         }
 
@@ -127,6 +125,10 @@ module ReliableMsg
 
         ERROR_RECEIVE_MISSING_QUEUE = "You must specify a queue to retrieve the message from" #:nodoc:
 
+        ERROR_PUBLISH_MISSING_TOPIC = "You must specify a destination topic for the message" #:nodoc:
+
+        ERROR_RETRIEVE_MISSING_TOPIC = "You must specify a topic to retrieve the message from" #:nodoc:
+
         ERROR_INVALID_HEADER_NAME = "Invalid header '%s': expecting the name to be a symbol, found object of type %s" #:nodoc:
 
         ERROR_INVALID_HEADER_VALUE = "Invalid header '%s': expecting the value to be %s, found object of type %s" #:nodoc:
@@ -150,7 +152,7 @@ module ReliableMsg
 
         def start
             @mutex.synchronize do
-                return if @started
+                return false if @started
 
                 # Get the message store based on the configuration, or default store.
                 @store = MessageStore::Base.configure(@config.store || Config::DEFAULT_STORE, @logger)
@@ -186,20 +188,19 @@ module ReliableMsg
                 end
 
                 # Associate this queue manager with the local Queue class, instead of using DRb.
-                Queue.send :qm=, self
+                Client.send :qm=, self
                 @started = true
             end
         end
 
         def stop
             @mutex.synchronize do
-                return unless @started
-                @started = false
+                return false unless @started
 
                 # Prevent transactions from timing out while we take down the server.
                 @timeout_thread.terminate
                 # Shutdown DRb server to prevent new requests from being processed.\
-                Queue.send :qm=, nil
+                Client.send :qm=, nil
                 drb_uri = @drb_server.uri
                 @drb_server.stop_service
                 # Deactivate the message store.
@@ -207,7 +208,9 @@ module ReliableMsg
                 @store = nil
                 @drb_server = @store = @timeout_thread = nil
                 @logger.info "Stopped queue manager at '#{drb_uri}'"
+                @started = false
             end
+            true
         end
 
         def alive?
@@ -248,7 +251,7 @@ module ReliableMsg
             headers[:received] = time
             headers[:delivery] ||= :best_effort
             headers[:retry] = 0
-            headers[:max_retries] = integer headers[:max_retries], 0, Queue::DEFAULT_MAX_RETRIES
+            headers[:max_retries] = integer headers[:max_retries], 0, Client::DEFAULT_MAX_RETRIES
             headers[:priority] = integer headers[:priority], 0, 0
             if expires_at = headers[:expires_at]
                 raise ArgumentError, format(ERROR_INVALID_HEADER_VALUE, :expires_at, "an integer", expires_at.class) unless expires_at.is_a?(Integer)
@@ -308,7 +311,7 @@ module ReliableMsg
             # discard the message, or send it to the DLQ. Since we're out of a message,
             # we call to get a new one. (This can be changed to repeat instead of recurse).
             headers = message[:headers]
-            if queue != Queue::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:retry] > headers[:max_retries]))
+            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:retry] > headers[:max_retries]))
                 expired = {:id=>message[:id], :queue=>queue, :headers=>headers}
                 if headers[:delivery] == :once || headers[:delivery] == :repeated
                     @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
@@ -324,7 +327,7 @@ module ReliableMsg
                 if tid
                     tx = @transactions[tid]
                     raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
-                    if queue != Queue::DLQ && headers[:delivery] == :once
+                    if queue != Client::DLQ && headers[:delivery] == :once
                         # Exactly once delivery: immediately move message to DLQ, so if
                         # transaction aborts, message is not retrieved again. Do not
                         # release lock here, to prevent message retrieved from DLQ.
@@ -332,7 +335,7 @@ module ReliableMsg
                         @store.transaction do |inserts, deletes, dlqs|
                             dlqs << delete
                         end
-                        delete[:queue] = Queue::DLQ
+                        delete[:queue] = Client::DLQ
                         tx[:deletes] << delete
                     else
                         # At most once delivery: delete message if transaction commits.
@@ -358,6 +361,90 @@ module ReliableMsg
             # in Queue, see there). The headers are also cloned (shallow, all values are frozen).
             return :id=>message[:id], :headers=>message[:headers].clone, :message=>message[:message]
         end
+
+
+        def publish args
+            # Get the arguments of this call.
+            message, headers, topic, tid = args[:message], args[:headers], args[:topic].downcase, args[:tid]
+            raise ArgumentError, ERROR_PUBLISH_MISSING_TOPIC unless topic and topic.instance_of?(String) and !topic.empty?
+            time = Time.new.to_i
+            id = args[:id] || UUID.new
+            created = args[:created] || time
+
+            # Validate and freeze the headers. The cloning ensures that the headers we hold in memory
+            # are not modified by the caller. The validation ensures that the headers we hold in memory
+            # can be persisted safely. Basic types like string and integer are allowed, but application types
+            # may prevent us from restoring the index. Strings are cloned since strings may be replaced.
+            headers = if headers
+                copy = {}
+                headers.each_pair do |name, value|
+                    raise ArgumentError, format(ERROR_INVALID_HEADER_NAME, name, name.class) unless name.instance_of?(Symbol)
+                    case value
+                    when String, Numeric, Symbol, true, false, nil
+                        copy[name] = value.freeze
+                    else
+                        raise ArgumentError, format(ERROR_INVALID_HEADER_VALUE, name, "a string, numeric, symbol, true/false or nil", value.class)
+                    end
+                end
+                copy
+            else
+                {}
+            end
+
+            # Set the message headers controlled by the topic.
+            headers[:id] = id
+            headers[:received] = time
+            if expires_at = headers[:expires_at]
+                raise ArgumentError, format(ERROR_INVALID_HEADER_VALUE, :expires_at, "an integer", expires_at.class) unless expires_at.is_a?(Integer)
+            elsif expires = headers[:expires]
+                raise ArgumentError, format(ERROR_INVALID_HEADER_VALUE, :expires, "an integer", expires.class) unless expires.is_a?(Integer)
+                headers[:expires_at] = Time.now.to_i + expires if expires > 0
+            end
+            # Create an insertion record for the new message.
+            insert = {:id=>id, :topic=>topic, :headers=>headers, :message=>message}
+            if tid
+                tx = @transactions[tid]
+                raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
+                tx[:inserts] << insert
+            else
+                @store.transaction do |inserts, deletes, dlqs|
+                    inserts << insert
+                end
+            end
+        end
+
+
+        def retrieve args
+            # Get the arguments of this call.
+            seen, topic, selector, tid = args[:seen], args[:topic].downcase, args[:selector], args[:tid]
+            id, headers = nil, nil
+            raise ArgumentError, ERROR_RETRIEVE_MISSING_TOPIC unless topic and topic.instance_of?(String) and !topic.empty?
+
+            # Very simple, we really only select one message and nothing to lock.
+            message = @store.get_last topic, seen do |headers|
+                case selector
+                when nil
+                    true
+                when Hash
+                    selector.all? { |name, value| headers[name] == value }
+                when Selector
+                    selector.__evaluate__ headers
+                end
+            end
+            # Nothing to do if no message found.
+            return unless message
+
+            # If the message has expired, we discard the message. This being the most recent
+            # message on the topic, we simply return nil.
+            headers = message[:headers]
+            if (headers[:expires_at] && headers[:expires_at] < Time.now.to_i)
+                expired = {:id=>message[:id], :topic=>topic, :headers=>headers}
+                @store.transaction { |inserts, deletes, dlqs| deletes << expired }
+                return nil
+            end
+            return :id=>message[:id], :headers=>message[:headers].clone, :message=>message[:message]
+        end
+
 
         def begin timeout
             tid = UUID.new

@@ -7,14 +7,11 @@
 # License:: MIT and/or Creative Commons Attribution-ShareAlike
 #
 #--
-# Changes:
-# 11/11/05
-#   Fixed: Messages retrieved in order after queue manager recovers when using MySQL.
 #++
 
 require 'thread'
 require 'uuid'
-require 'reliable-msg/queue'
+require 'reliable-msg/client'
 
 module ReliableMsg
 
@@ -68,6 +65,7 @@ module ReliableMsg
             def activate
                 @mutex = Mutex.new
                 @queues = {Queue::DLQ=>[]}
+                @topics = {}
                 @cache = {}
                 # TODO: add recovery logic
             end
@@ -79,7 +77,7 @@ module ReliableMsg
             #   store.deactivate
             #
             def deactivate
-                @mutex = @queues = @cache = nil
+                @mutex = @queues = @topics = @cache = nil
             end
 
             def transaction &block
@@ -92,6 +90,7 @@ module ReliableMsg
                     # Empty the cache and reload the queue, before raising the error.
                     @cache = {}
                     @queues = {Queue::DLQ=>[]}
+                    @topics = {}
                     load_index
                     raise error
                 end
@@ -99,17 +98,26 @@ module ReliableMsg
             end
 
             def select queue, &block
-                queue = @queues[queue]
-                return nil unless queue
-                queue.each do |headers|
-                    selected = block.call(headers)
-                    if selected
+                messages = @queues[queue]
+                return nil unless messages
+                messages.each do |headers|
+                    if block.call(headers)
                         id = headers[:id]
-                        message = @cache[id] || load(id, queue)
+                        message = @cache[id] || load(id, :queue, queue)
                         return {:id=>id, :headers=>headers, :message=>message}
                     end
                 end
                 return nil
+            end
+
+            def get_last topic, seen, &block
+                headers = @topics[topic]
+                return nil if headers.nil? || headers[:id] == seen
+                if block.call(headers)
+                    id = headers[:id]
+                    message = @cache[id] || load(id, :topic, topic)
+                    {:id=>id, :headers=>headers, :message=>message}
+                end
             end
 
             # Returns a message store from the specified configuration (previously
@@ -130,26 +138,34 @@ module ReliableMsg
             def update inserts, deletes, dlqs
                 @mutex.synchronize do
                     inserts.each do |insert|
-                        queue = @queues[insert[:queue]] ||= []
-                        headers = insert[:headers]
-                        # Add element based on priority, higher priority comes first.
-                        priority = headers[:priority]
-                        added = false
-                        queue.each_index do |idx|
-                            if queue[idx][:priority] < priority
-                                queue[idx, 0] = headers
-                                added = true
-                                break
+                        if insert[:queue]
+                            queue = @queues[insert[:queue]] ||= []
+                            headers = insert[:headers]
+                            # Add element based on priority, higher priority comes first.
+                            priority = headers[:priority]
+                            added = false
+                            queue.each_index do |idx|
+                                if queue[idx][:priority] < priority
+                                    queue[idx, 0] = headers
+                                    added = true
+                                    break
+                                end
                             end
+                            queue << headers unless added
+                            @cache[insert[:id]] = insert[:message]
+                        elsif insert[:topic]
+                            @topics[insert[:topic]] = insert[:headers]
                         end
-                        queue << headers unless added
-                        @cache[insert[:id]] = insert[:message]
                     end
                     deletes.each do |delete|
-                        queue = @queues[delete[:queue]]
-                        id = delete[:id]
-                        queue.delete_if { |headers| headers[:id] == id }
-                        @cache.delete id
+                        if delete[:queue]
+                            queue = @queues[delete[:queue]]
+                            id = delete[:id]
+                            queue.delete_if { |headers| headers[:id] == id }
+                            @cache.delete id
+                        elsif delete[:topic]
+                            @topics.delete delete[:topic]
+                        end
                     end
                     dlqs.each do |dlq|
                         queue = @queues[dlq[:queue]]
@@ -238,6 +254,7 @@ module ReliableMsg
             end
 
             def deactivate
+                @file.flock File::LOCK_UN
                 @file.close
                 @file_map.each_pair do |id, map|
                     map[1].close if map[1]
@@ -271,7 +288,8 @@ module ReliableMsg
                     # (message and file have different IDs).
                     file.sysseek 0, IO::SEEK_SET
                     file.syswrite insert[:message]
-                    file.truncate file.pos
+                    file.flush
+                    file.truncate insert[:message].length
                     file.flush
                     @mutex.synchronize do
                         @file_map[insert[:id]] = [name, file]
@@ -301,7 +319,7 @@ module ReliableMsg
                         file_map = {}
                         @file_map.each_pair { |id, name_file| file_map[id] = name_file[0] }
                         file_free = @file_free.collect { |name_file| name_file[0] }
-                        image = Marshal::dump({:queues=>@queues, :file_map=>file_map, :file_free=>file_free})
+                        image = Marshal::dump({:queues=>@queues, :topics=>@topics, :file_map=>file_map, :file_free=>file_free})
                         length = image.length
                         # Determine if we can store the new image before the last one (must have
                         # enough space from header), or append it to the end of the last one.
@@ -332,17 +350,18 @@ module ReliableMsg
                     # master index.
                     @file.sysseek last_block, IO::SEEK_SET
                     length = @file.sysread(8).hex
-                    # Load the index image and create the queues, file_free and
-                    # file_map structures.
+                    # Load the index image and create the queues, topics, file_free
+                    # and file_map structures.
                     image = Marshal::load @file.sysread(length)
                     @queues = image[:queues]
+                    @topics = image[:topics]
                     image[:file_free].each { |name| @file_free << [name, nil] }
                     image[:file_map].each_pair { |id, name| @file_map[id] = [name, nil] }
                     @last_block, @last_block_end = last_block, last_block + length + 8
                 end
             end
 
-            def load id, queue
+            def load id, type, queue
                 # Find the file from the message/file mapping.
                 map = @file_map[id]
                 return nil unless map # TODO: Error?
@@ -389,6 +408,7 @@ module ReliableMsg
                         :database=>config['database'], :port=>config['port'], :socket=>config['socket'] }
                     @prefix = config['prefix'] || DEFAULT_PREFIX
                     @queues_table = "#{@prefix}queues"
+                    @topics_table = "#{@prefix}topics"
                 end
 
                 def type
@@ -397,15 +417,13 @@ module ReliableMsg
 
                 def setup
                     mysql = connection
-                    exists = false
+                    requires = 2
                     mysql.query "SHOW TABLES" do |result|
                         while row = result.fetch_row
-                            exists = true if row[0] == @queues_table
+                            requires -= 1 if row[0] == @queues_table || row[0] == @topics_table
                         end
                     end
-                    if exists
-                        false
-                    else
+                    if requires > 0
                         sql = File.open File.join(File.dirname(__FILE__), "mysql.sql"), "r" do |input|
                             input.readlines.join
                         end
@@ -446,9 +464,15 @@ module ReliableMsg
                     mysql.query "BEGIN"
                     begin
                         inserts.each do |insert|
-                            mysql.query "INSERT INTO `#{@queues_table}` (id,queue,headers,object) VALUES('#{connection.quote  insert[:id]}','#{connection.quote insert[:queue]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
+                            if insert[:queue]
+                                mysql.query "INSERT INTO `#{@queues_table}` (id,queue,headers,object) VALUES('#{connection.quote  insert[:id]}','#{connection.quote insert[:queue]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
+                            else
+                                mysql.query "REPLACE `#{@topics_table}` (topic,headers,object) VALUES('#{connection.quote insert[:topic]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
+                            end
                         end
-                        ids = deletes.collect {|delete| "'#{delete[:id]}'" }
+                        ids = deletes.inject([]) do |array, delete|
+                            delete[:queue] ? array << "'#{delete[:id]}'" : array
+                        end
                         if !ids.empty?
                             mysql.query "DELETE FROM `#{@queues_table}` WHERE id IN (#{ids.join ','})"
                         end
@@ -481,13 +505,26 @@ module ReliableMsg
                             queue << headers unless added
                         end
                     end
+                    connection.query "SELECT topic,headers FROM `#{@topics_table}`" do |result|
+                        while row = result.fetch_row
+                            @topics[row[0]] = Marshal::load row[1]
+                        end
+                    end
                 end
 
-                def load id, queue
+                def load id, type, queue_or_topic
                     message = nil
-                    connection.query "SELECT object FROM `#{@queues_table}` WHERE id='#{id}'" do |result|
-                        message = if row = result.fetch_row
-                            row[0]
+                    if type == :queue
+                        connection.query "SELECT object FROM `#{@queues_table}` WHERE id='#{id}'" do |result|
+                            message = if row = result.fetch_row
+                                row[0]
+                            end
+                        end
+                    else
+                        connection.query "SELECT object FROM `#{@topics_table}` WHERE topic='#{queue_or_topic}'" do |result|
+                            message = if row = result.fetch_row
+                                row[0]
+                            end
                         end
                     end
                     message
