@@ -16,13 +16,18 @@ Rake::TestTask.new :test_uuid do |test|
     test.verbose = true
     test.test_files = ['test/test-uuid.rb']
 end
-desc "Run test case for Queue API generator"
+desc "Run test case for Queue API"
 Rake::TestTask.new :test_queue do |test|
     test.verbose = true
     test.test_files = ['test/test-queue.rb']
 end
+desc "Run test case for Topic API"
+Rake::TestTask.new :test_topic do |test|
+    test.verbose = true
+    test.test_files = ['test/test-topic.rb']
+end
 desc "Run all test cases"
-Rake::TestTask.new :tests=>[:test_uuid, :test_queue] do |test|
+Rake::TestTask.new :tests=>[:test_uuid, :test_queue, :test_topic] do |test|
     test.verbose = true
     test.test_files = []
     #test.warning = true
@@ -110,7 +115,7 @@ EOF
     spec.email = "assaf@labnotes.org"
     spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging"
 
-    spec.files = FileList["{bin,test,lib,docs}/**/*", "README", "MIT-LICENSE", "Rakefile"].to_a
+    spec.files = FileList["{bin,test,lib,docs}/**/*", "README", "MIT-LICENSE", "Rakefile", "changelog.txt"].to_a
     spec.require_path = "lib"
     spec.autorequire = 'reliable-msg.rb'
     spec.bindir = "bin"

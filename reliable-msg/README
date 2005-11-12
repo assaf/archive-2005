@@ -113,6 +113,10 @@ Stop the queue manager
 
   queues manager stop
 
+== Change log
+
+:include: changelog.txt
+
 
 == License
 

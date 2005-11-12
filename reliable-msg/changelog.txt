@@ -1,0 +1,15 @@
+Release 1.0.1 (Nov 10, 2005)
+
+  Fixed:    Messages not retrieved in order after queue manager
+            recovers when using MySQL message store.
+  Fixed:    Queue manager fails if stopped and then started again.
+  Added:    Test cases test put/get in memory and by reloading.
+
+
+Release 1.1.0 (Nov 11, 2005)
+
+  Added:    Topic class for publishing messages on a topic.
+  Added:    Can set delivery option when creating a queue.
+  Added:    Queue.name() returns the queue's name.
+  Changed:  Quque and Topic both extend the base class Client.
+  Fixed:    Documentation errors in Queue.
