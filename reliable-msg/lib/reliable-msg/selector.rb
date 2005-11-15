@@ -16,26 +16,30 @@ module ReliableMsg #:nodoc:
 
     class Selector
 
-            # We're using DRb. Unless we support respond_to? and instance_eval?, DRb will
-            # refuse to marshal the selector as an argument and attempt to create a remote
-            # object instead.
-            instance_methods.each { |name| undef_method name unless name =~ /^(__.*__)|respond_to\?|instance_eval$/ }
+        ERROR_NO_ARGUMENTS = "Can't pass arguments to header %s"
 
-            def initialize &block
-                # Call the block and hold the deferred value.
-                @value = self.instance_eval &block
-            end
+        # We're using DRb. Unless we support respond_to? and instance_eval?, DRb will
+        # refuse to marshal the selector as an argument and attempt to create a remote
+        # object instead.
+        instance_methods.each { |name| undef_method name unless name =~ /^(__.*__)|respond_to\?|instance_eval$/ }
 
-            def method_missing symbol, *args
-                if symbol == :__evaluate__
-                    # Evaluate the selector with the headers passed in the argument.
-                    @value.is_a?(Deferred) ? @value.__evaluate__(*args) : @value
-                else
-                    # Create a deferred value for the missing method (a header).
-                    raise ArgumentError, "Can't pass arguments to header" unless args.empty?
-                    Header.new symbol
-                end
+
+        def initialize &block
+            # Call the block and hold the deferred value.
+            @value = self.instance_eval &block
+        end
+
+
+        def method_missing symbol, *args
+            if symbol == :__evaluate__
+                # Evaluate the selector with the headers passed in the argument.
+                @value.is_a?(Deferred) ? @value.__evaluate__(*args) : @value
+            else
+                # Create a deferred value for the missing method (a header).
+                raise ArgumentError, format(ERROR_NO_ARGUMENTS, symbol.to_s) unless args.empty?
+                Header.new symbol
             end
+        end
 
 
         class Deferred #:nodoc:
@@ -45,15 +49,18 @@ module ReliableMsg #:nodoc:
             # object instead.
             instance_methods.each { |name| undef_method name unless name =~ /^(__.*__)|respond_to\?|instance_eval$/ }
 
+
             def initialize target, operation, args
                 @target = target
                 @operation = operation
                 @args = args
             end
 
+
             def coerce value
                 [Constant.new(value), self]
             end
+
 
             def method_missing symbol, *args
                 if symbol == :__evaluate__
@@ -67,15 +74,18 @@ module ReliableMsg #:nodoc:
 
         end
 
+
         class Header < Deferred #:nodoc:
 
             def initialize name
                 @name = name
             end
 
+
             def coerce value
                 [Constant.new(value), self]
             end
+
 
             def method_missing symbol, *args
                 if symbol == :__evaluate__
@@ -87,11 +97,13 @@ module ReliableMsg #:nodoc:
 
         end
 
+
         class Constant < Deferred #:nodoc:
 
             def initialize value
                 @value = value
             end
+
 
             def method_missing symbol, *args
                 if symbol == :__evaluate__

@@ -21,6 +21,7 @@ require 'reliable-msg/message-store'
 
 module ReliableMsg
 
+
     class Config #:nodoc:
 
         CONFIG_FILE = "queues.cfg"
@@ -31,6 +32,11 @@ module ReliableMsg
             "port"=>Client::DRB_PORT,
             "acl"=>"allow 127.0.0.1"
         }
+
+        INFO_LOADED_CONFIG = "Loaded queues configuration from: %s" #:nodoc:
+
+        INFO_CREATED_CONFIG = "Created queues configuration file in: %s" #:nodoc:
+
 
         def initialize file, logger = nil
             @logger = logger
@@ -48,6 +54,7 @@ module ReliableMsg
             @config = {}
         end
 
+
         def load_no_create
             if File.exist?(@file)
                 @config= {}
@@ -60,6 +67,7 @@ module ReliableMsg
             end
         end
 
+
         def load_or_create
             if File.exist?(@file)
                 @config= {}
@@ -68,16 +76,17 @@ module ReliableMsg
                         @config.merge! doc
                     end
                 end
-                @logger.info "Loaded queues configuration from: #{@file}"
+                @logger.info format(INFO_LOADED_CONFIG, @file)
             else
                 @config = {
                     "store" => DEFAULT_STORE,
                     "drb" => DEFAULT_DRB
                 }
                 save
-                @logger.info "Created queues configuration file in: #{@file}"
+                @logger.info format(INFO_CREATED_CONFIG, @file)
             end
         end
+
 
         def create_if_none
             if File.exist?(@file)
@@ -92,19 +101,23 @@ module ReliableMsg
             end
         end
 
+
         def exist?
             File.exist?(@file)
         end
 
+
         def path
             @file
         end
+
 
         def save
             File.open @file, "w" do |output|
                 YAML::dump @config, output
             end
         end
+
 
         def method_missing symbol, *args
             if symbol.to_s[-1] == ?=
@@ -135,6 +148,23 @@ module ReliableMsg
 
         ERROR_NO_TRANSACTION = "Transaction %s has completed, or was aborted" #:nodoc:
 
+        ERROR_QM_STARTED = "Queue manager already started for this process: stop the other queue manager before starting a new one" #:nodoc:
+
+        ERROR_QM_NOT_STARTED = "Queue manager not active" #:nodoc:
+
+        INFO_MESSAGE_STORE = "Using message store: %s" #:nodoc:
+
+        INFO_ACCEPTING_DRB = "Accepting requests at: %s" #:nodoc:
+
+        INFO_QM_STOPPED = "Stopped queue manager at: %s" #:nodoc:
+
+        WARN_TRANSACTION_TIMEOUT = "Timeout: aborting transaction %s" #:nodoc:
+
+        WARN_TRANSACTION_ABORTED = "Transaction %s aborted by client" #:nodoc:
+
+        @@active = nil #:nodoc:
+
+
         def initialize options = nil
             options ||= {}
             # Locks prevent two transactions from seeing the same message. We use a mutex
@@ -150,53 +180,67 @@ module ReliableMsg
             @config.load_or_create
         end
 
+
         def start
             @mutex.synchronize do
-                return false if @started
+                return if @@active == self
+                Thread.critical = true
+                if @@active.nil?
+                    @@active = self
+                else
+                    Thread.critical = false
+                    raise RuntimeError, ERROR_QM_STARTED
+                end
+                Thread.critical = false
 
-                # Get the message store based on the configuration, or default store.
-                @store = MessageStore::Base.configure(@config.store || Config::DEFAULT_STORE, @logger)
-                @logger.info "Using message store #{@store.type}"
-                @store.activate
+                begin
+                    # Get the message store based on the configuration, or default store.
+                    @store = MessageStore::Base.configure(@config.store || Config::DEFAULT_STORE, @logger)
+                    @logger.info format(INFO_MESSAGE_STORE, @store.type)
+                    @store.activate
 
-                # Get the DRb URI from the configuration, or use the default. Create a DRb server.
-                drb = Config::DEFAULT_DRB
-                drb.merge(@config.drb) if @config.drb
-                drb_uri = "druby://localhost:#{drb['port']}"
-                @drb_server = DRb::DRbServer.new drb_uri, self, :tcp_acl=>ACL.new(drb["acl"].split(" "), ACL::ALLOW_DENY), :verbose=>true
-                @logger.info "Accepting requests at '#{drb_uri}'"
+                    # Get the DRb URI from the configuration, or use the default. Create a DRb server.
+                    drb = Config::DEFAULT_DRB
+                    drb.merge(@config.drb) if @config.drb
+                    drb_uri = "druby://localhost:#{drb['port']}"
+                    @drb_server = DRb::DRbServer.new drb_uri, self, :tcp_acl=>ACL.new(drb["acl"].split(" "), ACL::ALLOW_DENY), :verbose=>true
+                    @logger.info format(INFO_ACCEPTING_DRB, drb_uri)
 
-                # Create a background thread to stop timed-out transactions.
-                @timeout_thread = Thread.new do
-                    begin
-                        while true
-                            time = Time.new.to_i
-                            @transactions.each_pair do |tid, tx|
-                                if tx[:timeout] <= time
-                                    begin
-                                        @logger.warn "Timeout: aborting transaction #{tid}"
-                                        abort tid
-                                    rescue
+                    # Create a background thread to stop timed-out transactions.
+                    @timeout_thread = Thread.new do
+                        begin
+                            while true
+                                time = Time.new.to_i
+                                @transactions.each_pair do |tid, tx|
+                                    if tx[:timeout] <= time
+                                        begin
+                                            @logger.warn format(WARN_TRANSACTION_TIMEOUT, tid)
+                                            abort tid
+                                        rescue
+                                        end
                                     end
                                 end
+                                sleep TX_TIMEOUT_CHECK_EVERY
                             end
-                            sleep TX_TIMEOUT_CHECK_EVERY
+                        rescue Exception=>error
+                            retry
                         end
-                    rescue Exception=>error
-                        retry
                     end
-                end
 
-                # Associate this queue manager with the local Queue class, instead of using DRb.
-                Client.send :qm=, self
-                @started = true
+                    # Associate this queue manager with the local Queue class, instead of using DRb.
+                    Client.send :qm=, self
+                    nil
+                rescue Exception=>error
+                    @@active = nil if @@active == self
+                    raise error
+                end
             end
         end
 
+
         def stop
             @mutex.synchronize do
-                return false unless @started
-
+                raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
                 # Prevent transactions from timing out while we take down the server.
                 @timeout_thread.terminate
                 # Shutdown DRb server to prevent new requests from being processed.\
@@ -207,15 +251,17 @@ module ReliableMsg
                 @store.deactivate
                 @store = nil
                 @drb_server = @store = @timeout_thread = nil
-                @logger.info "Stopped queue manager at '#{drb_uri}'"
-                @started = false
+                @logger.info format(INFO_QM_STOPPED, drb_uri)
+                @@active = nil
             end
             true
         end
 
+
         def alive?
             @drb_server && @drb_server.alive?
         end
+
 
         def queue args
             # Get the arguments of this call.
@@ -452,6 +498,7 @@ module ReliableMsg
             tid
         end
 
+
         def commit tid
             tx = @transactions[tid]
             raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
@@ -472,6 +519,7 @@ module ReliableMsg
             end
         end
 
+
         def abort tid
             tx = @transactions[tid]
             raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
@@ -484,8 +532,9 @@ module ReliableMsg
                 end
             end
             @transactions.delete tid
-            @logger.warn "Transaction #{tid} aborted"
+            @logger.warn format(WARN_TRANSACTION_ABORTED, tid)
         end
+
 
     private
         def integer value, minimum, default

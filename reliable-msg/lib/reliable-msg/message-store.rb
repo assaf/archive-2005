@@ -15,9 +15,11 @@ require 'reliable-msg/client'
 
 module ReliableMsg
 
+
     module MessageStore
 
         ERROR_INVALID_MESSAGE_STORE = "No message store '%s' available (note: case is not important)" #:nodoc:
+
 
         # Base class for message store.
         class Base
@@ -26,9 +28,11 @@ module ReliableMsg
 
             @@stores = {} #:nodoc:
 
+
             def initialize logger
                 @logger = logger
             end
+
 
             # Returns the message store type name.
             #
@@ -39,6 +43,7 @@ module ReliableMsg
                 raise RuntimeException, "Not implemented"
             end
 
+
             # Set up the message store. Create files, database tables, etc.
             #
             # :call-seq:
@@ -46,6 +51,7 @@ module ReliableMsg
             #
             def setup
             end
+
 
             # Returns the message store configuration as a hash.
             #
@@ -55,6 +61,7 @@ module ReliableMsg
             def configuration
                 raise RuntimeException, "Not implemented"
             end
+
 
             # Activates the message store. Call this method before using the
             # message store.
@@ -70,6 +77,7 @@ module ReliableMsg
                 # TODO: add recovery logic
             end
 
+
             # Deactivates the message store. Call this method when done using
             # the message store.
             #
@@ -79,6 +87,7 @@ module ReliableMsg
             def deactivate
                 @mutex = @queues = @topics = @cache = nil
             end
+
 
             def transaction &block
                 result = block.call inserts = [], deletes = [], dlqs= []
@@ -97,6 +106,7 @@ module ReliableMsg
                 result
             end
 
+
             def select queue, &block
                 messages = @queues[queue]
                 return nil unless messages
@@ -110,6 +120,7 @@ module ReliableMsg
                 return nil
             end
 
+
             def get_last topic, seen, &block
                 headers = @topics[topic]
                 return nil if headers.nil? || headers[:id] == seen
@@ -119,6 +130,7 @@ module ReliableMsg
                     {:id=>id, :headers=>headers, :message=>message}
                 end
             end
+
 
             # Returns a message store from the specified configuration (previously
             # created with configure).
@@ -132,6 +144,7 @@ module ReliableMsg
                 raise RuntimeError, format(ERROR_INVALID_MESSAGE_STORE, type) unless cls
                 cls.new config, logger
             end
+
 
         protected
 
@@ -201,6 +214,11 @@ module ReliableMsg
                 "path"=>DEFAULT_PATH
             }
 
+            ERROR_PATH_NOT_DIR = "The path %s is not a directory" #:nodoc:
+
+            ERROR_FAILED_WRITE_MASTER = "Cannot write to master index file %s" #:nodoc:
+
+
             def initialize config, logger
                 super logger
                 @fsync = config['fsync']
@@ -213,13 +231,15 @@ module ReliableMsg
                 @path = File.expand_path(config['path'] || DEFAULT_PATH)
             end
 
+
             def type
                 TYPE
             end
 
+
             def setup
                 if File.exist?(@path)
-                    raise RuntimeError, "The path '#{@path}' is not a directory" unless File.directory?(@path)
+                    raise RuntimeError, format(ERROR_PATH_NOT_DIR, @path) unless File.directory?(@path)
                     false
                 else
                     Dir.mkdir @path
@@ -227,17 +247,19 @@ module ReliableMsg
                 end
             end
 
+
             def configuration
                 { "type"=>TYPE, "path"=>@path }
             end
 
+
             def activate
                 super
                 Dir.mkdir @path unless File.exist?(@path)
-                raise RuntimeError, "The path '#{@path}' is not a directory" unless File.directory?(@path)
+                raise RuntimeError, format(ERROR_PATH_NOT_DIR, @path) unless File.directory?(@path)
                 index = "#{@path}/master.idx"
                 if File.exist? index
-                    raise RuntimeError, "Cannot write to master index file '#{index}'" unless File.writable?(index)
+                    raise RuntimeError, format(ERROR_FAILED_WRITE_MASTER, index) unless File.writable?(index)
                     @file = File.open index, "r+"
                     @file.flock File::LOCK_EX
                     @file.binmode # Things break if you forget binmode on Windows.
@@ -253,6 +275,7 @@ module ReliableMsg
                 end
             end
 
+
             def deactivate
                 @file.flock File::LOCK_UN
                 @file.close
@@ -265,6 +288,7 @@ module ReliableMsg
                 @file_map = @file_free = nil
                 super
             end
+
 
         protected
 
@@ -341,6 +365,7 @@ module ReliableMsg
                 end
             end
 
+
             def load_index
                 @file.sysseek 0, IO::SEEK_SET
                 last_block = @file.sysread(8).hex
@@ -360,6 +385,7 @@ module ReliableMsg
                     @last_block, @last_block_end = last_block, last_block + length + 8
                 end
             end
+
 
             def load id, type, queue
                 # Find the file from the message/file mapping.
@@ -390,6 +416,7 @@ module ReliableMsg
                 require 'active_record/vendor/mysql'
             end
 
+
             class MySQL < Base #:nodoc:
 
                 TYPE = self.name.split('::').last.downcase
@@ -402,6 +429,7 @@ module ReliableMsg
                 # Reference to an open MySQL connection held in the current thread.
                 THREAD_CURRENT_MYSQL = :reliable_msg_mysql #:nodoc:
 
+
                 def initialize config, logger
                     super logger
                     @config = { :host=>config['host'], :username=>config['username'], :password=>config['password'],
@@ -411,13 +439,15 @@ module ReliableMsg
                     @topics_table = "#{@prefix}topics"
                 end
 
+
                 def type
                     TYPE
                 end
 
+
                 def setup
                     mysql = connection
-                    requires = 2
+                    requires = 2 # Number of tables used by reliable-msg.
                     mysql.query "SHOW TABLES" do |result|
                         while row = result.fetch_row
                             requires -= 1 if row[0] == @queues_table || row[0] == @topics_table
@@ -433,6 +463,7 @@ module ReliableMsg
                     end
                 end
 
+
                 def configuration
                     config = { "type"=>TYPE, "host"=>@config[:host], "username"=>@config[:username],
                         "password"=>@config[:password], "database"=>@config[:database] }
@@ -442,10 +473,12 @@ module ReliableMsg
                     config
                 end
 
+
                 def activate
                     super
                     load_index
                 end
+
 
                 def deactivate
                     Thread.list.each do |thread|
@@ -456,6 +489,7 @@ module ReliableMsg
                     end
                     super
                 end
+
 
             protected
 
@@ -487,6 +521,7 @@ module ReliableMsg
                     super
                 end
 
+
                 def load_index
                     connection.query "SELECT id,queue,headers FROM `#{@queues_table}`" do |result|
                         while row = result.fetch_row
@@ -512,6 +547,7 @@ module ReliableMsg
                     end
                 end
 
+
                 def load id, type, queue_or_topic
                     message = nil
                     if type == :queue
@@ -530,6 +566,7 @@ module ReliableMsg
                     message
                 end
 
+
                 def connection
                     Thread.current[THREAD_CURRENT_MYSQL] ||= Mysql.new @config[:host], @config[:username], @config[:password],
                         @config[:database], @config[:port], @config[:socket]
@@ -538,6 +575,7 @@ module ReliableMsg
             end
 
         rescue LoadError
+            # do nothing
         end
 
     end
