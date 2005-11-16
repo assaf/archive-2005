@@ -16,103 +16,52 @@ module ReliableMsg #:nodoc:
 
     class Selector
 
-        ERROR_NO_ARGUMENTS = "Can't pass arguments to header %s"
-
-        # We're using DRb. Unless we support respond_to? and instance_eval?, DRb will
-        # refuse to marshal the selector as an argument and attempt to create a remote
-        # object instead.
-        instance_methods.each { |name| undef_method name unless name =~ /^(__.*__)|respond_to\?|instance_eval$/ }
-
-
         def initialize &block
-            # Call the block and hold the deferred value.
-            @value = self.instance_eval &block
+            @block = block
+            @list = nil
         end
 
 
-        def method_missing symbol, *args
-            if symbol == :__evaluate__
-                # Evaluate the selector with the headers passed in the argument.
-                @value.is_a?(Deferred) ? @value.__evaluate__(*args) : @value
+        def select list
+            @list = []
+            list.each do |headers|
+                id = headers[:id]
+                context = EvaluationContext.new headers
+                @list << id if context.instance_eval(&@block)
+            end
+        end
+
+
+        def next
+            @list && @list.shift
+        end
+
+
+    end
+
+
+    class EvaluationContext #:nodoc:
+
+        instance_methods.each { |name| undef_method name unless name =~ /^(__.*__)|instance_eval$/ }
+
+
+        def initialize headers
+            @headers = headers
+        end
+
+
+        def now
+            Time.now.to_i
+        end
+
+
+        def method_missing symbol, *args, &block
+            if @headers.has_key?(symbol)
+                raise ArgumentError, "Wrong number of arguments (#{args.length} for 0)" unless args.empty?
+                @headers[symbol]
             else
-                # Create a deferred value for the missing method (a header).
-                raise ArgumentError, format(ERROR_NO_ARGUMENTS, symbol.to_s) unless args.empty?
-                Header.new symbol
+                super
             end
-        end
-
-
-        class Deferred #:nodoc:
-
-            # We're using DRb. Unless we support respond_to? and instance_eval?, DRb will
-            # refuse to marshal the selector as an argument and attempt to create a remote
-            # object instead.
-            instance_methods.each { |name| undef_method name unless name =~ /^(__.*__)|respond_to\?|instance_eval$/ }
-
-
-            def initialize target, operation, args
-                @target = target
-                @operation = operation
-                @args = args
-            end
-
-
-            def coerce value
-                [Constant.new(value), self]
-            end
-
-
-            def method_missing symbol, *args
-                if symbol == :__evaluate__
-
-                    eval_args = @args.collect { |arg| arg.instance_of?(Deferred) ? arg.__evaluate__(*args) : arg }
-                    @target.__evaluate__(*args).send @operation, *eval_args
-                else
-                    Deferred.new self, symbol, args
-                end
-            end
-
-        end
-
-
-        class Header < Deferred #:nodoc:
-
-            def initialize name
-                @name = name
-            end
-
-
-            def coerce value
-                [Constant.new(value), self]
-            end
-
-
-            def method_missing symbol, *args
-                if symbol == :__evaluate__
-                    args[0][@name]
-                else
-                    Deferred.new self, symbol, args
-                end
-            end
-
-        end
-
-
-        class Constant < Deferred #:nodoc:
-
-            def initialize value
-                @value = value
-            end
-
-
-            def method_missing symbol, *args
-                if symbol == :__evaluate__
-                    @value
-                else
-                    Deferred.new self, symbol, args
-                end
-            end
-
         end
 
     end

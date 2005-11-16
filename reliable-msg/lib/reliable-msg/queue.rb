@@ -46,15 +46,17 @@ module ReliableMsg
         # still put messages in other queues by specifying the destination queue
         # name in the header.
         #
-        # TODO: document options
-        # * :expires
-        # * :delivery
-        # * :priority
-        # * :max_retries
-        # * :selector
-        # * :drb_uri
-        # * :tx_timeout
-        # * :connect_count
+        # The following options can be passed to the initializer:
+        # * <tt>:expires</tt> -- Message expiration in seconds. Default for new messages.
+        # * <tt>:delivery</tt> -- The message delivery mode. Default for new messages.
+        # * <tt>:priority</tt> -- The message priority. Default for new messages.
+        # * <tt>:max_retries</tt> -- Maximum number of attempts to re-deliver message.
+        #   Default for new messages.
+        # * <tt>:selector</tt> -- Message selector. Default when retrieving messages.
+        # * <tt>:drb_uri</tt> -- DRb URI for connecting to the queue manager. Only
+        #   required when using a remote queue manager, or different port.
+        # * <tt>:tx_timeout</tt> -- Transaction timeout. See tx_timeout.
+        # * <tt>:connect_count</tt> -- Connection attempts. See connect_count.
         #
         # :call-seq:
         #   Queue.new([name [,options]])    -> queue
@@ -152,12 +154,12 @@ module ReliableMsg
         #   assert(msg.obj == obj)
         #
         # More complex selector expressions can be generated using Queue.selector. For example,
-        # to retrieve the next message with priority 2 or higher, received in the last 60 seconds:
-        #   selector = Queue.selector { priority >= 2 and received > Time.new.to_i - 60 }
+        # to retrieve the next message with priority 2 or higher, created in the last 60 seconds:
+        #   selector = Queue.selector { priority >= 2 && created > now - 60 }
         #   msg = queue.get selector
         # You can also specify selectors for a Queue to be used by default for all Queue.get calls
         # on that Queue object. For example:
-        #   queue.selector= { priority >= 2 and received > Time.new.to_i - 60 }
+        #   queue.selector= { priority >= 2 and created > now - 60 }
         #   msg = queue.get  # default selector applies
         #
         # The following headers have special meaning:
@@ -167,7 +169,6 @@ module ReliableMsg
         # * <tt>:retry</tt> -- Specifies the retry count for the message. Zero when the message is
         #   first delivered, and incremented after each re-delivery attempt.
         # * <tt>:created</tt> -- Indicates timestamp (in seconds) when the message was created.
-        # * <tt>:received</tt> -- Indicates timestamp (in seconds) when the message was received.
         # * <tt>:expires_at</tt> -- Indicates timestamp (in seconds) when the message will expire,
         #   +nil+ if the message does not expire.
         #
@@ -236,6 +237,23 @@ module ReliableMsg
                         @selector
                     else
                         raise ArgumentError, ERROR_INVALID_SELECTOR
+                end
+                # If using block selector, obtain a list of all message headers
+                # in the queue and run them by the selector. Pick the next message
+                # that matches to retrieve.
+                if selector.is_a?(Selector)
+                    id = selector.next
+                    unless id
+                        list = if tx
+                            tx[:qm].list :queue=>@queue, :tid=>tx[:tid]
+                        else
+                            repeated { |qm| qm.list :queue=>@queue }
+                        end
+                        selector.select list
+                        id = selector.next
+                    end
+                    return nil unless id
+                    selector = {:id=>id}
                 end
                 # If inside a transaction, always retrieve from the same queue manager,
                 # otherwise, allow repeated() to try and access multiple queue managers.

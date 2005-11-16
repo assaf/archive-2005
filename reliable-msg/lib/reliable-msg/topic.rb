@@ -46,12 +46,13 @@ module ReliableMsg
         # still publish messages on other topics by specifying the destination topics
         # name in the header.
         #
-        # TODO: document options
-        # * :expires
-        # * :selector
-        # * :drb_uri
-        # * :tx_timeout
-        # * :connect_count
+        # The following options can be passed to the initializer:
+        # * <tt>:expires</tt> -- Message expiration in seconds. Default for new messages.
+        # * <tt>:selector</tt> -- Message selector. Default when retrieving messages.
+        # * <tt>:drb_uri</tt> -- DRb URI for connecting to the queue manager. Only
+        #   required when using a remote queue manager, or different port.
+        # * <tt>:tx_timeout</tt> -- Transaction timeout. See tx_timeout.
+        # * <tt>:connect_count</tt> -- Connection attempts. See connect_count.
         #
         # :call-seq:
         #   Topic.new([name [,options]])    -> topic
@@ -125,7 +126,6 @@ module ReliableMsg
         # The following headers have special meaning:
         # * <tt>:id</tt> -- The message identifier.
         # * <tt>:created</tt> -- Indicates timestamp (in seconds) when the message was created.
-        # * <tt>:received</tt> -- Indicates timestamp (in seconds) when the message was received.
         # * <tt>:expires_at</tt> -- Indicates timestamp (in seconds) when the message will expire,
         #   +nil+ if the message does not expire.
         #
@@ -164,6 +164,8 @@ module ReliableMsg
                     else
                         raise ArgumentError, ERROR_INVALID_SELECTOR
                 end
+                # TODO: Proper support for block selector (only one message to process!)
+
                 # If inside a transaction, always retrieve from the same queue manager,
                 # otherwise, allow repeated() to try and access multiple queue managers.
                 message = if tx

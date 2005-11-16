@@ -18,7 +18,7 @@ module ReliableMsg
     # Base class for both Queue and Topic client APIs.
     class Client #:nodoc:
 
-        ERROR_INVALID_SELECTOR = "Selector must be message identifier (String), set of header name/value pairs (Hash), or nil" # :nodoc:
+        ERROR_INVALID_SELECTOR = "Selector must be message identifier (String), set of header name/value pairs (Hash), Selector object, or nil" # :nodoc:
 
         ERROR_INVALID_TX_TIMEOUT = "Invalid transaction timeout: must be a non-zero positive integer" # :nodoc:
 
@@ -223,6 +223,16 @@ module ReliableMsg
         #
         def headers
             @headers
+        end
+
+    private
+        def method_missing symbol, *args, &block
+            if @headers.has_key?(symbol)
+                raise ArgumentError, "Wrong number of arguments (#{args.length} for 0)" unless args.empty?
+                @headers[symbol]
+            else
+                super
+            end
         end
 
     end

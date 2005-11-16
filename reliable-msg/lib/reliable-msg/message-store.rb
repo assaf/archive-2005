@@ -107,7 +107,7 @@ module ReliableMsg
             end
 
 
-            def select queue, &block
+            def get_message queue, &block
                 messages = @queues[queue]
                 return nil unless messages
                 messages.each do |headers|
@@ -118,6 +118,11 @@ module ReliableMsg
                     end
                 end
                 return nil
+            end
+
+
+            def get_headers queue
+                return @queues[queue]
             end
 
 

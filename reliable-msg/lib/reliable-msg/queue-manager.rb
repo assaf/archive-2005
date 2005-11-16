@@ -294,9 +294,9 @@ module ReliableMsg
 
             # Set the message headers controlled by the queue.
             headers[:id] = id
-            headers[:received] = time
+            headers[:created] = time
             headers[:delivery] ||= :best_effort
-            headers[:retry] = 0
+            headers[:delivered] = 0
             headers[:max_retries] = integer headers[:max_retries], 0, Client::DEFAULT_MAX_RETRIES
             headers[:priority] = integer headers[:priority], 0, 0
             if expires_at = headers[:expires_at]
@@ -321,6 +321,28 @@ module ReliableMsg
         end
 
 
+        def list args
+            # Get the arguments of this call.
+            queue = args[:queue].downcase
+            raise ArgumentError, ERROR_SEND_MISSING_QUEUE unless queue and queue.instance_of?(String) and !queue.empty?
+
+            return @mutex.synchronize do
+                 list = @store.get_headers queue
+                 list.delete_if do |headers|
+                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:delivered] > headers[:max_retries]))
+                        expired = {:id=>headers[:id], :queue=>queue, :headers=>headers}
+                        if headers[:delivery] == :once || headers[:delivery] == :repeated
+                            @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
+                        else # :best_effort
+                            @store.transaction { |inserts, deletes, dlqs| deletes << expired }
+                        end
+                        true
+                    end
+                end
+            end
+        end
+
+
         def enqueue args
             # Get the arguments of this call.
             queue, selector, tid = args[:queue].downcase, args[:selector], args[:tid]
@@ -333,7 +355,7 @@ module ReliableMsg
             # transaction. We can wrap everything with a mutex, but it's faster to
             # release the locks mutex as fast as possibe.
             message = @mutex.synchronize do
-                message = @store.select queue do |headers|
+                message = @store.get_message queue do |headers|
                     not @locks.has_key?(headers[:id]) and case selector
                         when nil
                             true
@@ -357,7 +379,7 @@ module ReliableMsg
             # discard the message, or send it to the DLQ. Since we're out of a message,
             # we call to get a new one. (This can be changed to repeat instead of recurse).
             headers = message[:headers]
-            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:retry] > headers[:max_retries]))
+            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:delivered] > headers[:max_retries]))
                 expired = {:id=>message[:id], :queue=>queue, :headers=>headers}
                 if headers[:delivery] == :once || headers[:delivery] == :repeated
                     @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
@@ -439,7 +461,7 @@ module ReliableMsg
 
             # Set the message headers controlled by the topic.
             headers[:id] = id
-            headers[:received] = time
+            headers[:created] = time
             if expires_at = headers[:expires_at]
                 raise ArgumentError, format(ERROR_INVALID_HEADER_VALUE, :expires_at, "an integer", expires_at.class) unless expires_at.is_a?(Integer)
             elsif expires = headers[:expires]
@@ -528,7 +550,7 @@ module ReliableMsg
             @mutex.synchronize do
                 tx[:deletes].each do |delete|
                     @locks.delete delete[:id]
-                    delete[:headers][:retry] += 1
+                    delete[:headers][:delivered] += 1
                 end
             end
             @transactions.delete tid
