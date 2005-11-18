@@ -1,0 +1,74 @@
+# Adapted from the rake Rakefile.
+
+require 'rubygems'
+Gem::manage_gems
+require 'rake/testtask'
+require 'rake/rdoctask'
+require 'rake/gempackagetask'
+
+
+desc "Default Task"
+task :default => [:tests, :rdoc]
+
+
+Rake::TestTask.new :tests do |test|
+    test.verbose = true
+    test.test_files = ['test/*.rb']
+end
+
+
+# Create the documentation.
+Rake::RDocTask.new do |rdoc|
+    rdoc.main = "README"
+    rdoc.rdoc_files.include("README", "lib/**/*.rb")
+    rdoc.title = 'Microformat Parser'
+end
+
+
+# Create the GEM package.
+gem_spec = Gem::Specification.new do |spec|
+    spec.name = 'uformatparser'
+    spec.version = "1.0.0"
+    spec.summary = "Microformat parser for extracting microcontent from (X)HTML"
+    spec.description = <<-EOF
+        Parser for extracting microcontent from (X)HTML documents, in any number
+        of microformats.
+
+        Uses a DSL for specifying the parsing rules as a set of selectors and
+        extractors. Supports a CSS-like selector and XPath-like extractor syntaxes
+        for quick and easy rule writing. Also supports reusable and compound rules,
+EOF
+    spec.author = "Assaf Arkin"
+    spec.email = "assaf@labnotes.org"
+    spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/MicroParserRuby"
+
+    spec.files = FileList["{test,lib}/**/*", "README", "Rakefile", "MIT-LICENSE"].to_a
+    spec.require_path = "lib"
+    spec.autorequire = 'uformatparser.rb'
+    spec.requirements << "ReXML. HTML->ReXML parser."
+    spec.has_rdoc = true
+    spec.rdoc_options << '--main' << 'README' << '--title' <<  'Microformat parser' << '--line-numbers'
+    spec.extra_rdoc_files = ["README"]
+    spec.rubyforge_project = "uformatparser"
+end
+
+gem = Rake::GemPackageTask.new(gem_spec) do |pkg|
+    pkg.need_tar = true
+    pkg.need_zip = true
+end
+
+
+# --------------------------------------------------------------------
+# Creating a release
+
+desc "Make a new release"
+task :release => [:tests, :clobber, :package] do
+    puts
+    puts "**************************************************************"
+    puts "* Release #{gem_spec.version} Complete."
+    puts "* Packages ready to upload."
+    puts "**************************************************************"
+    puts
+end
+
+

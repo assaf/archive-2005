@@ -1,0 +1,45 @@
+= Microformat Parser
+
+MicroformatParser is a Ruby module for creating microformat parsers.
+A microformat parser is a class with a set of rules for extracting
+interesting content from (X)HTML documents. You create your own parser
+by writing a class with a set of rules. The magic happens in the parse
+method which taks an (X)HTML document or element, runs all the rules
+on it, and returns new object that holds the extracted valus.
+
+Here's a simple example to find all links and all tags in a document:
+
+  class MyParser
+    include MicroformatParser
+
+    rule :links, "a", "a@href"
+    rule :tags, "a[rel~=tag]", "text()"
+  end
+
+  content = MyParser.parse(doc)
+  puts "Found " + content.links.size + " links" if content.links
+  puts "Tagged with " + content.tags.join(', ') if content.tags
+
+
+== Documentation
+
+You may want to read the documentation for a more details discussion of
+selectors, extractors, compound rules, (X)HTML parsing and examples
+
+http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/MicroParserRuby
+
+
+== Download
+
+The latest version of Reliable Messaging can be found at
+
+http://rubyforge.org/projects/uformatparser/
+
+
+== License
+
+This package is licensed under the MIT license and/or the {Creative
+Commons Attribution-ShareAlike}[http://creativecommons.org/licenses/by-sa/2.5/legalcode].
+
+:include: MIT-LICENSE
+
