@@ -164,14 +164,12 @@ module ReliableMsg
                     else
                         raise ArgumentError, ERROR_INVALID_SELECTOR
                 end
-                # TODO: Proper support for block selector (only one message to process!)
-
                 # If inside a transaction, always retrieve from the same queue manager,
                 # otherwise, allow repeated() to try and access multiple queue managers.
                 message = if tx
-                    tx[:qm].retrieve :seen=>@seen, :topic=>@topic, :selector=>selector, :tid=>tx[:tid]
+                    tx[:qm].retrieve :seen=>@seen, :topic=>@topic, :selector=>(selector.is_a?(Selector) ? nil : selector), :tid=>tx[:tid]
                 else
-                    repeated { |qm| qm.retrieve :seen=>@seen, :topic=>@topic, :selector=>selector }
+                    repeated { |qm| qm.retrieve :seen=>@seen, :topic=>@topic, :selector=>(selector.is_a?(Selector) ? nil : selector) }
                 end
                 # Result is either message, or result from processing block. Note that
                 # calling block may raise an exception. We deserialize the message here
@@ -181,6 +179,12 @@ module ReliableMsg
                 # 2. The message may rely on classes known to the client but not available
                 #    to the queue manager.
                 result = if message
+                    # Do not process message unless selector matches. Do not mark
+                    # message as seen either, since we may retrieve it if the selector
+                    # changes.
+                    if selector.is_a?(Selector)
+                        return nil unless selector.match message[:headers]
+                    end
                     @seen = message[:id]
                     message = Message.new(message[:id], message[:headers], Marshal::load(message[:message]))
                     block ? block.call(message) : message

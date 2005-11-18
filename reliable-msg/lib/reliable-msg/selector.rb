@@ -32,6 +32,12 @@ module ReliableMsg #:nodoc:
         end
 
 
+        def match headers
+            context = EvaluationContext.new headers
+            context.instance_eval(&@block)
+        end
+
+
         def next
             @list && @list.shift
         end

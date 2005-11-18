@@ -363,8 +363,8 @@ module ReliableMsg
                             headers[:id] == selector
                         when Hash
                             selector.all? { |name, value| headers[name] == value }
-                        when Selector
-                            selector.__evaluate__ headers
+                        else
+                            raise RuntimeError, "Internal error"
                     end
                 end
                 if message
@@ -495,8 +495,8 @@ module ReliableMsg
                     true
                 when Hash
                     selector.all? { |name, value| headers[name] == value }
-                when Selector
-                    selector.__evaluate__ headers
+                else
+                    raise RuntimeError, "Internal error"
                 end
             end
             # Nothing to do if no message found.

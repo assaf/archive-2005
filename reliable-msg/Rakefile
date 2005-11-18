@@ -125,6 +125,7 @@ EOF
     spec.has_rdoc = true
     spec.rdoc_options << '--main' << 'README' << '--title' <<  'Reliable Messaging for Ruby' << '--line-numbers'
     spec.extra_rdoc_files = ["README"]
+    spec.rubyforge_project = "reliable-msg"
 end
 
 gem = Rake::GemPackageTask.new(gem_spec) do |pkg|
