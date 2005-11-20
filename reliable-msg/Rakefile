@@ -113,7 +113,7 @@ gem_spec = Gem::Specification.new do |spec|
 EOF
     spec.author = "Assaf Arkin"
     spec.email = "assaf@labnotes.org"
-    spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyReliableMessaging"
+    spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/ReliableMessaging"
 
     spec.files = FileList["{bin,test,lib,docs}/**/*", "README", "MIT-LICENSE", "Rakefile", "changelog.txt"].to_a
     spec.require_path = "lib"

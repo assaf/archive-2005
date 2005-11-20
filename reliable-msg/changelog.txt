@@ -1,4 +1,4 @@
-Release 1.1.0 (Nov 16, 2005)
+Release 1.1.0 (Nov 18, 2005)
 
   Added:    Topic class for publishing messages on a topic.
   Added:    Can set delivery option when creating a queue.
@@ -6,18 +6,20 @@ Release 1.1.0 (Nov 16, 2005)
   Changed:  Quque and Topic both extend the base class Client.
   Changed:  Cannot start two queue managers in the same process.
   Changed:  Each message has a created header indicating date/time
-            of creation. Received header no longer exists.
+    of creation. Received header no longer exists.
   Changed:  Header retry renamed to delivered, to prevent clash with
-            reserved Ruby keyword.
-  Changed:  Selectors are now executed in the client process, by
-            passing headers back to the client.
+    reserved Ruby keyword.
+  Changed:  Selectors are now executed in the client process.
+    Selectors can rely on client variables, methods and constants.
+    However, it requires another message, and selectors are no
+    longer thread-safe.
   Fixed:    Documentation errors in Queue.
 
 
 Release 1.0.1 (Nov 10, 2005)
 
   Fixed:    Messages not retrieved in order after queue manager
-            recovers when using MySQL message store.
+    recovers when using MySQL message store.
   Fixed:    Queue manager fails if stopped and then started again.
   Added:    Test cases test put/get in memory and by reloading.
 
