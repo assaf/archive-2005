@@ -26,15 +26,14 @@ Here's a simple example to find all links and all tags in a document:
 You may want to read the documentation for a more details discussion of
 selectors, extractors, compound rules, (X)HTML parsing and examples
 
-http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/MicroParserRuby
+http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/MicroformatParser
 
 
 == Download
 
-The latest version of Reliable Messaging can be found at
+The latest version of can be found at
 
-http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyMicroformatParser
-
+http://rubyforge.org/projects/uformatparser/
 
 == License
 

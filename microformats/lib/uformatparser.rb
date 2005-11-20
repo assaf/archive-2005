@@ -3,7 +3,7 @@
 #
 #--
 # Author:: Assaf Arkin assaf@labnotes.org
-# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/RubyMicroformatParser
+# Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/MicroformatParser
 # Copyright:: Copyright (c) 2005 Assaf Arkin
 # License:: Creative Commons Attribution-ShareAlike
 #
