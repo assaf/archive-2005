@@ -11,11 +11,6 @@ desc "Default Task"
 task :default => [:tests, :rdoc]
 
 
-desc "Run test case for UUID generator"
-Rake::TestTask.new :test_uuid do |test|
-    test.verbose = true
-    test.test_files = ['test/test-uuid.rb']
-end
 desc "Run test case for Queue API"
 Rake::TestTask.new :test_queue do |test|
     test.verbose = true
@@ -27,7 +22,7 @@ Rake::TestTask.new :test_topic do |test|
     test.test_files = ['test/test-topic.rb']
 end
 desc "Run all test cases"
-Rake::TestTask.new :tests=>[:test_uuid, :test_queue, :test_topic] do |test|
+Rake::TestTask.new :tests=>[:test_queue, :test_topic] do |test|
     test.verbose = true
     test.test_files = []
     #test.warning = true

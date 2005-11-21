@@ -14,7 +14,12 @@ require 'drb'
 require 'drb/acl'
 require 'thread'
 require 'yaml'
-require 'uuid'
+begin
+  require 'uuid'
+rescue LoadError
+  require 'rubygems'
+  require_gem 'uuid'
+end
 require 'reliable-msg/client'
 require 'reliable-msg/message-store'
 

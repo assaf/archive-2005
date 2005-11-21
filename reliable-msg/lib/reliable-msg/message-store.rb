@@ -10,7 +10,6 @@
 #++
 
 require 'thread'
-require 'uuid'
 require 'reliable-msg/client'
 
 module ReliableMsg
