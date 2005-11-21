@@ -1,0 +1,4 @@
+Release 1.0.0 (Nov 20, 2005)
+
+* Changed:  Separated form reliable-msg into its own package.
+
