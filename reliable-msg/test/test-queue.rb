@@ -84,8 +84,12 @@ class TestQueue < Test::Unit::TestCase
         restart.call if restart
         msg = @queue.get(ReliableMsg::Queue.selector { name == 'bar' })
         assert msg && msg.id == id2, "Failed to retrieve message by selector"
+        msg = @queue.get(ReliableMsg::Queue.selector { name == 'baz' })
+        assert msg.nil?, "Retrieved non-existent message" # Tests reloading selector
         msg = @queue.get(ReliableMsg::Queue.selector { name == 'foo' })
         assert msg && msg.id == id1, "Failed to retrieve message by selector"
+        msg = @queue.get(ReliableMsg::Queue.selector { name == 'baz' })
+        assert msg.nil?, "Retrieved non-existent message" # Tests reloading selector
         assert @queue.get.nil?, "Phantom message in queue"
     end
 

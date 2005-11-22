@@ -92,47 +92,8 @@ module ReliableMsg
             end
         end
 
-        # If called with no block, returns the selector associated with this object
-        # (see selector=). If called with a block, creates and returns a new
-        # selector.
-        #
-        # :call-seq:
-        #   obj.selector -> selector
-        #   obj.selector { ... } -> selector
-        #
-        def selector &block
-            block ? Selector.new(&block) : @selector
-        end
-
-        # Sets a default selector for this object. Affects all future calls to get
-        # that do not specify a selector.
-        #
-        # You can pass a Selector object, a block expression, or +nil+ if you no longer
-        # want to use the default selector. For example:
-        #   queue.selector= { priority >= 2 and received > Time.new.to_i - 60 }
-        #   10.times do
-        #     p queue.get
-        #   end
-        #   queue.selector= nil
-        #
-        # :call-seq:
-        #   obj.selector = selector
-        #   obj.selector = { ... }
-        #   obj.selector = nil
-        #
-        def selector= value = nil, &block
-            raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK if (value && block)
-            if value
-                raise ArgumentError, ERROR_SELECTOR_VALUE_OR_BLOCK unless value.instance_of?(Selector)
-                @selector = value
-            elsif block
-                @selector = Selector.new &block
-            else
-                @selector = nil
-            end
-        end
-
-        # Create and return a new selector based on the block expression. For example:
+        # Create and return a new selector based on the block expression. Same as
+        # Selector.new. For example:
         #   selector = Queue.selector { priority >= 2 and received > Time.new.to_i - 60 }
         def self.selector &block
             raise ArgumentError, ERROR_NO_SELECTOR_BLOCK unless block

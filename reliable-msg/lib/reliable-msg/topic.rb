@@ -40,7 +40,7 @@ module ReliableMsg
     # See Topic.get and Topic.put for more examples.
     class Topic < Client
 
-        INIT_OPTIONS = [:expires, :selector, :drb_uri, :tx_timeout, :connect_count]
+        INIT_OPTIONS = [:expires, :drb_uri, :tx_timeout, :connect_count]
 
         # The optional argument +topic+ specifies the topic name. The application can
         # still publish messages on other topics by specifying the destination topics
@@ -48,7 +48,6 @@ module ReliableMsg
         #
         # The following options can be passed to the initializer:
         # * <tt>:expires</tt> -- Message expiration in seconds. Default for new messages.
-        # * <tt>:selector</tt> -- Message selector. Default when retrieving messages.
         # * <tt>:drb_uri</tt> -- DRb URI for connecting to the queue manager. Only
         #   required when using a remote queue manager, or different port.
         # * <tt>:tx_timeout</tt> -- Transaction timeout. See tx_timeout.
@@ -157,10 +156,8 @@ module ReliableMsg
             result = begin
                 # Validate the selector: nil or hash.
                 selector = case selector
-                    when Hash, Selector
+                    when Hash, Selector, nil
                         selector
-                    when nil
-                        @selector
                     else
                         raise ArgumentError, ERROR_INVALID_SELECTOR
                 end

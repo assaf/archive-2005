@@ -16,30 +16,29 @@ module ReliableMsg #:nodoc:
 
     class Selector
 
+        ERROR_INVALID_SELECTOR_BLOCK = "Selector must be created with a block accepting no arguments" #:nodoc:
+
+        # Create a new selector that evaluates by calling the block.
+        #
+        # :call-seq:
+        #   Selector.new { |headers| ... } -> selector
+        #
         def initialize &block
+            raise ArgumentError, ERROR_INVALID_SELECTOR_BLOCK unless block && block.arity < 1
             @block = block
-            @list = nil
         end
 
 
-        def select list
-            @list = []
-            list.each do |headers|
-                id = headers[:id]
-                context = EvaluationContext.new headers
-                @list << id if context.instance_eval(&@block)
-            end
-        end
-
-
-        def match headers
+        # Matches the message headers with the selectors. Returns true
+        # if a match is made, false otherwise. May raise an error if
+        # there's an error in the expression.
+        #
+        # :call-seq:
+        #   selector.match(headers) -> boolean
+        #
+        def match headers #:nodoc:
             context = EvaluationContext.new headers
             context.instance_eval(&@block)
-        end
-
-
-        def next
-            @list && @list.shift
         end
 
 

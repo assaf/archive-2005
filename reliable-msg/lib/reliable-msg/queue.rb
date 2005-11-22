@@ -16,6 +16,7 @@ require 'reliable-msg/selector'
 
 module ReliableMsg
 
+
     # == Reliable Messaging Client API
     #
     # Use the Queue object to put messages in queues, or get messages from queues.
@@ -40,7 +41,9 @@ module ReliableMsg
     # See Queue.get and Queue.put for more examples.
     class Queue < Client
 
-        INIT_OPTIONS = [:expires, :delivery, :priority, :max_retries, :selector, :drb_uri, :tx_timeout, :connect_count]
+        @@selectors = {}
+
+        INIT_OPTIONS = [:expires, :delivery, :priority, :max_retries, :drb_uri, :tx_timeout, :connect_count]
 
         # The optional argument +queue+ specifies the queue name. The application can
         # still put messages in other queues by specifying the destination queue
@@ -52,7 +55,6 @@ module ReliableMsg
         # * <tt>:priority</tt> -- The message priority. Default for new messages.
         # * <tt>:max_retries</tt> -- Maximum number of attempts to re-deliver message.
         #   Default for new messages.
-        # * <tt>:selector</tt> -- Message selector. Default when retrieving messages.
         # * <tt>:drb_uri</tt> -- DRb URI for connecting to the queue manager. Only
         #   required when using a remote queue manager, or different port.
         # * <tt>:tx_timeout</tt> -- Transaction timeout. See tx_timeout.
@@ -157,10 +159,6 @@ module ReliableMsg
         # to retrieve the next message with priority 2 or higher, created in the last 60 seconds:
         #   selector = Queue.selector { priority >= 2 && created > now - 60 }
         #   msg = queue.get selector
-        # You can also specify selectors for a Queue to be used by default for all Queue.get calls
-        # on that Queue object. For example:
-        #   queue.selector= { priority >= 2 and created > now - 60 }
-        #   msg = queue.get  # default selector applies
         #
         # The following headers have special meaning:
         # * <tt>:id</tt> -- The message identifier.
@@ -231,10 +229,8 @@ module ReliableMsg
                 selector = case selector
                     when String
                         {:id=>selector}
-                    when Hash, Selector
+                    when Hash, Selector, nil
                         selector
-                    when nil
-                        @selector
                     else
                         raise ArgumentError, ERROR_INVALID_SELECTOR
                 end
@@ -242,15 +238,13 @@ module ReliableMsg
                 # in the queue and run them by the selector. Pick the next message
                 # that matches to retrieve.
                 if selector.is_a?(Selector)
-                    id = selector.next
-                    unless id
-                        list = if tx
+                    cached = @@selectors[@queue] ||= SelectorCache.new
+                    id = cached.next(selector) do
+                        if tx
                             tx[:qm].list :queue=>@queue, :tid=>tx[:tid]
                         else
                             repeated { |qm| qm.list :queue=>@queue }
                         end
-                        selector.select list
-                        id = selector.next
                     end
                     return nil unless id
                     selector = {:id=>id}
@@ -292,6 +286,36 @@ module ReliableMsg
         # Returns the queue name.
         def name
             @queue
+        end
+
+    end
+
+
+    class SelectorCache #:nodoc:
+
+        def initialize
+            @list = nil
+            @mutex = Mutex.new
+        end
+
+
+        def next selector, &block
+            load = false
+            @mutex.synchronize do
+                load ||= (@list.nil? || @list.empty?)
+                @list = block.call() if load
+                @list.each_with_index do |headers, idx|
+                    if selector.match headers
+                        @list.delete idx
+                        return headers[:id]
+                    end
+                end
+                unless load
+                    load = true
+                    retry
+                end
+            end
+            return nil
         end
 
     end
