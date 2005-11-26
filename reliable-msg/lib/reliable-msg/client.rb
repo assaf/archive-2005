@@ -203,12 +203,8 @@ module ReliableMsg
 
     private
         def method_missing symbol, *args, &block
-            if @headers.has_key?(symbol)
-                raise ArgumentError, "Wrong number of arguments (#{args.length} for 0)" unless args.empty?
-                @headers[symbol]
-            else
-                super
-            end
+            raise ArgumentError, "Wrong number of arguments (#{args.length} for 0)" unless args.empty?
+            @headers[symbol]
         end
 
     end

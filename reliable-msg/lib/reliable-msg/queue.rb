@@ -329,7 +329,7 @@ module ReliableMsg
                 @list = block.call() if load
                 @list.each_with_index do |headers, idx|
                     if selector.match headers
-                        @list.delete idx
+                        @list.delete_at idx
                         return headers[:id]
                     end
                 end

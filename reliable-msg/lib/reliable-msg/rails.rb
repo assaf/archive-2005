@@ -1,4 +1,4 @@
-require "action_controller2"
+require "action_controller"
 
 module ActionController #:nodoc:
 

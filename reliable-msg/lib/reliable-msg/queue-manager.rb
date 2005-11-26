@@ -364,16 +364,20 @@ module ReliableMsg
 
             return @mutex.synchronize do
                 list = @store.get_headers queue
-                list.delete_if do |headers|
-                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:redelivery] && headers[:redelivery] >= headers[:max_deliveries]))
+                now = Time.now.to_i
+                list.inject([]) do |list, headers|
+                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < now) || (headers[:redelivery] && headers[:redelivery] >= headers[:max_deliveries]))
                         expired = {:id=>headers[:id], :queue=>queue, :headers=>headers}
                         if headers[:delivery] == :once || headers[:delivery] == :repeated
                             @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
                         else # :best_effort
                             @store.transaction { |inserts, deletes, dlqs| deletes << expired }
                         end
-                        true
+                    else
+                        # Need to clone headers (shallow, values are frozen) when passing in same process.
+                        list << headers.clone
                     end
+                    list
                 end
             end
         end
@@ -416,7 +420,7 @@ module ReliableMsg
             # discard the message, or send it to the DLQ. Since we're out of a message,
             # we call to get a new one. (This can be changed to repeat instead of recurse).
             headers = message[:headers]
-            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:redelivery] && headers[:redelivery]   >= headers[:max_deliveries]))
+            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:redelivery] && headers[:redelivery] >= headers[:max_deliveries]))
                 expired = {:id=>message[:id], :queue=>queue, :headers=>headers}
                 if headers[:delivery] == :once || headers[:delivery] == :repeated
                     @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
