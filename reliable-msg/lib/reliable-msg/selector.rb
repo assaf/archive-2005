@@ -14,6 +14,30 @@
 
 module ReliableMsg #:nodoc:
 
+    # A message selector is used to retrieve specific messages from the queue
+    # by matching the message headers.
+    #
+    # The selector matches messages by calling the block for each potential
+    # message. The block can access (read-only) message headers by calling
+    # methods with the same name, or using <tt>[:symbol]</tt>. It returns true
+    # if a match is found.
+    #
+    # The following three examples are equivalent:
+    #   selector = Queue::selector { priority > 2 }
+    #   selector = queue.selector { priority > 2 }
+    #   selector = Selector.new { [:priority] > 2 }
+    #
+    # The new function is always available and evaluates to the current time
+    # (in seconds from the Epoch).
+    #
+    # This example uses the delivery count and message creation date/time to
+    # implement a simple retry with back-out:
+    #
+    #   MINUTE = 60
+    #   HOUR = MINUTE * 60
+    #   BACKOUT = [ 5 * MINUTE, HOUR, 4 * HOUR, 12 * HOUR ]
+    #
+    #   selector = Queue::selector { delivered == 0 || BACKOUT[delivered - 1] + created <= now }
     class Selector
 
         ERROR_INVALID_SELECTOR_BLOCK = "Selector must be created with a block accepting no arguments" #:nodoc:
@@ -57,6 +81,11 @@ module ReliableMsg #:nodoc:
 
         def now
             Time.now.to_i
+        end
+
+
+        def [] symbol
+            @headers[symbol]
         end
 
 

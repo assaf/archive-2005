@@ -17,7 +17,7 @@ require 'reliable-msg/selector'
 module ReliableMsg
 
 
-    # == Reliable Messaging Client API
+    # == Queue client API
     #
     # Use the Queue object to put messages in queues, or get messages from queues.
     #
@@ -41,9 +41,15 @@ module ReliableMsg
     # See Queue.get and Queue.put for more examples.
     class Queue < Client
 
-        @@selectors = {}
+        # Caches queue headers locally. Used by queues that retrieve a list of
+        # headers for their selectors, and can be shared by queue/selector
+        # objects operating on the same queue.
+        @@headers_cache = {} #:nodoc:
 
-        INIT_OPTIONS = [:expires, :delivery, :priority, :max_retries, :drb_uri, :tx_timeout, :connect_count]
+        # Default number of delivery attempts.
+        DEFAULT_MAX_DELIVERIES = 5;
+
+        INIT_OPTIONS = [:expires, :delivery, :priority, :max_deliveries, :drb_uri, :tx_timeout, :connect_count]
 
         # The optional argument +queue+ specifies the queue name. The application can
         # still put messages in other queues by specifying the destination queue
@@ -53,7 +59,7 @@ module ReliableMsg
         # * <tt>:expires</tt> -- Message expiration in seconds. Default for new messages.
         # * <tt>:delivery</tt> -- The message delivery mode. Default for new messages.
         # * <tt>:priority</tt> -- The message priority. Default for new messages.
-        # * <tt>:max_retries</tt> -- Maximum number of attempts to re-deliver message.
+        # * <tt>:max_deliveries</tt> -- Maximum number of attempts to deliver message.
         #   Default for new messages.
         # * <tt>:drb_uri</tt> -- DRb URI for connecting to the queue manager. Only
         #   required when using a remote queue manager, or different port.
@@ -95,8 +101,8 @@ module ReliableMsg
         #   specified. Zero or +nil+ means no expiration.
         # * <tt>:expires_at</tt> -- Specifies when the message expires (timestamp). Alternative
         #   to <tt>:expires</tt>.
-        # * <tt>:max_retries</tt> -- Maximum number of attempts to re-deliver message, afterwhich
-        #   message moves to the DLQ. Minimum is 0 (deliver only once), default is 4 (deliver
+        # * <tt>:max_deliveries</tt> -- Maximum number of attempts to deliver message, afterwhich
+        #   message moves to the DLQ. Minimum is 1 (deliver only once), default is 5 (deliver
         #   up to 5 times).
         #
         # Headers can be set on a per-queue basis when the Queue is created. This only affects
@@ -106,8 +112,8 @@ module ReliableMsg
         # * <tt>:best_effort</tt> -- Attempt to deliver the message once. If the message expires or
         #   cannot be delivered, discard the message. The is the default delivery mode.
         # * <tt>:repeated</tt> -- Attempt to deliver until message expires, or up to maximum
-        #   re-delivery count (see <tt>:max_retries</tt>). Afterwards, move message to dead-letter
-        #   queue.
+        #   re-delivery count (see <tt>:max_deliveries</tt>). Afterwards, move message to
+        #   dead-letter queue.
         # * <tt>:once</tt> -- Attempt to deliver message exactly once. If message expires, or
         #   first delivery attempt fails, move message to dead-letter queue.
         #
@@ -122,11 +128,13 @@ module ReliableMsg
         def put message, headers = nil
             tx = Thread.current[THREAD_CURRENT_TX]
             # Use headers supplied by callers, or defaults for this queue.
-            headers ||= {}
-            headers.fetch(:priority, @priority || 0)
-            headers.fetch(:expires, @expires)
-            headers.fetch(:max_retries, @max_retries || DEFAULT_MAX_RETRIES)
-            headers.fetch(:delivery, @delivery || :best_effort)
+            defaults = {
+                :priority => @priority || 0,
+                :expires => @expires,
+                :max_deliveries => @max_deliveries || DEFAULT_MAX_DELIVERIES,
+                :delivery => @delivery || :best_effort
+            }
+            headers = headers ? defaults.merge(headers) : defaults
             # Serialize the message before sending to queue manager. We need the
             # message to be serialized for storage, this just saves duplicate
             # serialization when using DRb.
@@ -164,8 +172,8 @@ module ReliableMsg
         # * <tt>:id</tt> -- The message identifier.
         # * <tt>:queue</tt> -- Select a message originally delivered to the named queue. Only used
         #   when retrieving messages from the dead-letter queue.
-        # * <tt>:retry</tt> -- Specifies the retry count for the message. Zero when the message is
-        #   first delivered, and incremented after each re-delivery attempt.
+        # * <tt>:at_delivery</tt> -- Specifies the delivery count for this message. One on the first
+        #   attempt to delivery (get) this message, and incremented once for each subsequent attempt.
         # * <tt>:created</tt> -- Indicates timestamp (in seconds) when the message was created.
         # * <tt>:expires_at</tt> -- Indicates timestamp (in seconds) when the message will expire,
         #   +nil+ if the message does not expire.
@@ -234,11 +242,12 @@ module ReliableMsg
                     else
                         raise ArgumentError, ERROR_INVALID_SELECTOR
                 end
-                # If using block selector, obtain a list of all message headers
-                # in the queue and run them by the selector. Pick the next message
-                # that matches to retrieve.
+                # If using selector object, obtain a list of all message headers
+                # for the queue (shared by all Queue/Selector objects accessing
+                # the same queue) and run the selector on that list. Pick one
+                # message and switch to an :id selector to retrieve it.
                 if selector.is_a?(Selector)
-                    cached = @@selectors[@queue] ||= SelectorCache.new
+                    cached = @@headers_cache[@queue] ||= CachedHeaders.new
                     id = cached.next(selector) do
                         if tx
                             tx[:qm].list :queue=>@queue, :tid=>tx[:tid]
@@ -264,7 +273,9 @@ module ReliableMsg
                 # 2. The message may rely on classes known to the client but not available
                 #    to the queue manager.
                 result = if message
-                    message = Message.new(message[:id], message[:headers], Marshal::load(message[:message]))
+                    headers = message[:headers]
+                    headers[:at_delivery] += 1
+                    message = Message.new(message[:id], headers, Marshal::load(message[:message]))
                     block ? block.call(message) : message
                 end
             rescue Exception=>error
@@ -291,7 +302,11 @@ module ReliableMsg
     end
 
 
-    class SelectorCache #:nodoc:
+    # Locally cached headers for a queue. Used with the Selector object to
+    # retrieve the headers once, and share them. This effectively acts as a
+    # cursor into the queue, and saves I/O by retrieving a new list only
+    # when it's empty.
+    class CachedHeaders #:nodoc:
 
         def initialize
             @list = nil
@@ -299,6 +314,15 @@ module ReliableMsg
         end
 
 
+        # Find the next matching message in the queue based on the
+        # selector. The argument is a Selector object which filters out
+        # messages. The block is called to load a list of headers from
+        # the queue manager, returning an Array of headers (Hash).
+        # Returns the identifier of the first message found.
+        #
+        # :call-seq:
+        #   obj.next(selector) { } -> id or nil
+        #
         def next selector, &block
             load = false
             @mutex.synchronize do

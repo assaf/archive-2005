@@ -117,7 +117,7 @@ class TestQueue < Test::Unit::TestCase
 
         # Test that we can receive message more than once, but once we try more than
         # max_deliveries, the message moves to the DLQ.
-        id1 = @queue.put 'test message', :max_retries=>1, :delivery=>:repeated
+        id1 = @queue.put 'test message', :max_deliveries=>2, :delivery=>:repeated
         restart.call if restart
         begin
             @queue.get do |msg|
@@ -140,7 +140,7 @@ class TestQueue < Test::Unit::TestCase
         assert msg && msg.id == id1, "Message not moved to DLQ"
 
         # Test that message discarded when delivery mode is best_effort.
-        id1 = @queue.put 'test message', :max_retries=>0, :delivery=>:best_effort
+        id1 = @queue.put 'test message', :max_deliveries=>1, :delivery=>:best_effort
         restart.call if restart
         begin
             @queue.get do |msg|
@@ -154,7 +154,7 @@ class TestQueue < Test::Unit::TestCase
         assert @dlq.get.nil?, "Message incorrectly moved to DLQ"
 
         # Test that message is moved to DLQ when delivery mode is exactly_once.
-        id1 = @queue.put 'test message', :max_retries=>2, :delivery=>:once
+        id1 = @queue.put 'test message', :max_deliveries=>2, :delivery=>:once
         restart.call if restart
         begin
             @queue.get do |msg|

@@ -16,7 +16,7 @@ require 'reliable-msg/selector'
 module ReliableMsg
 
     # Base class for both Queue and Topic client APIs.
-    class Client #:nodoc:
+    class Client
 
         ERROR_INVALID_SELECTOR = "Selector must be message identifier (String), set of header name/value pairs (Hash), Selector object, or nil" # :nodoc:
 
@@ -38,9 +38,6 @@ module ReliableMsg
 
         # Default transaction timeout.
         DEFAULT_TX_TIMEOUT = 120
-
-        # Default number of re-delivery attempts.
-        DEFAULT_MAX_RETRIES = 4;
 
         # Thread.current entry for queue transaction.
         THREAD_CURRENT_TX = :reliable_msg_tx #:nodoc:
@@ -100,6 +97,14 @@ module ReliableMsg
             Selector.new &block
         end
 
+        # Create and return a new selector based on the block expression. Same as
+        # Selector.new. For example:
+        #   selector = Queue.selector { priority >= 2 and received > Time.new.to_i - 60 }
+        def selector & block
+            raise ArgumentError, ERROR_NO_SELECTOR_BLOCK unless block
+            Selector.new &block
+        end
+
     private
 
         # Returns the active queue manager. You can override this method to implement
@@ -149,6 +154,7 @@ module ReliableMsg
     # For example:
     #   while queue.get do |msg|
     #     print "Message #{msg.id}"
+    #     print "Headers: #{msg[:created]}"
     #     print "Headers: #{msg.headers.inspect}"
     #     print msg.object
     #     true
@@ -157,6 +163,11 @@ module ReliableMsg
 
         def initialize id, headers, object # :nodoc:
             @id, @object, @headers = id, object, headers
+            # For queues when at_delivery must be incremented at each delivery attempt,
+            # and made available to selector.
+            if headers.has_key?(:at_delivery)
+                headers[:at_delivery] += 1
+            end
         end
 
         # Returns the message identifier.
@@ -184,6 +195,15 @@ module ReliableMsg
         #
         def headers
             @headers
+        end
+
+        # Returns the message header.
+        #
+        # :call-seq:
+        #   msg[symbol] -> obj
+        #
+        def [] symbol
+            @headers[symbol]
         end
 
     private

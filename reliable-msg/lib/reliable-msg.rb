@@ -4,10 +4,11 @@ $:.unshift(File.dirname(__FILE__)) unless
 module ReliableMsg
 
     PACKAGE = "reliable-msg"
-    VERSION = '1.1.0'
+    VERSION = "1.1.0"
 
 end
 
-require 'reliable-msg/queue'
-require 'reliable-msg/topic'
-require 'reliable-msg/cli'
+require "reliable-msg/queue"
+require "reliable-msg/topic"
+require "reliable-msg/cli"
+require "reliable-msg/rails"

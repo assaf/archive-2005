@@ -42,6 +42,12 @@ Available commands:
   manager stop
     Stop a running queue manager.
 
+  list <queue>
+    List headers of messages in the named queue.
+
+  empty <queue>
+    Empty (delete all messages from) the named queue.
+
   install disk [<path>]
     Configure queue manager to use disk-based message store
     using the specified directory. Uses 'queues' by default.
@@ -67,7 +73,9 @@ Available options:
 
 EOF
 
-        class InvalidUsage  < Exception
+        MAX_STRING = 50
+
+        class InvalidUsage  < Exception #:nodoc:
         end
 
         def initialize
@@ -146,6 +154,43 @@ EOF
                         end
                     else
                         raise InvalidUsage
+                    end
+
+                when 'list'
+                    queue = args[1]
+                    raise InvalidUsage unless queue
+                    begin
+                        qm = queue_manager(config_file)
+                        list = qm.list(:queue=>queue)
+                        puts "Found #{list.size} messages in queue #{queue}"
+                        list.each do |headers|
+                            puts "Message #{headers[:id]}"
+                            headers.each do |name, value|
+                                unless name==:id
+                                    case value
+                                    when String
+                                        value = value[0..MAX_STRING - 3] << "..." if value.length > MAX_STRING
+                                        value = '"' << value.gsub('"', '\"') << '"'
+                                    when Symbol
+                                        value = ":#{value.to_s}"
+                                    end
+                                    puts "  :#{name} => #{value}"
+                                end
+                            end
+                        end
+                    rescue DRb::DRbConnError =>error
+                        puts "Cannot access queue manager: is it running?"
+                    end
+
+                when 'empty'
+                    queue = args[1]
+                    raise InvalidUsage unless queue
+                    begin
+                        qm = queue_manager(config_file)
+                        while msg = qm.enqueue(:queue=>queue)
+                        end
+                    rescue DRb::DRbConnError =>error
+                        puts "Cannot access queue manager: is it running?"
                     end
 
                 else

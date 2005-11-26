@@ -135,6 +135,22 @@ module ReliableMsg
     end
 
 
+    # The QueueManager handles message storage and delivery. Applications connect to the QueueManager
+    # either locally or remotely using the client API objects Queue and Topic.
+    #
+    # You can start a QueueManager from the command line using
+    #   queues manager start
+    # Or from code using
+    #   qm = QueueManager.new
+    #   qm.start
+    #
+    # A Ruby process can only allow one active QueueManager at any given time. Do not run more than
+    # one QueueManager connected to the same database or file system storage, as this will cause the
+    # queue managers to operate on different messages and queues. Instead, use a single QueueManager
+    # and connect to it remotely using DRb.
+    #
+    # The client API (Queue and Topic) will automatically connect to any QueueManager running in the
+    # same Ruby process, or if not found, to a QueueManager running in a different process using DRb.
     class QueueManager
 
         TX_TIMEOUT_CHECK_EVERY = 30
@@ -170,6 +186,14 @@ module ReliableMsg
         @@active = nil #:nodoc:
 
 
+        # Create a new QueueManager with the specified options. Once created, you can
+        # start the QueueManager with QueueManager.start.
+        #
+        # Accepted options are:
+        # * <tt>:logger</tt> -- The logger to use. If not specified, will log messages
+        #   to STDOUT.
+        # * <tt>:config</tt> -- The configuration file to use. If not specified, will
+        #   use <tt>queues.cfg</tt>.
         def initialize options = nil
             options ||= {}
             # Locks prevent two transactions from seeing the same message. We use a mutex
@@ -186,6 +210,9 @@ module ReliableMsg
         end
 
 
+        # Starts the QueueManager. This method will block until the QueueManager has
+        # successfully started, and raise an exception if the QueueManager fails to start
+        # or if another QueueManager was already started in this process.
         def start
             @mutex.synchronize do
                 return if @@active == self
@@ -208,7 +235,7 @@ module ReliableMsg
                     drb = Config::DEFAULT_DRB
                     drb.merge(@config.drb) if @config.drb
                     drb_uri = "druby://localhost:#{drb['port']}"
-                    @drb_server = DRb::DRbServer.new drb_uri, self, :tcp_acl=>ACL.new(drb["acl"].split(" "), ACL::ALLOW_DENY), :verbose=>true
+                    @drb_server = DRb::DRbServer.new drb_uri, self, :tcp_acl=>ACL.new(drb["acl"].split(" "), ACL::ALLOW_DENY)
                     @logger.info format(INFO_ACCEPTING_DRB, drb_uri)
 
                     # Create a background thread to stop timed-out transactions.
@@ -243,6 +270,8 @@ module ReliableMsg
         end
 
 
+        # Stops the QueueManager. Once stopped, you can start the same QueueManager again,
+        # or start a different QueueManager.
         def stop
             @mutex.synchronize do
                 raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
@@ -263,11 +292,13 @@ module ReliableMsg
         end
 
 
+        # Returns true if the QueueManager is receiving remote requests.
         def alive?
             @drb_server && @drb_server.alive?
         end
 
 
+        # Called by client to queue a message.
         def queue args
             # Get the arguments of this call.
             message, headers, queue, tid = args[:message], args[:headers], args[:queue].downcase, args[:tid]
@@ -301,8 +332,8 @@ module ReliableMsg
             headers[:id] = id
             headers[:created] = time
             headers[:delivery] ||= :best_effort
-            headers[:delivered] = 0
-            headers[:max_retries] = integer headers[:max_retries], 0, Client::DEFAULT_MAX_RETRIES
+            headers[:at_delivery] = 0
+            headers[:max_deliveries] = integer headers[:max_deliveries], 1, Queue::DEFAULT_MAX_DELIVERIES
             headers[:priority] = integer headers[:priority], 0, 0
             if expires_at = headers[:expires_at]
                 raise ArgumentError, format(ERROR_INVALID_HEADER_VALUE, :expires_at, "an integer", expires_at.class) unless expires_at.is_a?(Integer)
@@ -326,15 +357,16 @@ module ReliableMsg
         end
 
 
+        # Called by client to list queue headers.
         def list args
             # Get the arguments of this call.
             queue = args[:queue].downcase
             raise ArgumentError, ERROR_SEND_MISSING_QUEUE unless queue and queue.instance_of?(String) and !queue.empty?
 
             return @mutex.synchronize do
-                 list = @store.get_headers queue
-                 list.delete_if do |headers|
-                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:delivered] > headers[:max_retries]))
+                list = @store.get_headers queue
+                list.delete_if do |headers|
+                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:at_delivery] >= headers[:max_deliveries]))
                         expired = {:id=>headers[:id], :queue=>queue, :headers=>headers}
                         if headers[:delivery] == :once || headers[:delivery] == :repeated
                             @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
@@ -348,6 +380,7 @@ module ReliableMsg
         end
 
 
+        # Called by client to enqueue message.
         def enqueue args
             # Get the arguments of this call.
             queue, selector, tid = args[:queue].downcase, args[:selector], args[:tid]
@@ -380,11 +413,11 @@ module ReliableMsg
             # Nothing to do if no message found.
             return unless message
 
-            # If the message has expired, or maximum retry count elapsed, we either
+            # If the message has expired, or maximum delivery count elapsed, we either
             # discard the message, or send it to the DLQ. Since we're out of a message,
             # we call to get a new one. (This can be changed to repeat instead of recurse).
             headers = message[:headers]
-            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:delivered] > headers[:max_retries]))
+            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:at_delivery] >= headers[:max_deliveries]))
                 expired = {:id=>message[:id], :queue=>queue, :headers=>headers}
                 if headers[:delivery] == :once || headers[:delivery] == :repeated
                     @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
@@ -436,6 +469,7 @@ module ReliableMsg
         end
 
 
+        # Called by client to publish message.
         def publish args
             # Get the arguments of this call.
             message, headers, topic, tid = args[:message], args[:headers], args[:topic].downcase, args[:tid]
@@ -487,6 +521,7 @@ module ReliableMsg
         end
 
 
+        # Called by client to retrieve message from topic.
         def retrieve args
             # Get the arguments of this call.
             seen, topic, selector, tid = args[:seen], args[:topic].downcase, args[:selector], args[:tid]
@@ -519,6 +554,7 @@ module ReliableMsg
         end
 
 
+        # Called by client to begin a transaction.
         def begin timeout
             tid = UUID.new
             @transactions[tid] = {:inserts=>[], :deletes=>[], :timeout=>Time.new.to_i + timeout}
@@ -526,6 +562,7 @@ module ReliableMsg
         end
 
 
+        # Called by client to commit a transaction.
         def commit tid
             tx = @transactions[tid]
             raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
@@ -547,6 +584,7 @@ module ReliableMsg
         end
 
 
+        # Called by client to abort a transaction.
         def abort tid
             tx = @transactions[tid]
             raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
@@ -555,7 +593,8 @@ module ReliableMsg
             @mutex.synchronize do
                 tx[:deletes].each do |delete|
                     @locks.delete delete[:id]
-                    delete[:headers][:delivered] += 1
+                    delete[:headers][:at_delivery] += 1
+                    # TODO: move to DLQ if delivery count or expires
                 end
             end
             @transactions.delete tid

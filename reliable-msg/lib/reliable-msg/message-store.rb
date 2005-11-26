@@ -121,7 +121,7 @@ module ReliableMsg
 
 
             def get_headers queue
-                return @queues[queue]
+                return @queues[queue] || []
             end
 
 

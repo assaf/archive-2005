@@ -16,7 +16,7 @@ require 'reliable-msg/selector'
 
 module ReliableMsg
 
-    # == Reliable Messaging Pub/Sub API
+    # == Pub/Sub Topic API
     #
     # Use the Topic object to publish a message on a topic, get messages from topics.
     #
@@ -101,8 +101,10 @@ module ReliableMsg
         def put message, headers = nil
             tx = Thread.current[THREAD_CURRENT_TX]
             # Use headers supplied by callers, or defaults for this topic.
-            headers ||= {}
-            headers.fetch(:expires, @expires)
+            defaults = {
+                :expires=> @expires
+            }
+            headers = headers ? defaults.merge(headers) : defaults
             # Serialize the message before sending to queue manager. We need the
             # message to be serialized for storage, this just saves duplicate
             # serialization when using DRb.
