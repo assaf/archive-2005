@@ -1,4 +1,4 @@
-require "action_controller"
+require "action_controller2"
 
 module ActionController #:nodoc:
 
@@ -37,7 +37,7 @@ module ActionController #:nodoc:
             when Symbol
                 attr = args[0]
                 if args.length == 1
-                    name = args[0].to_sym
+                    name = args[0].to_s
                 else
                     raise ArgumetnError, "When first argument is a Symbol specifying the attribute name, expecting the second argument to be a String specifying the queue name or absent" unless args[1].instance_of?(String)
                     name = args[1]
@@ -90,7 +90,7 @@ module ActionController #:nodoc:
             when Symbol
                 attr = args[0]
                 if args.length == 1
-                    name = args[0].to_sym
+                    name = args[0].to_s
                 else
                     raise ArgumetnError, "When first argument is a Symbol specifying the attribute name, expecting the second argument to be a String specifying the topic name or absent" unless args[1].instance_of?(String)
                     name = args[1]

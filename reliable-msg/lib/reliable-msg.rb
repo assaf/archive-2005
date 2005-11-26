@@ -11,4 +11,7 @@ end
 require "reliable-msg/queue"
 require "reliable-msg/topic"
 require "reliable-msg/cli"
-require "reliable-msg/rails"
+begin
+    require "reliable-msg/rails"
+rescue LoadError
+end

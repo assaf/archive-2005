@@ -21,10 +21,15 @@ Rake::TestTask.new :test_topic do |test|
     test.verbose = true
     test.test_files = ["test/test-topic.rb"]
 end
-desc "Run all test cases"
-Rake::TestTask.new :tests=>[:test_queue, :test_topic] do |test|
+desc "Run test case for Rails integration"
+Rake::TestTask.new :test_rails do |test|
     test.verbose = true
-    test.test_files = []
+    test.test_files = ["test/test-rails.rb"]
+end
+desc "Run all test cases"
+Rake::TestTask.new :tests do |test|
+    test.verbose = true
+    test.test_files = ["test/*.rb"]
     #test.warning = true
 end
 
