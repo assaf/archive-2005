@@ -170,6 +170,32 @@ class TestQueue < Test::Unit::TestCase
         assert msg && msg.id == id1, "Message not moved to DLQ"
     end
 
+
+    def test_backout
+        @queue.put "backout test", :delivery=>:repeated
+        backout = [ 1, 2, 3, 4 ]
+        redelivery = nil
+        done = false
+        while !done
+            selector = ReliableMsg::Queue::selector { redelivery.nil? || backout[redelivery - 1] + created <= now }
+            begin
+                more = @queue.get selector do |msg|
+                    assert redelivery == msg.headers[:redelivery], "Unexpected redelivery header"
+                    redelivery = (redelivery || 0) + 1
+                    raise "Reject message"
+                    true
+                end
+            rescue Exception=>error
+                assert error.message == "Reject message", "Unexpected ... exception"
+                more = true
+            end while more
+            while msg = @dlq.get
+                done = true
+            end
+            sleep 2
+        end
+    end
+
 private
     def clear complain
         # Empty test queue and DLQ.
