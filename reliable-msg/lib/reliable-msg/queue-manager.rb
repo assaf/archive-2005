@@ -332,7 +332,6 @@ module ReliableMsg
             headers[:id] = id
             headers[:created] = time
             headers[:delivery] ||= :best_effort
-            headers[:at_delivery] = 0
             headers[:max_deliveries] = integer headers[:max_deliveries], 1, Queue::DEFAULT_MAX_DELIVERIES
             headers[:priority] = integer headers[:priority], 0, 0
             if expires_at = headers[:expires_at]
@@ -366,7 +365,7 @@ module ReliableMsg
             return @mutex.synchronize do
                 list = @store.get_headers queue
                 list.delete_if do |headers|
-                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:at_delivery] >= headers[:max_deliveries]))
+                    if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:redelivery] && headers[:redelivery] >= headers[:max_deliveries]))
                         expired = {:id=>headers[:id], :queue=>queue, :headers=>headers}
                         if headers[:delivery] == :once || headers[:delivery] == :repeated
                             @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
@@ -417,7 +416,7 @@ module ReliableMsg
             # discard the message, or send it to the DLQ. Since we're out of a message,
             # we call to get a new one. (This can be changed to repeat instead of recurse).
             headers = message[:headers]
-            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:at_delivery] >= headers[:max_deliveries]))
+            if queue != Client::DLQ && ((headers[:expires_at] && headers[:expires_at] < Time.now.to_i) || (headers[:redelivery] && headers[:redelivery]   >= headers[:max_deliveries]))
                 expired = {:id=>message[:id], :queue=>queue, :headers=>headers}
                 if headers[:delivery] == :once || headers[:delivery] == :repeated
                     @store.transaction { |inserts, deletes, dlqs| dlqs << expired }
@@ -593,7 +592,7 @@ module ReliableMsg
             @mutex.synchronize do
                 tx[:deletes].each do |delete|
                     @locks.delete delete[:id]
-                    delete[:headers][:at_delivery] += 1
+                    delete[:headers][:redelivery] = (delete[:headers][:redelivery] || 0) + 1
                     # TODO: move to DLQ if delivery count or expires
                 end
             end

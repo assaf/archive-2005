@@ -163,11 +163,6 @@ module ReliableMsg
 
         def initialize id, headers, object # :nodoc:
             @id, @object, @headers = id, object, headers
-            # For queues when at_delivery must be incremented at each delivery attempt,
-            # and made available to selector.
-            if headers.has_key?(:at_delivery)
-                headers[:at_delivery] += 1
-            end
         end
 
         # Returns the message identifier.

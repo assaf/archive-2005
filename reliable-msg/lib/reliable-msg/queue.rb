@@ -112,7 +112,7 @@ module ReliableMsg
         # * <tt>:best_effort</tt> -- Attempt to deliver the message once. If the message expires or
         #   cannot be delivered, discard the message. The is the default delivery mode.
         # * <tt>:repeated</tt> -- Attempt to deliver until message expires, or up to maximum
-        #   re-delivery count (see <tt>:max_deliveries</tt>). Afterwards, move message to
+        #   delivery attempts (see <tt>:max_deliveries</tt>). Afterwards, move message to
         #   dead-letter queue.
         # * <tt>:once</tt> -- Attempt to deliver message exactly once. If message expires, or
         #   first delivery attempt fails, move message to dead-letter queue.
@@ -172,8 +172,9 @@ module ReliableMsg
         # * <tt>:id</tt> -- The message identifier.
         # * <tt>:queue</tt> -- Select a message originally delivered to the named queue. Only used
         #   when retrieving messages from the dead-letter queue.
-        # * <tt>:at_delivery</tt> -- Specifies the delivery count for this message. One on the first
-        #   attempt to delivery (get) this message, and incremented once for each subsequent attempt.
+        # * <tt>:redelivery</tt> -- Specifies the re-delivery count for this message. Nil if the
+        #   message is delivered (get) for the first time, one on the first attempt to re-deliver,
+        #   and incremented once for each subsequent attempt.
         # * <tt>:created</tt> -- Indicates timestamp (in seconds) when the message was created.
         # * <tt>:expires_at</tt> -- Indicates timestamp (in seconds) when the message will expire,
         #   +nil+ if the message does not expire.
@@ -273,9 +274,7 @@ module ReliableMsg
                 # 2. The message may rely on classes known to the client but not available
                 #    to the queue manager.
                 result = if message
-                    headers = message[:headers]
-                    headers[:at_delivery] += 1
-                    message = Message.new(message[:id], headers, Marshal::load(message[:message]))
+                    message = Message.new(message[:id], message[:headers], Marshal::load(message[:message]))
                     block ? block.call(message) : message
                 end
             rescue Exception=>error
