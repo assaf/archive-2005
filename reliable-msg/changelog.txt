@@ -1,10 +1,12 @@
-Release 1.1.0 (Nov 23, 2005)
+Release 1.1.0 (Nov 25, 2005)
 
 * Added: Topic class for publishing messages on a topic.
 * Added: Can set delivery option when creating a queue.
 * Added: Queue.name() returns the queue's name.
 * Added: Command line options to list or delete all messages
   in named queue.
+* Added: Rails integration for easily accessing queues/topics
+  from a Rails controller.
 * Changed: Quque and Topic both extend the base class Client.
 * Changed: Cannot start two queue managers in the same process.
 * Changed: Each message has a created header indicating date/time
