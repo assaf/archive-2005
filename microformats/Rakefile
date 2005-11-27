@@ -28,7 +28,7 @@ end
 # Create the GEM package.
 gem_spec = Gem::Specification.new do |spec|
     spec.name = 'uformatparser'
-    spec.version = "1.0.0"
+    spec.version = "1.0.1"
     spec.summary = "Microformat parser for extracting microcontent from (X)HTML"
     spec.description = <<-EOF
         Parser for extracting microcontent from (X)HTML documents, in any number
