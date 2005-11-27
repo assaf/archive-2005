@@ -1,4 +1,4 @@
-Release 1.1.0 (Nov 25, 2005)
+Release 1.1.0 (Nov 26, 2005)
 
 * Added: Topic class for publishing messages on a topic.
 * Added: Can set delivery option when creating a queue.
@@ -15,6 +15,9 @@ Release 1.1.0 (Nov 25, 2005)
   reserved Ruby keyword.
 * Changed: Selectors are now executed in the client process.
   Selectors can rely on client variables, methods and constants.
+* Changed: Specify maximum delivery attempts with the header
+  max_deliveries; get the redelivery attempt from the header
+  redelivery; the later is only set on the first redelivery attempt.
 * Fixed: Documentation errors in Queue.
 * Removed: Cannot associate default selector with queue.
 

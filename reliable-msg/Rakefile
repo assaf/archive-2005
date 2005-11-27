@@ -126,6 +126,7 @@ EOF
     spec.rdoc_options << "--main" << "README" << "--title" <<  "Reliable Messaging for Ruby" << "--line-numbers"
     spec.extra_rdoc_files = ["README"]
     spec.rubyforge_project = "reliable-msg"
+    spec.add_dependency(%q<uuid>, [">= 1.0.0"])
 end
 
 gem = Rake::GemPackageTask.new(gem_spec) do |pkg|
