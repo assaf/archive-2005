@@ -1,4 +1,5 @@
 require 'stringio'
+require 'strscan'
 
 module JSON
 
@@ -59,10 +60,10 @@ module JSON
         alias :to_s :to_str
 
         def write *args, &block
-            #raise ArgumentError, "wrong number of arguments (0 for 1)" unless args.length > 0
+            raise ArgumentError, "wrong number of arguments (0 for 1)" unless args.length > 0
             case args[0]
             when Hash
-                #raise ArgumentError, "only one hash allowed, no block expected" if args.length > 1 || block
+                raise ArgumentError, "only one hash allowed, no block expected" if args.length > 1 || block
                 name, value = nil, nil
                 args[0].each_pair do |name, value|
                     @io << ',' if @separator
@@ -75,7 +76,7 @@ module JSON
                     write_value value
                 end
             when String, Symbol, Numeric
-                #raise ArgumentError, "expected second argument with value, or a block" unless args.length == 2 || block
+                raise ArgumentError, "expected second argument with value, or a block" unless args.length == 2 || block
                 @io << ',' if @separator
                 if @indent_by > 0
                     @io << "\n"
@@ -118,7 +119,7 @@ module JSON
             self.new.write(*args, &block).to_s
         end
 
-    protected
+    private
 
         def indent_at= count
             @indent_at = count
@@ -182,7 +183,83 @@ module JSON
 
     end
 
+
+    class Reader
+
+        def initialize
+        end
+
+        def read string
+            scanner = StringScanner.new string
+            scanner.scan(/\s*\{\s*/) or fail "Expected opening curly bracket ({ at start of object)"
+            object = scan_object scanner
+            scanner.skip(/\s*/)
+            scanner.eos? or fail "Found unexpected data beyond end of JSON object"
+            object
+        end
+
+        def self.read string
+            Reader.new.read string
+        end
+
+    private
+
+        def scan_object scanner
+            object = {}
+            begin
+                name = scan_quoted scanner
+                scanner.scan(/\s*\:\s*/) or fail "Missing name/value separator (:)"
+                object[name] = scan_value scanner
+            end while scanner.scan(/\s*,\s*/)
+            scanner.scan(/s*\}\s*/) or fail "Expected closing curly brackets at end of object (})"
+            object
+        end
+
+        def scan_quoted scanner
+            scanner.skip(/\"/) or fail "Expected opening quote (\" at start of name/value)"
+            scanned = scanner.scan(/[^\"]*/)
+            while scanned[-1] == ?\\
+                scanned << '"'
+                scanner.skip(/\"/)
+                scanned << scanner.scan(/[^\"]*/)
+            end
+            scanner.skip(/\"/) or fail "Expected closing quote (\" at end of name/value)"
+            scanned
+        end
+
+        def scan_value scanner
+            if scanner.match?(/"/)
+                # Expecting quoted value
+                scan_quoted scanner
+            elsif scanner.scan(/\{\s*/)
+                # Expecting object.
+                scan_object scanner
+            elsif scanner.scan(/\[\s*/)
+                # Expecting array
+                array = []
+                begin
+                    array << scan_value(scanner)
+                end while scanner.scan(/\s*,\s*/)
+                scanner.scan(/s*\]\s*/) or fail "Expected closing brackets at end of array (])"
+                array
+            # TODO: add numbers
+            elsif scanner.scan(/true/)
+                true
+            elsif scanner.scan(/false/)
+                false
+            elsif scanner.scan(/null/)
+                nil
+            else
+                fail "Expected a JSON value"
+            end
+        end
+
+    end
+
 end
+
+
+
 
 
 def test_1
@@ -230,23 +307,66 @@ end
 
 
 def test_3
-puts JSON::Writer.new {
-    write "false", false
-    write "true", true
-    write "null", nil
-    write "float", 12.34
-    write "integer", 56
-    write "array", ["foo", :bar, 56, Time.new, nil]
-}
+    puts JSON::Writer.new {
+        write "false", false
+        write "true", true
+        write "null", nil
+        write "float", 12.34
+        write "integer", 56
+        write "array", ["foo", :bar, 56, Time.new, nil]
+    }
 end
 
 
+def write_test
 
-test_2
+    require 'benchmark'
+    require 'yaml'
 
+    object = {
+        "glossary"=>{
+            "title"=>"example glossary",
+            "GlossDiv"=>{
+                "title"=>"S",
+                "GlossList"=>[{
+                    "ID"=>"SGML",
+                    "SortAs"=>"SGML",
+                    "GlossTerm"=>"Standard Generalized Markup Language",
+                    "Acronym"=>"SGML",
+                    "Abbrev"=>"ISO 8879:1986",
+                    "GlossDef"=>"A meta-markup language, used to create markup languages such as DocBook.",
+                    "GlossSeeAlso"=>["GML", "XML", "markup"]
+                }]
+            }
+        }
+    }
+    count = 1000
 
-require 'benchmark'
-require 'yaml'
+    puts "JSon (indented) size: #{JSON::Writer.indented.write(object).to_s.length}"
+
+    puts "JSon size: #{JSON::Writer::write(object).to_s.length}"
+    puts Benchmark.measure {
+        count.times do
+            JSON::Writer::write(object).to_s
+        end
+    }
+
+    puts "YAML size: #{YAML::dump(object).length}"
+    puts Benchmark.measure {
+        count.times do
+            YAML::dump(object)
+        end
+    }
+
+    puts "Marshal size: #{Marshal.dump(object).length}"
+    puts Benchmark.measure {
+        count.times do
+            Marshal::dump(object)
+        end
+    }
+
+end
+
 
 object = {
     "glossary"=>{
@@ -265,27 +385,24 @@ object = {
         }
     }
 }
+string = JSON::Writer.write(object).to_s
+reader = JSON::Reader.new
+object2 = reader.read string
+puts object2 == object
+puts JSON::Writer.indented.write(object2)
+
+
+require 'benchmark'
 count = 1000
-
-puts "JSon (indented) size: #{JSON::Writer.indented.write(object).to_s.length}"
-
-puts "JSon size: #{JSON::Writer::write(object).to_s.length}"
 puts Benchmark.measure {
     count.times do
-        JSON::Writer::write(object).to_s
+        string = JSON::Writer::write(object).to_s
+        object = JSON::Reader::read(string)
     end
 }
-
-puts "YAML size: #{YAML::dump(object).length}"
 puts Benchmark.measure {
     count.times do
-        YAML::dump(object)
-    end
-}
-
-puts "Marshal size: #{Marshal.dump(object).length}"
-puts Benchmark.measure {
-    count.times do
-        Marshal::dump(object)
+        string = Marshal::dump(object)
+        object = Marshal::load(string)
     end
 }
