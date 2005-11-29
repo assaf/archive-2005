@@ -214,11 +214,11 @@ module ReliableMsg
                     when Symbol
                         value = ":#{value.to_s}"
                     end
-                    string << " , :#{name}:=>#{value}" unless name == :id
+                    string << ", :#{name}=>#{value}" unless name == :id
                 end
-                value = @message.length > 32 ? @message[0..29] << "..." : @message
-                string << ", text: " << value << "}"
             end
+            value = @message.length > 32 ? @message[0..29] << "..." : @message
+            string << ", text: \"" << value << "\"}"
         end
 
     private
