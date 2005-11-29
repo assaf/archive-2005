@@ -68,7 +68,7 @@ module ReliableMsg
 
         # Publish a message on the topic.
         #
-        # The +message+ argument is required, but may be +nil+
+        # The +message+ argument is required, and must be a +String+.
         #
         # Headers are optional. Headers are used to provide the application with additional
         # information about the message, and can be used to retrieve messages (see Topic.get
@@ -99,16 +99,13 @@ module ReliableMsg
         #   topic.put(message[, headers])
         #
         def put message, headers = nil
+            raise ArgumentError, ERROR_MESSAGE_NOT_STRING unless message.instance_of?(String)
             tx = Thread.current[THREAD_CURRENT_TX]
             # Use headers supplied by callers, or defaults for this topic.
             defaults = {
                 :expires=> @expires
             }
             headers = headers ? defaults.merge(headers) : defaults
-            # Serialize the message before sending to queue manager. We need the
-            # message to be serialized for storage, this just saves duplicate
-            # serialization when using DRb.
-            message = Marshal::dump message
             # If inside a transaction, always send to the same queue manager, otherwise,
             # allow repeated() to try and access multiple queue managers.
             if tx
@@ -185,7 +182,7 @@ module ReliableMsg
                         return nil unless selector.match message[:headers]
                     end
                     @seen = message[:id]
-                    message = Message.new(message[:id], message[:headers], Marshal::load(message[:message]))
+                    message = Message.new(message[:id], message[:headers], message[:message])
                     block ? block.call(message) : message
                 end
             rescue Exception=>error

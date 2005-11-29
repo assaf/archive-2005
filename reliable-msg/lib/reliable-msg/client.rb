@@ -28,6 +28,8 @@ module ReliableMsg
 
         ERROR_INVALID_INIT_OPTION = "Unrecognized initialization option %s" #:nodoc:
 
+        ERROR_MESSAGE_NOT_STRING = "A message is required and must be a String" #:nodoc:
+
         # The default DRb port used to connect to the queue manager.
         DRB_PORT = 6438
 

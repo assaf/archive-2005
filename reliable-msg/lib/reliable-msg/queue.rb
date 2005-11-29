@@ -80,7 +80,7 @@ module ReliableMsg
 
         # Put a message in the queue.
         #
-        # The +message+ argument is required, but may be +nil+
+        # The +message+ argument is required, and must be a +String+.
         #
         # Headers are optional. Headers are used to provide the application with additional
         # information about the message, and can be used to retrieve messages (see Queue.get
@@ -126,6 +126,7 @@ module ReliableMsg
         #   queue.put(message[, headers]) -> id
         #
         def put message, headers = nil
+            raise ArgumentError, ERROR_MESSAGE_NOT_STRING unless message.instance_of?(String)
             tx = Thread.current[THREAD_CURRENT_TX]
             # Use headers supplied by callers, or defaults for this queue.
             defaults = {
@@ -135,10 +136,6 @@ module ReliableMsg
                 :delivery => @delivery || :best_effort
             }
             headers = headers ? defaults.merge(headers) : defaults
-            # Serialize the message before sending to queue manager. We need the
-            # message to be serialized for storage, this just saves duplicate
-            # serialization when using DRb.
-            message = Marshal::dump message
             # If inside a transaction, always send to the same queue manager, otherwise,
             # allow repeated() to try and access multiple queue managers.
             if tx
@@ -274,7 +271,7 @@ module ReliableMsg
                 # 2. The message may rely on classes known to the client but not available
                 #    to the queue manager.
                 result = if message
-                    message = Message.new(message[:id], message[:headers], Marshal::load(message[:message]))
+                    message = Message.new(message[:id], message[:headers], message[:message])
                     block ? block.call(message) : message
                 end
             rescue Exception=>error
