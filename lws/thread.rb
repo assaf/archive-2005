@@ -12,13 +12,13 @@ class Thread
     def initialize *args, &block
         @@override[:initialize].bind(self).call *args do
             instance_eval *args, &block
-            __completion__ true
+            on_completion true
         end
     end
 
     def exit
         @@override[:exit].bind(self).call
-        __completion__ false
+        on_completion false
     end
 
     def on_completion_add listener
@@ -32,9 +32,9 @@ class Thread
         nil
     end
 
-private
-    def __completion__ successful
-        @@completion.each do |listener|
+protected
+    def on_completion successful
+        @@on_completion.each do |listener|
             begin
                 if listener.respond_to?(:on_completion)
                     listener.on_completion self, successful
@@ -58,6 +58,9 @@ t = Thread.new do
 #        break if flg_stop
     end
 end
+ObjectSpace.define_finalizer(t, proc {
+    puts "Thread finalized"
+})
 puts "New thread: #{t.status}"
 t.run
 puts "Run called: #{t.status}"

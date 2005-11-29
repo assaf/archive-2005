@@ -1,0 +1,28 @@
+# Adapted from the rake Rakefile.
+
+require "rubygems"
+Gem::manage_gems
+require "rake/testtask"
+require "rake/rdoctask"
+require "rake/gempackagetask"
+
+
+desc "Default Task"
+task :default => [:tests, :rdoc]
+
+
+desc "Run all test cases"
+Rake::TestTask.new :tests do |test|
+    test.verbose = true
+    test.test_files = ["test/*.rb"]
+    #test.warning = true
+end
+
+
+# Create the documentation.
+Rake::RDocTask.new do |rdoc|
+    rdoc.main = "README"
+    rdoc.rdoc_files.include("README", "lib/**/*.rb")
+    rdoc.title = "JSON Lightwight Services"
+end
+
