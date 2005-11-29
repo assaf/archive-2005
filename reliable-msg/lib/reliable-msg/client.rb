@@ -163,8 +163,8 @@ module ReliableMsg
     #   end
     class Message
 
-        def initialize id, headers, object # :nodoc:
-            @id, @object, @headers = id, object, headers
+        def initialize id, headers, message #:nodoc:
+            @id, @message, @headers = id, message, headers
         end
 
         # Returns the message identifier.
@@ -176,13 +176,13 @@ module ReliableMsg
             @id
         end
 
-        # Returns the message object.
+        # Returns the message value itself.
         #
         # :call-seq:
-        #   msg.object -> obj
+        #   msg.message -> string
         #
-        def object
-            @object
+        def message
+            @message
         end
 
         # Returns the message headers.
@@ -201,6 +201,24 @@ module ReliableMsg
         #
         def [] symbol
             @headers[symbol]
+        end
+
+        def inspect
+            string = "{id: #{@id}"
+            @headers.each_pair do |name, value|
+                unless name==:id
+                    case value
+                    when String
+                        value = value[0..29] << "..." if value.length > 32
+                        value = '"' << value.gsub('"', '\"') << '"'
+                    when Symbol
+                        value = ":#{value.to_s}"
+                    end
+                    string << " , :#{name}:=>#{value}" unless name == :id
+                end
+                value = @message.length > 32 ? @message[0..29] << "..." : @message
+                string << ", text: " << value << "}"
+            end
         end
 
     private
