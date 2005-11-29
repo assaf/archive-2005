@@ -36,23 +36,42 @@ module JSON
         def read input
             scanner = StringScanner.new input
             scanner.scan(/\s*\{\s*/) or fail scanner, "Expected opening curly bracket ({ at start of object)"
-            object = scan_object scanner
+            object = create_root
+            scan_object object, scanner
             scanner.skip(/\s*/)
             scanner.eos? or fail scanner, "Found unexpected data beyond end of JSON object"
             object
         end
 
+
+    protected
+
+        def create_root
+            {}
+        end
+
+        def create_object parent, name
+            {}
+        end
+
+        def create_array parent, name
+            []
+        end
+
+        def set_value parent, name, value
+            parent[name] = value
+        end
+
     private
 
-        def scan_object scanner
-            object = {}
+        def scan_object object, scanner
             begin
                 name = scan_quoted scanner
                 scanner.scan(/\s*\:\s*/) or fail scanner, "Missing name/value separator (:)"
-                object[name] = scan_value scanner
+                value = scan_value object, name, scanner
+                set_value object, name, value
             end while scanner.scan(/\s*,\s*/)
             scanner.scan(/\s*\}\s*/) or fail scanner, "Expected closing curly brackets at end of object (})"
-            object
         end
 
         def scan_quoted scanner
@@ -67,18 +86,21 @@ module JSON
             scanned.gsub DECODE_REGEXP, &DECODE_PROC
         end
 
-        def scan_value scanner
+        def scan_value parent, name, scanner
             if scanner.match?(/"/)
                 # Expecting quoted value
                 scan_quoted scanner
             elsif scanner.scan(/\{\s*/)
                 # Expecting object.
-                scan_object scanner
+                object = create_object parent, name
+                scan_object object, scanner
+                object
             elsif scanner.scan(/\[\s*/)
                 # Expecting array
-                array = []
+                array = create_array parent, name
                 begin
-                    array << scan_value(scanner)
+                    value = scan_value object, name, scanner
+                    array << value
                 end while scanner.scan(/\s*,\s*/)
                 scanner.scan(/s*\]\s*/) or fail scanner, "Expected closing brackets at end of array (])"
                 array

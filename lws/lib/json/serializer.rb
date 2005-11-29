@@ -70,7 +70,7 @@ module JSON
             raise RuntimeError, "Serialized closed for writing" if @closed
             raise ArgumentError, "wrong number of arguments (0 for 1)" unless args.length > 0
             case args[0]
-            when Hash
+            when Hash, Struct
                 raise ArgumentError, "only one hash allowed, no block expected" if args.length > 1 || block
                 name, value = nil, nil
                 args[0].each_pair do |name, value|
