@@ -80,7 +80,7 @@ module ReliableMsg
 
         # Put a message in the queue.
         #
-        # The +payload+ argument is required, and must be a +String+.
+        # The +payload+ argument is required, and must be a string.
         #
         # Headers are optional. Headers are used to provide the application with additional
         # information about the message, and can be used to retrieve messages (see Queue.get
@@ -98,7 +98,7 @@ module ReliableMsg
         # * <tt>:priority</tt> -- The message priority. Messages with higher priority are
         #   retrieved first.
         # * <tt>:expires</tt> -- Message expiration in seconds. Messages do not expire unless
-        #   specified. Zero or +nil+ means no expiration.
+        #   specified. Zero or nil means no expiration.
         # * <tt>:expires_at</tt> -- Specifies when the message expires (timestamp). Alternative
         #   to <tt>:expires</tt>.
         # * <tt>:max_deliveries</tt> -- Maximum number of attempts to deliver message, afterwhich
@@ -174,13 +174,13 @@ module ReliableMsg
         #   and incremented once for each subsequent attempt.
         # * <tt>:created</tt> -- Indicates timestamp (in seconds) when the message was created.
         # * <tt>:expires_at</tt> -- Indicates timestamp (in seconds) when the message will expire,
-        #   +nil+ if the message does not expire.
+        #   nil if the message does not expire.
         #
         # Call this method without a block to return the message. The returned object is of type
-        # Message, or +nil+ if no message is found.
+        # Message, or nil if no message is found.
         #
         # Call this method in a block to retrieve and process the message. The block is called with
-        # the Message object, returning the result of the block. Returns +nil+ if no message is found.
+        # the Message object, returning the result of the block. Returns nil if no message is found.
         #
         # All operations performed on the queue inside the block are part of the same transaction.
         # The transaction commits when the block completes. However, if the block raises an exception,

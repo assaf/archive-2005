@@ -68,7 +68,7 @@ module ReliableMsg
 
         # Publish a message on the topic.
         #
-        # The +payload+ argument is required, and must be a +String+.
+        # The +payload+ argument is required, and must be a string.
         #
         # Headers are optional. Headers are used to provide the application with additional
         # information about the message, and can be used to retrieve messages (see Topic.get
@@ -83,7 +83,7 @@ module ReliableMsg
         # * <tt>:topic</tt> -- Publish the onn the named topic. Otherwise, uses the topic
         #   specified when creating this Topic object.
         # * <tt>:expires</tt> -- Message expiration in seconds. Messages do not expire unless
-        #   specified. Zero or +nil+ means no expiration.
+        #   specified. Zero or nil means no expiration.
         # * <tt>:expires_at</tt> -- Specifies when the message expires (timestamp). Alternative
         #   to <tt>:expires</tt>.
         #
@@ -125,13 +125,13 @@ module ReliableMsg
         # * <tt>:id</tt> -- The message identifier.
         # * <tt>:created</tt> -- Indicates timestamp (in seconds) when the message was created.
         # * <tt>:expires_at</tt> -- Indicates timestamp (in seconds) when the message will expire,
-        #   +nil+ if the message does not expire.
+        #   nil if the message does not expire.
         #
         # Call this method without a block to return the message. The returned object is of type
-        # Message, or +nil+ if no message is found.
+        # Message, or nil if no message is found.
         #
         # Call this method in a block to retrieve and process the message. The block is called with
-        # the Message object, returning the result of the block. Returns +nil+ if no message is found.
+        # the Message object, returning the result of the block. Returns nil if no message is found.
         #
         # All operations performed on the topic inside the block are part of the same transaction.
         # See Queue.get for discussion about transactions. Note that retry counts and delivery modes

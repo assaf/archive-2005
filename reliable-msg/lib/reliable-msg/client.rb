@@ -18,7 +18,7 @@ module ReliableMsg
     # Base class for both Queue and Topic client APIs.
     class Client
 
-        ERROR_INVALID_SELECTOR = "The selector must be a message identifier (String), name/value pairs (Hash), Selector object, or nil" # :nodoc:
+        ERROR_INVALID_SELECTOR = "The selector must be a message identifier (string), name/value pairs (Hash), Selector object, or nil" # :nodoc:
 
         ERROR_INVALID_TX_TIMEOUT = "Invalid transaction timeout: must be a non-zero positive integer" # :nodoc:
 
@@ -28,7 +28,7 @@ module ReliableMsg
 
         ERROR_INVALID_INIT_OPTION = "Unrecognized initialization option %s: valid options are %s" #:nodoc:
 
-        ERROR_PAYLOAD_NOT_STRING = "A message payload is required and must be a String" #:nodoc:
+        ERROR_PAYLOAD_NOT_STRING = "A message payload is required and must be a string" #:nodoc:
 
         # The default DRb port used to connect to the queue manager.
         DRB_PORT = 6438
@@ -65,7 +65,7 @@ module ReliableMsg
         end
 
         # Sets the transaction timeout (in seconds). Affects future transactions started
-        # by Queue.get. Use +nil+ to restore the default timeout.
+        # by Queue.get. Use nil to restore the default timeout.
         def tx_timeout= timeout
             if timeout
                 raise ArgumentError, ERROR_INVALID_TX_TIMEOUT unless timeout.instance_of?(Integer) and timeout > 0
@@ -81,7 +81,7 @@ module ReliableMsg
         end
 
         # Sets the number of connection attempts, before operations fail. The minimum is one.
-        # Use +nil+ to restore the default connection count.
+        # Use nil to restore the default connection count.
         def connect_count= count
             if count
                 raise ArgumentError, ERROR_INVALID_CONNECT_COUNT unless count.instance_of?(Integer) and count > 0
