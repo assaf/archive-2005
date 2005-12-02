@@ -1,3 +1,9 @@
+Release 1.1.1 (Dec 1, 2005)
+
+* Changed: Message payload must be a string. Message object adds
+  payload method and depracates message method.
+
+
 Release 1.1.0 (Nov 26, 2005)
 
 * Added: Topic class for publishing messages on a topic.

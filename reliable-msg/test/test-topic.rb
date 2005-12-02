@@ -46,17 +46,17 @@ class TestTopic < Test::Unit::TestCase
         @topic.put msg1
         restart.call if restart
         msg = @topic.get
-        assert msg && msg.message == msg1, "Failed to retrieve last message on topic"
+        assert msg && msg.payload == msg1, "Failed to retrieve last message on topic"
         assert @topic.get.nil?, "Retrieved last message on topic twice"
         @topic.put msg2
         restart.call if restart
         msg = @topic.get
-        assert msg && msg.message == msg2, "Failed to retrieve last message on topic"
+        assert msg && msg.payload == msg2, "Failed to retrieve last message on topic"
         assert @topic.get.nil?, "Retrieved last message on topic twice"
         # Test that someone else can retrieve the message.
         new_topic = ReliableMsg::Topic.new @topic.name
         msg = new_topic.get
-        assert msg && msg.message == msg2, "Failed to retrieve last message on topic"
+        assert msg && msg.payload == msg2, "Failed to retrieve last message on topic"
     end
 
     def test_selector
@@ -73,7 +73,7 @@ class TestTopic < Test::Unit::TestCase
         msg = @topic.get(ReliableMsg::Queue.selector { name == 'bar' })
         assert msg.nil?, "Retrieve message with non-matching selector"
         msg = @topic.get(ReliableMsg::Queue.selector { name == 'foo' })
-        assert msg && msg.message == msg1, "Failed to retrieve message with selector"
+        assert msg && msg.payload == msg1, "Failed to retrieve message with selector"
     end
 
     def test_non_expires
@@ -91,7 +91,7 @@ class TestTopic < Test::Unit::TestCase
         @topic.put msg1, :expires=>30
         restart.call if restart
         msg = @topic.get
-        assert msg && msg.message == msg1, "Failed to retrieve message"
+        assert msg && msg.payload == msg1, "Failed to retrieve message"
         @topic.put msg2, :expires=>1
         restart.call if restart
         sleep 2

@@ -27,14 +27,14 @@ module ReliableMsg
     # For example:
     #   topic = Topic.new 'my-topic'
     #   # Publish a message on the topic, expiring in 30 seconds.
-    #   msg = 'lorem ipsum'
-    #   mid = topic.put msg, :expires=>30
+    #   payload = 'lorem ipsum'
+    #   mid = topic.put payload, :expires=>30
     #   # Retrieve and process a message on the topic.
     #   topic.get do |msg|
     #     if msg.id == mid
     #       print "Retrieved same message"
     #     end
-    #     print "Message text: #{msg.object}"
+    #     print "Message payload: #{msg.payload}"
     #   end
     #
     # See Topic.get and Topic.put for more examples.
@@ -58,7 +58,7 @@ module ReliableMsg
         #
         def initialize topic = nil, options = nil
             options.each do |name, value|
-                raise RuntimeError, format(ERROR_INVALID_OPTION, name) unless INIT_OPTIONS.include?(name)
+                raise RuntimeError, format(ERROR_INVALID_OPTION, name, INIT_OPTIONS.join(", ")) unless INIT_OPTIONS.include?(name)
                 instance_variable_set "@#{name.to_s}".to_sym, value
             end if options
             @topic = topic
@@ -68,7 +68,7 @@ module ReliableMsg
 
         # Publish a message on the topic.
         #
-        # The +message+ argument is required, and must be a +String+.
+        # The +payload+ argument is required, and must be a +String+.
         #
         # Headers are optional. Headers are used to provide the application with additional
         # information about the message, and can be used to retrieve messages (see Topic.get
@@ -93,13 +93,13 @@ module ReliableMsg
         # For example:
         #   topic.put updates
         #   topic.put notice, :expires=>10
-        #   topic.put object, :topic=>'other-topic'
+        #   topic.put data, :topic=>'other-topic'
         #
         # :call-seq:
-        #   topic.put(message[, headers])
+        #   topic.put(payload [,headers])
         #
-        def put message, headers = nil
-            raise ArgumentError, ERROR_MESSAGE_NOT_STRING unless message.instance_of?(String)
+        def put payload, headers = nil
+            raise ArgumentError, ERROR_PAYLOAD_NOT_STRING unless payload.instance_of?(String)
             tx = Thread.current[THREAD_CURRENT_TX]
             # Use headers supplied by callers, or defaults for this topic.
             defaults = {
@@ -109,9 +109,9 @@ module ReliableMsg
             # If inside a transaction, always send to the same queue manager, otherwise,
             # allow repeated() to try and access multiple queue managers.
             if tx
-                tx[:qm].publish(:message=>message, :headers=>headers, :topic=>(headers[:topic] || @topic), :tid=>tx[:tid])
+                tx[:qm].publish(:payload=>payload, :headers=>headers, :topic=>(headers[:topic] || @topic), :tid=>tx[:tid])
             else
-                repeated { |qm| qm.publish :message=>message, :headers=>headers, :topic=>(headers[:topic] || @topic) }
+                repeated { |qm| qm.publish :payload=>payload, :headers=>headers, :topic=>(headers[:topic] || @topic) }
             end
         end
 
@@ -168,12 +168,7 @@ module ReliableMsg
                     repeated { |qm| qm.retrieve :seen=>@seen, :topic=>@topic, :selector=>(selector.is_a?(Selector) ? nil : selector) }
                 end
                 # Result is either message, or result from processing block. Note that
-                # calling block may raise an exception. We deserialize the message here
-                # for two reasons:
-                # 1. It creates a distinct copy, so changing the message object and returning
-                #    it to the queue (abort) does not affect other consumers.
-                # 2. The message may rely on classes known to the client but not available
-                #    to the queue manager.
+                # calling block may raise an exception.
                 result = if message
                     # Do not process message unless selector matches. Do not mark
                     # message as seen either, since we may retrieve it if the selector
@@ -182,7 +177,7 @@ module ReliableMsg
                         return nil unless selector.match message[:headers]
                     end
                     @seen = message[:id]
-                    message = Message.new(message[:id], message[:headers], message[:message])
+                    message = Message.new(message[:id], message[:headers], message[:payload])
                     block ? block.call(message) : message
                 end
             rescue Exception=>error

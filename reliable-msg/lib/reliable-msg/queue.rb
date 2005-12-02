@@ -35,7 +35,7 @@ module ReliableMsg
     #     if msg.id == mid
     #       print "Retrieved same message"
     #     end
-    #     print "Message text: #{msg.object}"
+    #     print "Message payload: #{msg.payload}"
     #   end
     #
     # See Queue.get and Queue.put for more examples.
@@ -71,7 +71,7 @@ module ReliableMsg
         #
         def initialize queue = nil, options = nil
             options.each do |name, value|
-                raise RuntimeError, format(ERROR_INVALID_OPTION, name) unless INIT_OPTIONS.include?(name)
+                raise RuntimeError, format(ERROR_INVALID_OPTION, name, INIT_OPTIONS.join(", ")) unless INIT_OPTIONS.include?(name)
                 instance_variable_set "@#{name.to_s}".to_sym, value
             end if options
             @queue = queue
@@ -80,7 +80,7 @@ module ReliableMsg
 
         # Put a message in the queue.
         #
-        # The +message+ argument is required, and must be a +String+.
+        # The +payload+ argument is required, and must be a +String+.
         #
         # Headers are optional. Headers are used to provide the application with additional
         # information about the message, and can be used to retrieve messages (see Queue.get
@@ -120,13 +120,13 @@ module ReliableMsg
         # For example:
         #   queue.put request
         #   queue.put notice, :expires=>10
-        #   queue.put object, :queue=>'other-queue'
+        #   queue.put data, :queue=>'other-queue'
         #
         # :call-seq:
-        #   queue.put(message[, headers]) -> id
+        #   queue.put(payload [, headers]) -> id
         #
-        def put message, headers = nil
-            raise ArgumentError, ERROR_MESSAGE_NOT_STRING unless message.instance_of?(String)
+        def put payload, headers = nil
+            raise ArgumentError, ERROR_PAYLOAD_NOT_STRING unless payload.instance_of?(String)
             tx = Thread.current[THREAD_CURRENT_TX]
             # Use headers supplied by callers, or defaults for this queue.
             defaults = {
@@ -139,9 +139,9 @@ module ReliableMsg
             # If inside a transaction, always send to the same queue manager, otherwise,
             # allow repeated() to try and access multiple queue managers.
             if tx
-                return tx[:qm].queue(:message=>message, :headers=>headers, :queue=>(headers[:queue] || @queue), :tid=>tx[:tid])
+                return tx[:qm].queue(:payload=>payload, :headers=>headers, :queue=>(headers[:queue] || @queue), :tid=>tx[:tid])
             else
-                return repeated { |qm| qm.queue :message=>message, :headers=>headers, :queue=>(headers[:queue] || @queue) }
+                return repeated { |qm| qm.queue :payload=>payload, :headers=>headers, :queue=>(headers[:queue] || @queue) }
             end
         end
 
@@ -156,9 +156,9 @@ module ReliableMsg
         # with priority 2:
         #   msg = queue.get :priority=>2
         # To put and get the same message:
-        #   mid = queue.put obj
+        #   mid = queue.put payload
         #   msg = queue.get mid # or queue.get :id=>mid
-        #   assert(msg.obj == obj)
+        #   assert(msg.payload == payload)
         #
         # More complex selector expressions can be generated using Queue.selector. For example,
         # to retrieve the next message with priority 2 or higher, created in the last 60 seconds:
@@ -193,9 +193,10 @@ module ReliableMsg
         #   while queue.get do |msg|  # called for each message in the queue,
         #                             # until the queue is empty
         #     ... do something with msg ...
-        #     queue.put obj           # puts another message in the queue
+        #     queue.put payload       # puts another message in the queue
         #     true
         #   end
+        #
         # This loop will only complete if it raises an exception, since it gets one message from
         # the queue and puts another message in its place. After an exception, there will be at
         # least one message in the queue.
@@ -264,14 +265,9 @@ module ReliableMsg
                     repeated { |qm| qm.enqueue :queue=>@queue, :selector=>selector }
                 end
                 # Result is either message, or result from processing block. Note that
-                # calling block may raise an exception. We deserialize the message here
-                # for two reasons:
-                # 1. It creates a distinct copy, so changing the message object and returning
-                #    it to the queue (abort) does not affect other consumers.
-                # 2. The message may rely on classes known to the client but not available
-                #    to the queue manager.
+                # calling block may raise an exception.
                 result = if message
-                    message = Message.new(message[:id], message[:headers], message[:message])
+                    message = Message.new(message[:id], message[:headers], message[:payload])
                     block ? block.call(message) : message
                 end
             rescue Exception=>error

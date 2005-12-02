@@ -18,7 +18,7 @@ module ReliableMsg
     # Base class for both Queue and Topic client APIs.
     class Client
 
-        ERROR_INVALID_SELECTOR = "Selector must be message identifier (String), set of header name/value pairs (Hash), Selector object, or nil" # :nodoc:
+        ERROR_INVALID_SELECTOR = "The selector must be a message identifier (String), name/value pairs (Hash), Selector object, or nil" # :nodoc:
 
         ERROR_INVALID_TX_TIMEOUT = "Invalid transaction timeout: must be a non-zero positive integer" # :nodoc:
 
@@ -26,9 +26,9 @@ module ReliableMsg
 
         ERROR_SELECTOR_VALUE_OR_BLOCK = "You can either pass a Selector object, or use a block" # :nodoc:
 
-        ERROR_INVALID_INIT_OPTION = "Unrecognized initialization option %s" #:nodoc:
+        ERROR_INVALID_INIT_OPTION = "Unrecognized initialization option %s: valid options are %s" #:nodoc:
 
-        ERROR_MESSAGE_NOT_STRING = "A message is required and must be a String" #:nodoc:
+        ERROR_PAYLOAD_NOT_STRING = "A message payload is required and must be a String" #:nodoc:
 
         # The default DRb port used to connect to the queue manager.
         DRB_PORT = 6438
@@ -150,39 +150,39 @@ module ReliableMsg
 
     # == Retrieved Message
     #
-    # Returned from Queue.get holding the last message retrieved from the
-    # queue and providing access to the message identifier, headers and object.
+    # Returned from Queue.get or Topic.get holding the last message retrieved
+    # from the queue/topic. Wraps the message identifier, headers and payload.
     #
     # For example:
     #   while queue.get do |msg|
     #     print "Message #{msg.id}"
     #     print "Headers: #{msg[:created]}"
     #     print "Headers: #{msg.headers.inspect}"
-    #     print msg.object
+    #     print msg.payload
     #     true
     #   end
     class Message
 
-        def initialize id, headers, message #:nodoc:
-            @id, @message, @headers = id, message, headers
+        def initialize id, headers, payload #:nodoc:
+            @id, @payload, @headers = id, payload, headers
         end
 
         # Returns the message identifier.
         #
         # :call-seq:
-        #   msg.id -> id
+        #   msg.id -> string
         #
         def id
             @id
         end
 
-        # Returns the message value itself.
+        # Returns the message payload.
         #
         # :call-seq:
-        #   msg.message -> string
+        #   msg.payload -> string
         #
-        def message
-            @message
+        def payload
+            @payload
         end
 
         # Returns the message headers.
@@ -203,6 +203,12 @@ module ReliableMsg
             @headers[symbol]
         end
 
+        # Deprecated, use payload instead.
+        def message
+            $stderr.puts "#{caller[0]}: warning: Message#message is deprecated; use Message#payload"
+            @payload
+        end
+
         def inspect
             string = "{id: #{@id}"
             @headers.each_pair do |name, value|
@@ -217,8 +223,8 @@ module ReliableMsg
                     string << ", :#{name}=>#{value}" unless name == :id
                 end
             end
-            value = @message.length > 32 ? @message[0..29] << "..." : @message
-            string << ", text: \"" << value << "\"}"
+            value = @payload.length > 32 ? @payload[0..29] << "..." : @payload
+            string << ", payload: \"" << value << "\"}"
         end
 
     private

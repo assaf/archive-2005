@@ -17,9 +17,6 @@ module ReliableMsg
 
     module MessageStore
 
-        ERROR_INVALID_MESSAGE_STORE = "No message store '%s' available (note: case is not important)" #:nodoc:
-
-
         # Base class for message store.
         class Base
 
@@ -112,8 +109,8 @@ module ReliableMsg
                 messages.each do |headers|
                     if block.call(headers)
                         id = headers[:id]
-                        message = @cache[id] || load(id, :queue, queue)
-                        return {:id=>id, :headers=>headers, :message=>message}
+                        payload = @cache[id] || load(id, :queue, queue)
+                        return {:id=>id, :headers=>headers, :payload=>payload}
                     end
                 end
                 return nil
@@ -130,8 +127,8 @@ module ReliableMsg
                 return nil if headers.nil? || headers[:id] == seen
                 if block.call(headers)
                     id = headers[:id]
-                    message = @cache[id] || load(id, :topic, topic)
-                    {:id=>id, :headers=>headers, :message=>message}
+                    payload = @cache[id] || load(id, :topic, topic)
+                    {:id=>id, :headers=>headers, :payload=>payload}
                 end
             end
 
@@ -169,7 +166,7 @@ module ReliableMsg
                                 end
                             end
                             queue << headers unless added
-                            @cache[insert[:id]] = insert[:message]
+                            @cache[insert[:id]] = insert[:payload]
                         elsif insert[:topic]
                             @topics[insert[:topic]] = insert[:headers]
                         end
@@ -312,12 +309,12 @@ module ReliableMsg
                         file = File.open name, "w+"
                         file.binmode
                     end
-                    # Store the message in the file, map the message to the file
-                    # (message and file have different IDs).
+                    # Store the message (payload) in the file, map the message to the
+                    # file (message and file have different IDs).
                     file.sysseek 0, IO::SEEK_SET
-                    file.syswrite insert[:message]
+                    file.syswrite insert[:payload]
                     file.flush
-                    file.truncate insert[:message].length
+                    file.truncate insert[:payload].length
                     file.flush
                     @mutex.synchronize do
                         @file_map[insert[:id]] = [name, file]
@@ -503,9 +500,9 @@ module ReliableMsg
                     begin
                         inserts.each do |insert|
                             if insert[:queue]
-                                mysql.query "INSERT INTO `#{@queues_table}` (id,queue,headers,object) VALUES('#{connection.quote  insert[:id]}','#{connection.quote insert[:queue]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
+                                mysql.query "INSERT INTO `#{@queues_table}` (id,queue,headers,payload) VALUES('#{connection.quote  insert[:id]}','#{connection.quote insert[:queue]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:payload]}')"
                             else
-                                mysql.query "REPLACE `#{@topics_table}` (topic,headers,object) VALUES('#{connection.quote insert[:topic]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:message]}')"
+                                mysql.query "REPLACE `#{@topics_table}` (topic,headers,payload) VALUES('#{connection.quote insert[:topic]}',BINARY '#{connection.quote Marshal::dump(insert[:headers])}',BINARY '#{connection.quote insert[:payload]}')"
                             end
                         end
                         ids = deletes.inject([]) do |array, delete|
@@ -553,21 +550,21 @@ module ReliableMsg
 
 
                 def load id, type, queue_or_topic
-                    message = nil
+                    payload = nil
                     if type == :queue
-                        connection.query "SELECT object FROM `#{@queues_table}` WHERE id='#{id}'" do |result|
-                            message = if row = result.fetch_row
+                        connection.query "SELECT payload FROM `#{@queues_table}` WHERE id='#{id}'" do |result|
+                            payload = if row = result.fetch_row
                                 row[0]
                             end
                         end
                     else
-                        connection.query "SELECT object FROM `#{@topics_table}` WHERE topic='#{queue_or_topic}'" do |result|
-                            message = if row = result.fetch_row
+                        connection.query "SELECT payload FROM `#{@topics_table}` WHERE topic='#{queue_or_topic}'" do |result|
+                            payload = if row = result.fetch_row
                                 row[0]
                             end
                         end
                     end
-                    message
+                    payload
                 end
 
 

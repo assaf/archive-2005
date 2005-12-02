@@ -301,7 +301,7 @@ module ReliableMsg
         # Called by client to queue a message.
         def queue args
             # Get the arguments of this call.
-            message, headers, queue, tid = args[:message], args[:headers], args[:queue].downcase, args[:tid]
+            payload, headers, queue, tid = args[:payload], args[:headers], args[:queue].downcase, args[:tid]
             raise ArgumentError, ERROR_SEND_MISSING_QUEUE unless queue and queue.instance_of?(String) and !queue.empty?
             time = Time.new.to_i
             # TODO: change this to support the RM delivery protocol.
@@ -341,7 +341,7 @@ module ReliableMsg
                 headers[:expires_at] = Time.now.to_i + expires if expires > 0
             end
             # Create an insertion record for the new message.
-            insert = {:id=>id, :queue=>queue, :headers=>headers, :message=>message}
+            insert = {:id=>id, :queue=>queue, :headers=>headers, :payload=>payload}
             if tid
                 tx = @transactions[tid]
                 raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
@@ -468,14 +468,14 @@ module ReliableMsg
             # To prevent a transaction from modifying a message and then returning it to the
             # queue by aborting, we instead clone the message by de-serializing (this happens
             # in Queue, see there). The headers are also cloned (shallow, all values are frozen).
-            return :id=>message[:id], :headers=>message[:headers].clone, :message=>message[:message]
+            return :id=>message[:id], :headers=>message[:headers].clone, :payload=>message[:payload]
         end
 
 
         # Called by client to publish message.
         def publish args
             # Get the arguments of this call.
-            message, headers, topic, tid = args[:message], args[:headers], args[:topic].downcase, args[:tid]
+            payload, headers, topic, tid = args[:payload], args[:headers], args[:topic].downcase, args[:tid]
             raise ArgumentError, ERROR_PUBLISH_MISSING_TOPIC unless topic and topic.instance_of?(String) and !topic.empty?
             time = Time.new.to_i
             id = args[:id] || UUID.new
@@ -511,7 +511,7 @@ module ReliableMsg
                 headers[:expires_at] = Time.now.to_i + expires if expires > 0
             end
             # Create an insertion record for the new message.
-            insert = {:id=>id, :topic=>topic, :headers=>headers, :message=>message}
+            insert = {:id=>id, :topic=>topic, :headers=>headers, :payload=>payload}
             if tid
                 tx = @transactions[tid]
                 raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
@@ -553,7 +553,7 @@ module ReliableMsg
                 @store.transaction { |inserts, deletes, dlqs| deletes << expired }
                 return nil
             end
-            return :id=>message[:id], :headers=>message[:headers].clone, :message=>message[:message]
+            return :id=>message[:id], :headers=>message[:headers].clone, :payload=>message[:payload]
         end
 
 
