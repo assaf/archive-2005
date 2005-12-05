@@ -281,6 +281,7 @@ module ReliableMsg
                 Client.send :qm=, nil
                 drb_uri = @drb_server.uri
                 @drb_server.stop_service
+                DRb::stop_service if DRb::uri == drb_uri # Not sure why this is required
                 # Deactivate the message store.
                 @store.deactivate
                 @store = nil
@@ -300,6 +301,7 @@ module ReliableMsg
 
         # Called by client to queue a message.
         def queue args
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             # Get the arguments of this call.
             payload, headers, queue, tid = args[:payload], args[:headers], args[:queue].downcase, args[:tid]
             raise ArgumentError, ERROR_SEND_MISSING_QUEUE unless queue and queue.instance_of?(String) and !queue.empty?
@@ -358,6 +360,7 @@ module ReliableMsg
 
         # Called by client to list queue headers.
         def list args
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             # Get the arguments of this call.
             queue = args[:queue].downcase
             raise ArgumentError, ERROR_SEND_MISSING_QUEUE unless queue and queue.instance_of?(String) and !queue.empty?
@@ -385,6 +388,7 @@ module ReliableMsg
 
         # Called by client to enqueue message.
         def enqueue args
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             # Get the arguments of this call.
             queue, selector, tid = args[:queue].downcase, args[:selector], args[:tid]
             id, headers = nil, nil
@@ -474,6 +478,7 @@ module ReliableMsg
 
         # Called by client to publish message.
         def publish args
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             # Get the arguments of this call.
             payload, headers, topic, tid = args[:payload], args[:headers], args[:topic].downcase, args[:tid]
             raise ArgumentError, ERROR_PUBLISH_MISSING_TOPIC unless topic and topic.instance_of?(String) and !topic.empty?
@@ -526,6 +531,7 @@ module ReliableMsg
 
         # Called by client to retrieve message from topic.
         def retrieve args
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             # Get the arguments of this call.
             seen, topic, selector, tid = args[:seen], args[:topic].downcase, args[:selector], args[:tid]
             id, headers = nil, nil
@@ -559,6 +565,7 @@ module ReliableMsg
 
         # Called by client to begin a transaction.
         def begin timeout
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             tid = UUID.new
             @transactions[tid] = {:inserts=>[], :deletes=>[], :timeout=>Time.new.to_i + timeout}
             tid
@@ -567,6 +574,7 @@ module ReliableMsg
 
         # Called by client to commit a transaction.
         def commit tid
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             tx = @transactions[tid]
             raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
             begin
@@ -589,6 +597,7 @@ module ReliableMsg
 
         # Called by client to abort a transaction.
         def abort tid
+            raise RuntimeError, ERROR_QM_NOT_STARTED unless @@active == self
             tx = @transactions[tid]
             raise RuntimeError, format(ERROR_NO_TRANSACTION, tid) unless tx
             # Release locks here because we are no longer in posession of any
