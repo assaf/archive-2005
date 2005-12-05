@@ -15,3 +15,4 @@ begin
     require "reliable-msg/rails"
 rescue LoadError
 end
+
