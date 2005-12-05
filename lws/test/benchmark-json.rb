@@ -40,7 +40,6 @@ end
 
 module JSON
 
-
     def self.benchmark
 
         object = {
@@ -60,6 +59,7 @@ module JSON
                 }
             }
         }
+        puts "Ruby #{RUBY_VERSION} / #{RUBY_PLATFORM}"
         puts "Benchmark using the object"
         puts JSON::dump(object, nil, 4)
         puts
@@ -92,7 +92,7 @@ module JSON
                     count.times { JSON::load(json_in) } if load
                 end
                 bm.report("YAML:") do
-                    count.times { YAML::dump(object, StringIO.new) } if dump
+                    count.times { YAML::dump(object) } if dump
                     count.times { YAML::load(yaml) } if load
                 end
                 bm.report("Marshal:") do

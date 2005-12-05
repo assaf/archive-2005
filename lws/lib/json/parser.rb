@@ -2,10 +2,33 @@ require 'strscan'
 
 module JSON
 
-    class Parser
+    class ParseError < RuntimeError
+    end
 
-        class ParseError < RuntimeError
+
+    class ObjectBuilder
+
+        def create_root
+            {}
         end
+
+        def create_object parent, name
+            {}
+        end
+
+        def create_array parent, name
+            []
+        end
+
+        def set_value parent, name, value
+            parent[name] = value
+        end
+
+    end
+
+
+    class Parser < ObjectBuilder
+
 
         # Regular expression for catching all the characters that must be decoded.
         DECODE_REGEXP = /\\[nrftb\\\/"]|\\\d{4}/
@@ -30,48 +53,34 @@ module JSON
             end
         end
 
-        def initialize
+        DEFAULT_BUILDER = ObjectBuilder.new
+
+        def initialize builder = nil
+            @builder = builder || DEFAULT_BUILDER
         end
 
         def read input
             scanner = StringScanner.new input
             scanner.scan(/\s*\{\s*/) or fail scanner, "Expected opening curly bracket ({ at start of object)"
-            object = create_root
+            object = @builder.create_root
             scan_object object, scanner
             scanner.skip(/\s*/)
             scanner.eos? or fail scanner, "Found unexpected data beyond end of JSON object"
             object
         end
 
-
-    protected
-
-        def create_root
-            {}
-        end
-
-        def create_object parent, name
-            {}
-        end
-
-        def create_array parent, name
-            []
-        end
-
-        def set_value parent, name, value
-            parent[name] = value
-        end
-
     private
 
         def scan_object object, scanner
-            begin
-                name = scan_quoted scanner
-                scanner.scan(/\s*\:\s*/) or fail scanner, "Missing name/value separator (:)"
-                value = scan_value object, name, scanner
-                set_value object, name, value
-            end while scanner.scan(/\s*,\s*/)
-            scanner.scan(/\s*\}\s*/) or fail scanner, "Expected closing curly brackets at end of object (})"
+            unless scanner.scan(/\}\s*/) # empty object
+                begin
+                    name = scan_quoted scanner
+                    scanner.scan(/\s*\:\s*/) or fail scanner, "Missing name/value separator (:)"
+                    value = scan_value object, name, scanner
+                    @builder.set_value object, name, value
+                end while scanner.scan(/\s*,\s*/)
+                scanner.scan(/\s*\}\s*/) or fail scanner, "Expected closing curly brackets at end of object (})"
+            end
         end
 
         def scan_quoted scanner
@@ -92,17 +101,19 @@ module JSON
                 scan_quoted scanner
             elsif scanner.scan(/\{\s*/)
                 # Expecting object.
-                object = create_object parent, name
+                object = @builder.create_object parent, name
                 scan_object object, scanner
                 object
             elsif scanner.scan(/\[\s*/)
-                # Expecting array
-                array = create_array parent, name
-                begin
-                    value = scan_value object, name, scanner
-                    array << value
-                end while scanner.scan(/\s*,\s*/)
-                scanner.scan(/s*\]\s*/) or fail scanner, "Expected closing brackets at end of array (])"
+                array = @builder.create_array parent, name
+                unless scanner.scan(/\]\s*/) # empty array
+                    # Expecting array
+                    begin
+                        value = scan_value object, name, scanner
+                        array << value
+                    end while scanner.scan(/\s*,\s*/)
+                    scanner.scan(/s*\]\s*/) or fail scanner, "Expected closing brackets at end of array (])"
+                end
                 array
             elsif scanner.scan(/-?[[:digit:]]+(\.[[:digit:]]+)?([eE][\-+]?[[:digit:]]+)?/)
                 value = scanner[0]
