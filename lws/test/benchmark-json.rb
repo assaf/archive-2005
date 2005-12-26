@@ -40,6 +40,50 @@ end
 
 module JSON
 
+    class BenchTest
+
+        def initialize name, &block
+            @name = name
+            @load = nil
+            instance_eval &block
+        end
+
+        def dump &block
+            @dump = block
+        end
+
+        def load &block
+            @load = block
+        end
+
+        def run count, object, gc = true
+            puts "#{@name}:"
+            text = @dump.call object
+            puts "Serialized size: #{text.length} bytes"
+            Benchmark.bmbm(10) do |bm|
+                bm.report("#{@name}: Serialize:") do
+                    GC.disable unless gc
+                    count.times { @dump.call object }
+                    GC.enable unless gc
+                end
+                if @load
+                    bm.report("#{@name}: Parse:") do
+                        GC.disable unless gc
+                        count.times { @load.call text }
+                        GC.enable unless gc
+                    end
+                    bm.report("#{@name}: Round-trip:") do
+                        GC.disable unless gc
+                        count.times { text = @dump.call object ; @load.call text }
+                        GC.enable unless gc
+                    end
+                end
+            end
+            puts ; puts
+        end
+
+    end
+
     def self.benchmark
 
         object = {
@@ -65,59 +109,36 @@ module JSON
         puts
         count = 1000
 
-        puts "Serialized text size"
-        json = JSON::dump(object)
-        puts "JSON: #{json.length}"
-        json_in = JSON::dump(object, nil, 4)
-        puts "JSON*: #{json_in.length}"
-        yaml = YAML::dump(object)
-        puts "YAML: #{yaml.length}"
-        marshal = Marshal::dump(object)
-        puts "Marshal: #{marshal.length}"
-        xml = REXML::dump(object)
-        puts "REXML: #{xml.length}"
-        xml = REXML::dump(object, 4)
-        puts "REXML*: #{xml.length}"
-        puts
-        puts "* Indented output"
 
-        test = Proc.new do |dump, load|
-            Benchmark.bmbm(20) do |bm|
-                bm.report("JSON:") do
-                    count.times { JSON::dump(object) } if dump
-                    count.times { JSON::load(json) } if load
-                end
-                bm.report("JSON*:") do
-                    count.times { JSON::dump(object, nil, 4) } if dump
-                    count.times { JSON::load(json_in) } if load
-                end
-                bm.report("YAML:") do
-                    count.times { YAML::dump(object) } if dump
-                    count.times { YAML::load(yaml) } if load
-                end
-                bm.report("Marshal:") do
-                    count.times { Marshal::dump(object) } if dump
-                    count.times { Marshal::load(marshal) } if load
-                end
-                if dump && !load
-                    bm.report("REXML:") do
-                        count.times { REXML::dump(object) }
-                    end
-                    bm.report("REXML*:") do
-                        count.times { REXML::dump(object, 4) }
-                    end
-                end
-            end
+        tests = []
+        tests << BenchTest.new("JSON") do
+            dump { |object| JSON::dump(object) }
+            load { |text| JSON::load(text) }
+        end
+        tests << BenchTest.new("JSON*") do
+            dump { |object| JSON::dump(object, nil, 4) }
+            load { |text| JSON::load(text) }
+        end
+        tests << BenchTest.new("YAML") do
+            dump { |object| YAML::dump(object) }
+            load { |text| YAML::load(text) }
+        end
+        tests << BenchTest.new("Marshal") do
+            dump { |object| Marshal::dump(object) }
+            load { |text| Marshal::load(text) }
+        end
+        tests << BenchTest.new("REXML") do
+            dump { |object| REXML::dump(object) }
+        end
+        tests << BenchTest.new("REXML*") do
+            dump { |object| REXML::dump(object, 4) }
+        end
+
+        tests.each do |test|
+            test.run count, object, true
         end
         puts
-        puts "Serialization (dump):"
-        test.call true, false
-        puts
-        puts "Parsing (load):"
-        test.call false, true
-        puts
-        puts "Round-trip (dump, load):"
-        test.call true, true
+        puts "* Indented output"
 
     end
 

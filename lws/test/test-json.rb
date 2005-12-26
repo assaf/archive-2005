@@ -26,19 +26,19 @@ class TestQueue < Test::Unit::TestCase
 
     def test_write_methods
         json = JSON::Serializer.indented {
-            write "glossary", object {
-                write "title", "example glossary"
-                write "GlossDiv", object {
-                    write "title", "S"
-                    write "GlossList", [
+            write "glossary"=>object {
+                write "title"=>"example glossary"
+                write "GlossDiv"=>object {
+                    write "title"=>"S"
+                    write "GlossList"=>[
                         object {
-                            write "ID", "SGML"
-                            write "SortAs", "SGML"
-                            write "GlossTerm", "Standard Generalized Markup Language"
-                            write "Acronym", "SGML"
-                            write "Abbrev", "ISO 8879:1986"
-                            write "GlossDef", "A meta-markup language, used to create markup languages such as DocBook."
-                            write "GlossSeeAlso", ["GML", "XML", "markup"]
+                            write "ID"=>"SGML"
+                            write "SortAs"=>"SGML"
+                            write "GlossTerm"=>"Standard Generalized Markup Language"
+                            write "Acronym"=>"SGML"
+                            write "Abbrev"=>"ISO 8879:1986"
+                            write "GlossDef"=>"A meta-markup language, used to create markup languages such as DocBook."
+                            write "GlossSeeAlso"=>["GML", "XML", "markup"]
                         }
                     ]
                 }
@@ -75,7 +75,9 @@ class TestQueue < Test::Unit::TestCase
             "null"=>nil,
             "float"=>12.34,
             "integer"=>56,
-            "array"=>["foo", 56, nil]
+            "array"=>["foo", 56, nil],
+            "empty_array"=>[],
+            "empty_object"=>{}
         }
         json = JSON::dump(object)
         assert object == JSON::load(json), "Round-trip failed when testing base types"
