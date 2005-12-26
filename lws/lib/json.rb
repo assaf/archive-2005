@@ -19,10 +19,9 @@ module JSON
     end
 
 
-    def self.load input, builder = nil
-        #input = StringIO.new(input) unless input.is_a?(IO)
-        parser = Parser::new builder
-        parser.read input
+    def self.load input
+        parser = Parser::new input
+        parser.read
     end
 
 end

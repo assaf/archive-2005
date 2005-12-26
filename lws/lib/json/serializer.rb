@@ -53,70 +53,54 @@ module JSON
 
 
         def flush
-            close
             @io.flush
         end
 
 
         def to_str
             close
+            raise RuntimeError, "Cannot get string from this IO object" unless @io.respond_to?(:string)
             @io.string
         end
 
         alias :to_json :to_str
 
-
-        def write *args, &block
+        def write hash_or_name, &block
             raise RuntimeError, "Serialized closed for writing" if @closed
-            raise ArgumentError, "wrong number of arguments (0 for 1)" unless args.length > 0
-            case args[0]
-            when Hash, Struct
-                raise ArgumentError, "only one hash allowed, no block expected" if args.length > 1 || block
-                name, value = nil, nil
-                args[0].each_pair do |name, value|
-                    @io << ',' if @separator
-                    if @indent_by
-                        @io << "\n"
-                        @indent.times { @io << @indent_by }
-                    end
-                    name = name.to_s unless name.instance_of?(String)
-                    @io << '"' << name.gsub(ESCAPE_REGEXP, &ESCAPE_PROC) << '": '
-                    write_value value
-                    @separator = true
-                end
-            when String, Symbol, Numeric
-                raise ArgumentError, "expected second argument with value, or a block" unless args.length == 2 || block
+            if block
                 @io << ',' if @separator
                 if @indent_by
                     @io << "\n"
                     @indent.times { @io << @indent_by }
                 end
-                name = name.instance_of?(String) ? args[0] : args[0].to_s
-                @io << '"' << name.gsub(ESCAPE_REGEXP, &ESCAPE_PROC) << '": '
-                if block
-                    separator, @separator = @separator, false
-                    @io << '{'
+                @io << '"' << hash_or_name.to_s.gsub(ESCAPE_REGEXP, &ESCAPE_PROC) << '": '
+                separator, @separator = @separator, false
+                @io << '{'
+                if @indent_by
+                    @indent += 1
+                    instance_eval &block
+                    @indent -= 1
+                    @io << "\n"
+                    @indent.times { @io << @indent_by }
+                else
+                    instance_eval &block
+                end
+                @io << '}'
+                @separator = separator
+            else
+                name, value = nil, nil
+                hash_or_name.each_pair do |name, value|
+                    @io << ',' if @separator
                     if @indent_by
-                        @indent += 1
-                        instance_eval &block
-                        @indent -= 1
                         @io << "\n"
                         @indent.times { @io << @indent_by }
-                    else
-                        instance_eval &block
                     end
-                    @io << '}'
-                    @separator = separator
-                else
-                    write_value args[1]
+                    @io << '"' << name.to_s.gsub(ESCAPE_REGEXP, &ESCAPE_PROC) << '": '
+                    write_value value
+                    @separator = true
                 end
-            else
-                raise ArgumentError, "first argument must be values of object (a Hash), or a name/value pair"
             end
-            @separator = true
-            self
         end
-
 
         def object &block
             raise RuntimeError, "Serialized closed for writing" if @closed
@@ -159,16 +143,16 @@ module JSON
                 name = nil
                 if @indent_by
                     @indent += 1
-                    value.each_pair { |name, value| write name, value }
+                    write value
                     @indent -= 1
                     @io << "\n"
                     @indent.times { @io << @indent_by }
                 else
-                    value.each_pair { |name, value| write name, value }
+                    write value
                 end
                 @io << '}'
                 @separator = true
-            when Serializer
+            when JSON::Serializer
                 @io << value.to_str
             else
                 if value.respond_to?(:to_json)
