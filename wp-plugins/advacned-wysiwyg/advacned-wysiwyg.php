@@ -3,7 +3,7 @@
 Plugin Name: Advanced WYSIWYG Editor
 Plugin URI: http://www.labnotes.org/
 Description: Adds more styling options to the WYSIWYG post editor.
-Version: 0.1
+Version: 0.2
 Author: Assaf Arkin
 Author URI: http://labnotes.org/
 License: Creative Commons Attribution-ShareAlike
@@ -13,6 +13,8 @@ Tags: wordpress tinymce
 if (isset($wp_version)) {
     add_filter("mce_plugins", "extended_editor_mce_plugins", 0);
     add_filter("mce_buttons", "extended_editor_mce_buttons", 0);
+    add_filter("mce_buttons_2", "extended_editor_mce_buttons_2", 0);
+    add_filter("mce_buttons_3", "extended_editor_mce_buttons_3", 0);
 }
 
 
@@ -33,4 +35,13 @@ return array(
         "code", "fullscreen", "wordpress", "wphelp");
 }
 
+function extended_editor_mce_buttons_2($buttons) {
+    // Add buttons on the second toolbar line
+    return $buttons;
+}
+
+function extended_editor_mce_buttons_3($buttons) {
+    // Add buttons on the third toolbar line
+    return $buttons;
+}
 ?>
