@@ -7,7 +7,7 @@ require 'json/parser'
 module JSON
 
 
-    def self.dump object, output = nil, indent = 0
+    def self.dump(object, output = nil, indent = 0)
         ser = Serializer::new output, indent
         ser.write object
         if output
@@ -19,7 +19,7 @@ module JSON
     end
 
 
-    def self.load input
+    def self.load(input)
         parser = Parser::new input
         parser.read
     end

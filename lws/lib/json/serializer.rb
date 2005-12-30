@@ -5,10 +5,10 @@ module JSON
     class Serializer
 
         # Regular expression for catching all the characters that must be encoded.
-        ESCAPE_REGEXP = /[^[:print:]]|["\\\/]/
+        ESCAPE_REGEXP = /[^[:print:]]|["\\\/]/ #:nodoc:
 
         # Proc for encoding non-printable characters, quote and back-slash.
-        ESCAPE_PROC = Proc.new do |match|
+        ESCAPE_PROC = Proc.new do |match| #:nodoc:
             case match[0]
             when 34
                 '\\"'
@@ -33,7 +33,7 @@ module JSON
 
         DEFAULT_INDENT = 4
 
-        def initialize output = nil, indent = 0, &block
+        def initialize(output = nil, indent = 0, &block)
             @separator = false
             @io = output || StringIO.new
             @closed = false
@@ -47,7 +47,7 @@ module JSON
         end
 
 
-        def self.indented output = nil, &block
+        def self.indented(output = nil, &block)
             self.new output, DEFAULT_INDENT, &block
         end
 
@@ -65,7 +65,7 @@ module JSON
 
         alias :to_json :to_str
 
-        def write hash_or_name, &block
+        def write(hash_or_name, &block)
             raise RuntimeError, "Serialized closed for writing" if @closed
             if block
                 @io << ',' if @separator
@@ -102,7 +102,7 @@ module JSON
             end
         end
 
-        def object &block
+        def object(&block)
             raise RuntimeError, "Serialized closed for writing" if @closed
             ser = Serializer.new
             ser.instance_variable_set :@indent_by,  @indent_by
@@ -113,7 +113,7 @@ module JSON
 
     private
 
-        def write_value value
+        def write_value(value)
             case value
             when String
                 @io << '"' << value.gsub(ESCAPE_REGEXP, &ESCAPE_PROC) << '"'

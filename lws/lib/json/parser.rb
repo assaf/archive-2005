@@ -8,12 +8,11 @@ module JSON
 
     class Parser
 
-
         # Regular expression for catching all the characters that must be decoded.
-        DECODE_REGEXP = /\\[nrftb\\\/"]|\\\d{4}/
+        DECODE_REGEXP = /\\[nrftb\\\/"]|\\\d{4}/ #:nodoc:
 
         # Proc for decoding escaped characters .
-        DECODE_PROC = Proc.new do |match|
+        DECODE_PROC = Proc.new do |match| #:nocod:
             case match[1]
             when ?n
                 "\n"
@@ -32,16 +31,16 @@ module JSON
             end
         end
 
-        REGEXP_OPENING_CURLY = /^\s*\{/
-        REGEXP_WS = /^\s*/
-        REGEXP_FIRST_NON_WS = /^\s*[^\s]/
-        REGEXP_COLON = /^\s*\:/
-        REGEXP_NON_QUOTE = /^[^\"]*/
-        REGEXP_NUMBER = /^(-?[[:digit:]]+(\.[[:digit:]]+)?([eE][\-+]?[[:digit:]]+)?)[^[:digit:]]/
-        REGEXP_IS_FLOAT = /[\.eE]/
+        REGEXP_OPENING_CURLY = /^\s*\{/ #:nodoc:
+        REGEXP_WS = /^\s*/ #:nodoc:
+        REGEXP_FIRST_NON_WS = /^\s*[^\s]/ #:nodoc:
+        REGEXP_COLON = /^\s*\:/ #:nodoc:
+        REGEXP_NON_QUOTE = /^[^\"]*/ #:nodoc:
+        REGEXP_NUMBER = /^(-?[[:digit:]]+(\.[[:digit:]]+)?([eE][\-+]?[[:digit:]]+)?)[^[:digit:]]/ #:nodoc:
+        REGEXP_IS_FLOAT = /[\.eE]/ #:nodoc:
 
 
-        def initialize input
+        def initialize(input)
             case input
             when String
                 @scanner = ScanFromString.new input
@@ -66,22 +65,22 @@ module JSON
             {}
         end
 
-        def create_object parent, name
+        def create_object(parent, name)
             {}
         end
 
-        def create_array parent, name
+        def create_array(parent, name)
             []
         end
 
-        def set_value parent, name, value
+        def set_value(parent, name, value)
             parent[name] = value
         end
 
 
     private
 
-        def scan_object object
+        def scan_object(object)
             scanned = @scanner.scan(REGEXP_FIRST_NON_WS)
             return if scanned[-1] == ?} # empty object
             name, value = nil, nil
@@ -111,7 +110,7 @@ module JSON
             scanned.gsub DECODE_REGEXP, &DECODE_PROC
         end
 
-        def scan_value parent, name
+        def scan_value(parent, name)
             scanned = @scanner.scan(REGEXP_FIRST_NON_WS)[-1]
             if scanned == 34
                 # Expecting quoted value
@@ -161,11 +160,11 @@ module JSON
 
     class ScanFromString < StringScanner
 
-        def initialize string
+        def initialize(string)
             super
         end
 
-        def expect regexp, message
+        def expect(regexp, message)
             scanned = scan regexp
             fail message unless scanned
             scanned
@@ -175,11 +174,11 @@ module JSON
             # what do we do here?
         end
 
-        def pushback ch
+        def pushback(ch)
             self.pos = pos - 1
         end
 
-        def fail message
+        def fail(message)
             current = pos
             start = current - 32
             start = 0 if start < 0
@@ -200,19 +199,19 @@ module JSON
 
     class ScanFromIO
 
-        def initialize io
+        def initialize(io)
             @io = io
             @string = io.read
             @scanner = StringScanner @string
         end
 
-        def expect regexp, message
+        def expect(regexp, message)
             scanned = scan regexp
             fail message unless scanned
             scanned
         end
 
-        def scan regexp
+        def scan(regexp)
             scanned = @scanner.scan regexp
             while !scanned
                 fail "Reached end of stream" if io.eof?
@@ -232,7 +231,7 @@ module JSON
             ch
         end
 
-        def skip regexp
+        def skip(regexp)
             count = @scanner.skip regexp
             while !count
                 fail "Reached end of stream" if io.eof?
@@ -246,11 +245,11 @@ module JSON
             # what do we do here?
         end
 
-        def pushback ch
+        def pushback(ch)
             self.pos = pos - 1
         end
 
-        def fail message
+        def fail(message)
             current = @scanner.pos
             start = current - 32
             start = 0 if start < 0
