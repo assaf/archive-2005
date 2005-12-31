@@ -255,10 +255,10 @@ module WebClient
             HTTP_METHODS = [ :get, :post ]
 
             # List of targets for binding input values. See bind_input.
-            INPUT_TARGETS = [ :path, :query, :post, :header, :default ]
+            INPUT_TARGETS = [ :path, :query, :post, :header, :default, :cookie ]
 
             # List of sources for binding output values. See bind_output.
-            OUTPUT_SOURCES = [ :url, :header, :body ]
+            OUTPUT_SOURCES = [ :url, :header, :body, :cookie ]
 
 
             # The service URL. You can set this in the service bindings, or
@@ -274,8 +274,24 @@ module WebClient
             attr_accessor :http_method
 
 
-            def initialize(parent = nil)
+            def initialize(parent = nil, *args, &block)
                 @parent = parent
+                # If the last argument is a hash, we use its values to call the
+                # various set methods.
+                arg = args.shift
+                if arg.instance_of?(Hash)
+                    arg.each_pair do |key, value|
+                        method = "#{key}=".to_s
+                        raise ArgumentError, "Service bindings do not havea setting for #{key}" unless self.respond_to?(method)
+                        self.send(method, value)
+                    end
+                    arg = args.shift
+                end
+                raise ArgumentError, "I don't know what to do with the argument #{arg.to_s}" if !arg.nil?
+
+                # If we have a block, we execute the block in order to specify
+                # the bindings.
+                block.call(self) if block
             end
 
 
@@ -321,6 +337,7 @@ module WebClient
             #  * :query -- Bind the input value to the URL query string.
             #  * :post -- Bind the input value to content of the HTTP request.
             #    Only valid when using the HTTP method POST.
+            #  * :cookie -- Bind the input value to a cookie with the same name.
             #  * :header -- Bind the input value to an HTTP header.
             #  * :default -- Bind the input value to the URL path, if it contains
             #    the pattern $name$. Otherwise, bind it to the HTTP request when
@@ -361,6 +378,7 @@ module WebClient
             #  * :url -- Bind the output value from the actual URL. You can use
             #    this to capture the request URL, or a redirect.
             #  * :header -- Bind the output value from an HTTP header.
+            #  * :cookie -- Bind the output value from a cookie with the same name.
             #  * :body -- Bind the output value from the HTTP response body.
             #
             # If the source is not specified, then the output name :url is always
@@ -527,20 +545,57 @@ module WebClient
 
         class Service < Base
 
-            def method(name, bindings = nil)
-                methods = (@methods ||= {})
-                method = (methods[name.to_sym] ||= Method.new(self))
-                if bindings
-                    bindings.each do |name, value|
-                        method.send "#{name}=".to_s, value
+            # Create new service bindings.
+            #
+            # You can initialize the service bindings inline by passing a block,
+            # for example:
+            #   Service.new do |bindings|
+            #     bindings.url = "http://www.example.com"
+            #     bindings.http_method = :get
+            #   end
+            #
+            # You can also pass service bindings information as a hash, for example:
+            #   Service.new :url=>"http://www.example.com", :http_method=>:get
+            #
+            # If the first argument is a string, it is interpreted as the service
+            # URL. If the second argument is a symbol, it is interpreted as the HTTP
+            # method.
+            #
+            # :call-seq:
+            #   Service.new([bindings])
+            #   Service.new(url [,bindings])
+            #   Service.new(url, http_method [,bindings])
+            #   Service.new { |bindings| ... }
+            #
+            def initialize(*args, &block)
+                # If the first argument is a string, it specifies the service URL.
+                if args.length > 0 && args[0].instance_of?(String)
+                    self.url = args.shift
+                    # If the next argument is a symbol, it specifies the HTTP method.
+                    if args.length > 0 && args[0].instance_of?(Symbol)
+                        self.http_method = args.shift
                     end
                 end
-                method
+                super(nil, *args, &block)
             end
 
+            public :initialize
+
+
+            def method(name, *args, &block)
+                methods = (@methods ||= {})
+                if method = methods[name.to_sym]
+                    method.initialize(self, name, *args, &block)
+                    method
+                else
+                    methods[name.to_sym] = Method.new(self, name, *args, &block)
+                end
+            end
+
+
             def methods=(map)
-                map.each do |name, bindings|
-                    method name, bindings
+                map.each do |method, bindings|
+                    method(method, bindings)
                 end
             end
 
@@ -549,15 +604,24 @@ module WebClient
 
         class Method < Base
 
-            def initialize(parent = nil)
-                super
-                @input_bindings ||= {}
-                @input_bindings[:method] = :default unless has_binding(:method)
+            def initialize(parent, name, *args, &block)
+                # We expect a list of arguments specifying the method arguments (Symbols),
+                # and one last optional argument providing more information (Hash).
+                while args.length > 0 && args[0].instance_of?(Symbol)
+                    self.arguments = args.shift
+                end
+                super(parent, *args, &block)
+                # Bind method name as parameter.
+                inputs[:method] = name.to_s unless inputs.has_key?(:method)
             end
+
+            public :initialize
+
 
             def arguments
                 @arguments ||= []
             end
+
 
             def arguments=(*args)
                 @arguments ||= []
@@ -629,6 +693,10 @@ module WebClient
                 @headers ||= {}
             end
 
+            def cookies
+                @cookies ||= {}
+            end
+
             def bind(name, target, value)
                 case target
                 when :path
@@ -639,6 +707,8 @@ module WebClient
                     data[name] = value
                 when :headers
                     headers[name] = value
+                when :cookie
+                    cookies[name] = value
                 when :default
                     # TODO: encode value
                     unless @url.path.gsub!("$#{name}$", value)
@@ -672,98 +742,58 @@ module WebClient
 
 
     def service(*args, &block)
-        bindings = (@service_bindings ||= Binding::Service.new)
-        arg = args.shift
-        # If the first argument is a string, it specifies the service URL.
-        if arg.instance_of?(String)
-            bindings.url = arg
-            # If the next argument is a symbol, it specifies the HTTP method.
-            arg = args.shift
-            if arg.instance_of?(Symbol)
-                bindings.http_method = arg
-                arg = args.shift
-            end
+        # Create new service bindings if don't already exist, otherwise,
+        # modify existing service bindings. Make sure we return the service
+        # bindings to the caller.
+        if bindings = @service_bindings
+            bindings.initialize(*args, &block)
+            bindings
+        else
+            @service_bindings = Binding::Service.new(*args, &block)
         end
-        # If the last argument is a hash, we use its values to call the
-        # various set methods.
-        if arg.instance_of?(Hash)
-            arg.each_pair do |name, value|
-                method = "#{name}=".to_s
-                # TODO: check that we have a method (respond_do)
-                bindings.send method, value
-            end
-            arg = args.shift
-        end
-        raise ArgumentError, "I don't know what to do with the argument #{arg.to_s}" if !arg.nil?
-
-        # If we have a block, we execute the block in order to specify
-        # the bindings.
-        if block
-            bindings.instance_eval(&block)
-        end
-        # Return the binding, allowing more method calls.
-        bindings
     end
 
 
-    def method(method_name, *args, &block)
-        bindings = (@method_bindings ||= {})
-        bindings = (bindings[method_name] ||= Binding::Method.new((@service_bindings ||= Binding::Service.new)))
-
-        # We expect a list of arguments specifying the method arguments (Symbols),
-        # and one last optional argument providing more information (Hash).
-        arg = args.shift
-        while arg.instance_of?(Symbol)
-            bindings.arguments = arg
-            arg = args.shift
-        end
-        if arg.instance_of?(Hash)
-            arg.each_pair do |name, value|
-                method = "#{name}=".to_s
-                # TODO: check that we have a method (respond_do)
-                bindings.send(method, value)
-            end
-            arg = args.shift
-        end
-        raise ArgumentError, "I don't know what to do with the argument #{arg.to_s}" if !arg.nil?
-        # If we have a block, we execute the block in order to specify
-        # the bindings.
-        if block
-            bindings.instance_eval(&block)
-        end
-
-        # Bind method name as parameter.
-        bindings.inputs[:method] = method_name.to_s unless bindings.inputs.has_key?(:method)
+    def method(name, *args, &block)
+        service = (@service_bindings ||= Binding::Service.new())
+        binding = service.method(name, *args, &block)
 
         # Define a method to proxy the call.
-        define_method(method_name) do |*args|
+        define_method(name.to_sym) do |*args|
             # TODO: add support for asynchronous callbacks
             #raise ArgumentError, "Not supported yet" if block_given?
             # Create a request context and use the bindings to populate it.
             inputs = {}
             # TODO: verify we don't have too many arguments.
-            bindings.arguments.each_with_index do |arg, idx|
+            binding.arguments.each_with_index do |arg, idx|
                 value = args[idx]
                 inputs[arg[:name]] = value
             end
-            request = bindings.create_request(inputs, self)
+            request = binding.create_request(inputs, self)
             # TODO: handle all other HTTP methods
             # TODO: handle asynchronous processing
+            # TODO: handle cookies
+            # TODO: possibly move request creation to request object
             url = request.url
             response = Net::HTTP.start url.host, url.port do |http|
                 http.request_get("#{url.path}?#{url.query}", request.headers)
             end
-            response = bindings.unwrap_response(CallContext::Response.new(response), self)
+            response = binding.unwrap_response(CallContext::Response.new(response), self)
             raise response.error, caller if response.error
             response.object
         end
 
         # Return the binding, allowing more method calls.
-        bindings
+        binding
     end
 
     def self.included(mod)
         mod.extend(self)
+    end
+
+
+    class Base
+
     end
 
 end
@@ -780,24 +810,24 @@ class YahooSearchProgram
     include WebClient
 
     # Define the service by calling methods on the binding defintion.
-    service do
+    service do |binding|
         # Set the service URL and HTTP method.
-        self.url =  "http://api.search.yahoo.com/ImageSearchService/V1/$method$"
-        self.http_method = :get
+        binding.url =  "http://api.search.yahoo.com/ImageSearchService/V1/$method$"
+        binding.http_method = :get
         # Bind the input parameters, and specify default inputs.
-        bind_input :method=>:path, :appid=>:query, :output=>:query
-        inputs[:appid] = "YahooDemo"
-        inputs[:output] = "json"
+        binding.bind_input :method=>:path, :appid=>:query, :output=>:query
+        binding.inputs[:appid] = "YahooDemo"
+        binding.inputs[:output] = "json"
         # Specify that the output is a JSON object.
-        response_as_json
+        binding.response_as_json
     end
 
-    method :imageSearch do
+    method :imageSearch do |binding|
         # Bind input parameters for this method, and specify default input for the
         # method name (bound by the service).
-        bind_input :query=>:query, :results=>:query
-        inputs[:method] = "imageSearch"
-        self.arguments = :query, :results
+        binding.bind_input :query=>:query, :results=>:query
+        binding.inputs[:method] = "imageSearch"
+        binding.arguments = :query, :results
     end
 
 end
@@ -851,9 +881,12 @@ end
 
 
 client = YahooSearchProgram.new
+puts "Call YahooSearchProgram"
 pp(client.imageSearch("Madonna", "2"))
+puts "Call YahooSearchParam"
 client = YahooSearchParam.new
 pp(client.imageSearch("Madonna", "2"))
+puts "Call YahooSearchAutomagic"
 client = YahooSearchAutomagic.new
 pp(client.imageSearch("Madonna", "2"))
 
