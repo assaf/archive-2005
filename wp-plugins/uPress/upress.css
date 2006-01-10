@@ -1,0 +1,25 @@
+#upress fieldset {
+	margin-bottom: 1em;
+}
+
+#upress h3 {
+	padding: 3px;
+	font-weight: normal;
+	font-size: 13px;
+}
+
+#upress div {
+	margin-top: .5em;
+}
+
+#upress a.dbx-toggle, #upress a.dbx-toggle-open:visited {
+	height: 22px;
+	width: 22px;
+	background-position: 0 -3px;
+}
+
+#upress a.dbx-toggle-open, #upress a.dbx-toggle-open:visited {
+	height: 22px;
+	width: 22px;
+	background-position: 0 -28px;
+}
