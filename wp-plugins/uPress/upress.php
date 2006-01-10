@@ -1,8 +1,8 @@
 <?php
 /*
 Plugin Name: uPress
-Plugin URI: http://www.labnotes.org/metapost
-Description: Post events from your blog.
+Plugin URI: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/WPPlugin/uPress
+Description: Post events on your blog.
 Version: 0.2
 Author: Assaf Arkin
 Author URI: http://labnotes.org/
