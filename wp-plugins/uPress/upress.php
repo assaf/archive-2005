@@ -3,7 +3,7 @@
 Plugin Name: uPress
 Plugin URI: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/WPPlugin/uPress
 Description: Post events on your blog.
-Version: 0.2
+Version: 0.3
 Author: Assaf Arkin
 Author URI: http://labnotes.org/
 License: Creative Commons Attribution-ShareAlike
@@ -25,33 +25,34 @@ if (isset($wp_version)) {
 }
 
 
+$UPRESS_ADDRESS_PATTERN = "/((?#address)(?:\d{1,5}(?:[ ]+\w+\.?){1,})|(?:(?:pob|p\.o\.box)\s*\d{1,5}))((?#address2)(?:\s*(?:[,\n])\s*(?:(?:(?:#|apt|bldg|dept|fl|hngr|lot|pier|rm|s(?:lip|pc|t(?:e|op))|trlr|unit|room)\s*#?\s*[\w\-\/]+)|(?:bsmt|frnt|lbby|lowr|ofc|ph|rear|side|uppr)\.?)){0,2})\s*(?:[,\n])\s*((?#city)(?:[A-Za-z]{2,}\.?\s*){1,})\s*(?:[,\n])\s*((?#state)A[LKSZRAP]|C[AOT]|D[EC]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[ARW]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*((?#zipcode)(?<!0{5})\d{5}(-\d{4})?)?/iS";
+
+$UPRESS_LOCATION_META_FIELDS = array("address1", "address2", "city", "region", "zipcode");
 
 class uPressLocation {
-
-    const ADDRESS_PATTERN = '/((?#address)(?:\d{1,5}(?:\s+\w+\.?){1,})|(?:(?:pob|p\.o\.box)\s*\d{1,5}))((?#address2)(?:\s+(?:(?:(?:#|apt|bldg|dept|fl|hngr|lot|pier|rm|s(?:lip|pc|t(?:e|op))|trlr|unit)\s*#?\s*\w{1,5})|(?:bsmt|frnt|lbby|lowr|ofc|ph|rear|side|uppr)\.?)){0,2})\s*(?:[,\n])\s*((?#city)(?:[A-Za-z]{2,}\.?\s*){1,})\s*(?:[,\n])\s*((?#state)A[LKSZRAP]|C[AOT]|D[EC]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[ARW]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*((?#zipcode)(?<!0{5})\d{5}(-\d{4})?)?/iS';
-
-    const META_FIELDS = "address1 address2 city region zipcode";
 
     function process_location($location) {
         $result = new uPressLocation();
         $location = stripslashes(trim($location));
         if (!empty($location)) {
-            $result->uformatted = preg_replace_callback(uPressLocation::ADDRESS_PATTERN, array($result, 'parse_address'), $location);
+            global $UPRESS_ADDRESS_PATTERN;
+            $result->uformatted = preg_replace_callback($UPRESS_ADDRESS_PATTERN, array($result, 'parse_address'), $location);
         }
         return $result;
     }
 
     function parse_address($matches) {
-        $fields = explode(' ', uPressLocation::META_FIELDS);
-        for ($i = 1; $i < 5; ++$i) {
-            $this->$fields[$i] = $matches[$i];
+        global $UPRESS_LOCATION_META_FIELDS;
+        for ($i = 1; $i < $UPRESS_LOCATION_META_FIELDS.length; ++$i) {
+            $UPRESS_LOCATION_META_FIELDS[$i] = $matches[$i];
             $matches[$i] = htmlspecialchars(trim($matches[$i]));
         }
-        $this->link_to_map = "<a href=\"http://maps.google.com/maps?q=".urlencode($matches[0])."\">Map It!</a>";
-        $uformatted = "<span class='primary'>{$matches[1]}</span>";
+        $address = $matches[1].", ".$matches[3].", ".$matches[4]." ".$matches[5];
+        $this->link_to_map = "<a href=\"http://maps.google.com/maps?q=".urlencode($address)."\">Map It!</a>";
+        $uformatted = "<div class='adr'><span class='street-address'>{$matches[1]}</span>";
         if ($matches[2])
-            $uformatted .= " <span class='secondary'>{$matches[2]}</span>";
-        $uformatted .= "<div class='city'>{$matches[3]}</div><div><span class='state'>{$matches[4]}</state> <span class='zipcode'>{$matches[5]}</span></div>";
+            $uformatted .= " <span class='extended-address'>{$matches[2]}</span>";
+        $uformatted .= "<div class='locality'>{$matches[3]}</div><div><span class='region'>{$matches[4]}</state> <span class='postal-code'>{$matches[5]}</span></div></div>";
         return $uformatted;
 //    $address = str_replace("\n", ",", $matches[0]);
 //    return "<a href=\"".htmlentities($textagsOptions["mapUrl"]).urlencode($address)."\">".htmlentities($matches[0])."</a>";
@@ -59,17 +60,18 @@ class uPressLocation {
 
 }
 
+
+$UPRESS_EVENT_META_FIELDS = array("dtstart", "dtend", "location");
+
+$UPRESS_SECONDS_IN_DAY = 86400;
+
 class uPressEvent {
 
-    const META_FIELDS = "dtstart dtend location";
-
-    const SECONDS_IN_DAY = 86400;
-
     static function load_from_post($post_id) {
-        $fields = explode(' ', uPressEvent::META_FIELDS);
+        global $UPRESS_EVENT_META_FIELDS;
         $event = new uPressEvent();
         // Load all the meta fields from the post.
-        foreach ($fields as $field)
+        foreach ($UPRESS_EVENT_META_FIELDS as $field)
             $event->$field = get_post_meta($post_id, "_event_{$field}", true);
         // Validate the event date/time. This gives us the text to present
         // in the form in human readable form, and also any error messages,
@@ -84,10 +86,10 @@ class uPressEvent {
     }
 
     static function update_from_request($post_id, $request) {
-        $fields = explode(' ', uPressEvent::META_FIELDS);
+        global $UPRESS_EVENT_META_FIELDS;
         $event = new uPressEvent();
         // Get all meta fields from the HTTP POST.
-        foreach ($fields as $field)
+        foreach ($UPRESS_EVENT_META_FIELDS as $field)
             $event->$field = stripslashes(trim($request["event_{$field}"]));
         // Validate the event date/time. This gives us the ISO representation
         // of the date/time, the value we want to store in the database for
@@ -98,7 +100,7 @@ class uPressEvent {
         if ($result->dtend_iso)
             $result->dtend = $result->dtend_iso;
         // Store the event fields as post metadata.
-        foreach ($fields as $field) {
+        foreach ($UPRESS_EVENT_META_FIELDS as $field) {
             $meta_key = "_event_${field}";
             $value = $event->$field;
             if (isset($value) && !empty($value)) {
@@ -137,6 +139,7 @@ class uPressEvent {
     //  * valid_dt -- True if the event start date/time is valid and
     //    the end date/time is valid or absent.
     static function validate_event_dt($dtstart, $dtend) {
+        global $UPRESS_SECONDS_IN_DAY;
         $result = array();
         // Determine if we have dtstart to parse, and then whether or
         // not we can parse it.
@@ -151,8 +154,8 @@ class uPressEvent {
             // For dates, you get 000000 even if you shift the base time.
             // For today/saturday, you get the same time as the (shifted) base time.
             $base = time();
-            $a_date = (date("His", strtotime($dtstart, $base)) == "000000" && date("His", strtotime($dtstart, $base + uPressEvent::SECONDS_IN_DAY - 1)) == "000000") ||
-                (date("His", strtotime($dtstart, $base)) == date("His", $base) && date("His", strtotime($dtstart, $base + uPressEvent::SECONDS_IN_DAY - 1)) == date("His", $base + uPressEvent::SECONDS_IN_DAY - 1));
+            $a_date = (date("His", strtotime($dtstart, $base)) == "000000" && date("His", strtotime($dtstart, $base + $UPRESS_SECONDS_IN_DAY - 1)) == "000000") ||
+                (date("His", strtotime($dtstart, $base)) == date("His", $base) && date("His", strtotime($dtstart, $base + $UPRESS_SECONDS_IN_DAY - 1)) == date("His", $base + $UPRESS_SECONDS_IN_DAY - 1));
 
             // Create ISO/human representation of dtstart.
             $timeZone = uPressEvent::get_iso_timezone();
@@ -176,7 +179,7 @@ class uPressEvent {
                 if ($a_date) {
                     // If dtstart is a date, then dtend must also be a date and must be at least a
                     // day later than dtstart.
-                    if ($dtend_real >= $dtstart_real + uPressEvent::SECONDS_IN_DAY) {
+                    if ($dtend_real >= $dtstart_real + $UPRESS_SECONDS_IN_DAY) {
                         $result['dtend_iso'] = date("Ymd", $dtend_real);
                         $result['dtend_text'] = date("F j, Y", $dtend_real);
                     } else {
