@@ -18,11 +18,11 @@ function output_json($object) {
 $method = $_GET['method'];
 switch ($method) {
 case 'process_event':
-    $result = uPressEvent::validate_event_dt($_GET['dtstart'], $_GET['dtend']);
+    $result = upress_validate_event_dt($_GET['dtstart'], $_GET['dtend']);
     echo output_json($result);
     break;
 case 'process_location':
-    $result = uPressLocation::process_location($_GET["location"]);
+    $result = upress_process_location($_GET["location"]);
     echo output_json($result);
     break;
 }

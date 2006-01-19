@@ -31,16 +31,6 @@ $UPRESS_LOCATION_META_FIELDS = array("address1", "address2", "city", "region", "
 
 class uPressLocation {
 
-    function process_location($location) {
-        $result = new uPressLocation();
-        $location = stripslashes(trim($location));
-        if (!empty($location)) {
-            global $UPRESS_ADDRESS_PATTERN;
-            $result->uformatted = preg_replace_callback($UPRESS_ADDRESS_PATTERN, array($result, 'parse_address'), $location);
-        }
-        return $result;
-    }
-
     function parse_address($matches) {
         global $UPRESS_LOCATION_META_FIELDS;
         for ($i = 1; $i < $UPRESS_LOCATION_META_FIELDS.length; ++$i) {
@@ -60,176 +50,26 @@ class uPressLocation {
 
 }
 
+function upress_process_location($location) {
+    $result = new uPressLocation();
+    $location = stripslashes(trim($location));
+    if (!empty($location)) {
+        global $UPRESS_ADDRESS_PATTERN;
+        $result->uformatted = preg_replace_callback($UPRESS_ADDRESS_PATTERN, array($result, 'parse_address'), $location);
+    }
+    return $result;
+}
 
-$UPRESS_EVENT_META_FIELDS = array("dtstart", "dtend", "location");
+
+
+/**
+ * Event handling class and global methods.
+ */
+$UPRESS_META_FIELDS = array("dtstart", "dtend", "location");
 
 $UPRESS_SECONDS_IN_DAY = 86400;
 
 class uPressEvent {
-
-    static function load_from_post($post_id) {
-        global $UPRESS_EVENT_META_FIELDS;
-        $event = new uPressEvent();
-        // Load all the meta fields from the post.
-        foreach ($UPRESS_EVENT_META_FIELDS as $field)
-            $event->$field = get_post_meta($post_id, "_event_{$field}", true);
-        // Validate the event date/time. This gives us the text to present
-        // in the form in human readable form, and also any error messages,
-        // e.g. about event being invalid.
-        $result = uPressEvent::validate_event_dt($event->dtstart, $event->dtend);
-        foreach ($result as $name=>$value)
-            $event->$name = $value;
-        // Validate the location. This gives us a map link if we can understand
-        // the address.
-        $event->address = uPressLocation::process_location($event->location);
-        return $event;
-    }
-
-    static function update_from_request($post_id, $request) {
-        global $UPRESS_EVENT_META_FIELDS;
-        $event = new uPressEvent();
-        // Get all meta fields from the HTTP POST.
-        foreach ($UPRESS_EVENT_META_FIELDS as $field)
-            $event->$field = stripslashes(trim($request["event_{$field}"]));
-        // Validate the event date/time. This gives us the ISO representation
-        // of the date/time, the value we want to store in the database for
-        // meta-data queries.
-        $result = uPressEvent::validate_event_dt($event->dtstart, $event->dtend);
-        if ($result->dtstart_iso)
-            $result->dtstart = $result->dtstart_iso;
-        if ($result->dtend_iso)
-            $result->dtend = $result->dtend_iso;
-        // Store the event fields as post metadata.
-        foreach ($UPRESS_EVENT_META_FIELDS as $field) {
-            $meta_key = "_event_${field}";
-            $value = $event->$field;
-            if (isset($value) && !empty($value)) {
-                if (!update_post_meta($post_id, $meta_key, $value))
-                    add_post_meta($post_id, $meta_key, $value, true);
-            } else
-                delete_post_meta($post_id, $meta_key);
-        }
-    }
-
-    // Fix the datetime representation. There's a few things strototime
-    // doesn't deal well with which are fixed here. Specifically:
-    //  * Commas are removed (e.g. Jan 1, 2005 -> Jan 1 2005)
-    //  * AM/PM are normalized (e.g. a.m -> am)
-    static function fix_datetime($dt) {
-        return preg_replace(array('/,/', '/a.m/', '/p.m/'), array(' ', 'am', 'pm'), trim($dt));
-    }
-
-    // Validate the event date/time values and return all information
-    // we need to display the event information, or decide whether or
-    // not the event is valid.
-    //
-    // The result is an array with the following entries:
-    //  * dtstart_iso -- ISO representation of the start date/time if
-    //    the start date/time could be parsed
-    //  * dtstart_text -- Textual representation of the start date/time
-    //    if the start date/time could be parsed
-    //  * dtstart_message -- An error message if the start date/time
-    //    could not be parsed
-    //  * dtend_iso -- ISO representation of the end date/time if
-    //    the end date/time could be parsed
-    //  * dtend_text -- Textual representation of the end date/time
-    //    if the end date/time could be parsed
-    //  * dtend_message -- An error message if the end date/time
-    //    could not be parsed or validated with respect to the start
-    //  * valid_dt -- True if the event start date/time is valid and
-    //    the end date/time is valid or absent.
-    static function validate_event_dt($dtstart, $dtend) {
-        global $UPRESS_SECONDS_IN_DAY;
-        $result = array();
-        // Determine if we have dtstart to parse, and then whether or
-        // not we can parse it.
-        $dtstart = uPressEvent::fix_datetime($dtstart);
-        if (empty($dtstart)) {
-            $dtstart = null;
-        } else if (($dt = strtotime($dtstart)) == -1 || $dt === false) {
-            $dtstart = null;
-            $result['dtstart_message'] = "I don't understand the event start date/time.";
-        } else {
-            // Determine if dtstart is a date or a date/time. Ugly but it works.
-            // For dates, you get 000000 even if you shift the base time.
-            // For today/saturday, you get the same time as the (shifted) base time.
-            $base = time();
-            $a_date = (date("His", strtotime($dtstart, $base)) == "000000" && date("His", strtotime($dtstart, $base + $UPRESS_SECONDS_IN_DAY - 1)) == "000000") ||
-                (date("His", strtotime($dtstart, $base)) == date("His", $base) && date("His", strtotime($dtstart, $base + $UPRESS_SECONDS_IN_DAY - 1)) == date("His", $base + $UPRESS_SECONDS_IN_DAY - 1));
-
-            // Create ISO/human representation of dtstart.
-            $timeZone = uPressEvent::get_iso_timezone();
-            $dtstart_real = strtotime($dtstart, uPressEvent::get_base_time());
-            $result['dtstart_iso'] = $a_date ? date("Ymd", $dtstart_real) : date("Ymd\THis", $dtstart_real).$timeZone;
-            $result['dtstart_text'] = $a_date ? date("F j, Y", $dtstart_real) : date("g:i a, F j, Y", $dtstart_real);
-            $result['valid_dt'] = true;
-        }
-
-        // Determine if we have dtend to parse, and then whether or
-        // not we can parse it. It is an error if dtstart is missing.
-        $dtend = uPressEvent::fix_datetime($dtend);
-        if (!empty($dtend)) {
-            if (($dt = strtotime($dtend)) == -1 || $dt === false) {
-                $result['dtend_message'] = "I don't understand the event end date/time.";
-                $result['valid_dt'] = false;
-            } else if (!$dtstart)
-                $result['dtend_message'] = "The event start date/time is missing.";
-            else {
-                $dtend_real = strtotime($dtend, $dtstart_real);
-                if ($a_date) {
-                    // If dtstart is a date, then dtend must also be a date and must be at least a
-                    // day later than dtstart.
-                    if ($dtend_real >= $dtstart_real + $UPRESS_SECONDS_IN_DAY) {
-                        $result['dtend_iso'] = date("Ymd", $dtend_real);
-                        $result['dtend_text'] = date("F j, Y", $dtend_real);
-                    } else {
-                        $result['dtend_message'] = "The event end date must be at least one day after the start date";
-                    }
-                } else {
-                    // If dtstart is date/time, then dtend must be dtstart or later.
-                    if ($dtend_real >= $dtstart_real) {
-                        $result['dtend_iso'] = date("Ymd\THis", $dtend_real).$timeZone;
-                        $result['dtend_text'] = date("g:i a, F j, Y", $dtend_real);
-                    } else {
-                        $result['dtend_message'] = "The event end date/time must be later than the start date/time";
-                    }
-                }
-            }
-        }
-        return $result;
-    }
-
-    // Returns the time zone in seconds. This is either the time zone
-    // configured for WP, or the time zone used by PHP.
-    static function get_timezone_seconds() {
-        global $wp_version;
-        if (isset($wp_version))
-            return ((int)get_option("gmt_offset")) * 60;
-        else
-            return (int)date("Z");
-    }
-
-    // Returns the base time (i.e. now). This is the same time that will
-    // be used for the post, or the PHP system time.
-    static function get_base_time() {
-        global $wp_version;
-        if (isset($wp_version))
-            return strtotime(the_date("Y-m-d", null, null, false)." ".get_the_time("H:i:s"));
-        else
-            return time();
-    }
-
-    // Return the ISO representation of the time zone. See get_timezone_seconds.
-    static function get_iso_timezone() {
-        global $wp_version;
-        if (isset($wp_version)) {
-            $offset = (int)get_option("gmt_offset");
-            return $offset == 0 ? 'Z' : ($offset < 0 ? "-" : "+").sprintf("%02d00", abs($offset));
-        } else {
-            $offset = (int)date("Z") / 60;
-            return $offset == 0 ? 'Z' : ($offset < 0 ? "-" : "+").sprintf("%02d%02d", abs($offset / 60), abs($offset % 60));
-        }
-    }
 
     // Returns true if this event is valid. A valid event has a valid start
     // date/time, and either absent or valid end date/time.
@@ -259,10 +99,179 @@ class uPressEvent {
 
 }
 
+function upress_load_from_post($post_id) {
+    global $UPRESS_META_FIELDS;
+    $event = new uPressEvent();
+    // Load all the meta fields from the post.
+    foreach ($UPRESS_META_FIELDS as $field)
+        $event->$field = get_post_meta($post_id, "_event_{$field}", true);
+    // Validate the event date/time. This gives us the text to present
+    // in the form in human readable form, and also any error messages,
+    // e.g. about event being invalid.
+    $result = upress_validate_event_dt($event->dtstart, $event->dtend);
+    foreach ($result as $name=>$value)
+        $event->$name = $value;
+    // Validate the location. This gives us a map link if we can understand
+    // the address.
+    $event->address = upress_process_location($event->location);
+    return $event;
+}
+
+function upress_update_from_request($post_id, $request) {
+    global $UPRESS_META_FIELDS;
+    $event = new uPressEvent();
+    // Get all meta fields from the HTTP POST.
+    foreach ($UPRESS_META_FIELDS as $field)
+        $event->$field = stripslashes(trim($request["event_{$field}"]));
+    // Validate the event date/time. This gives us the ISO representation
+    // of the date/time, the value we want to store in the database for
+    // meta-data queries.
+    $result = upress_validate_event_dt($event->dtstart, $event->dtend);
+    if ($result->dtstart_iso)
+        $result->dtstart = $result->dtstart_iso;
+    if ($result->dtend_iso)
+        $result->dtend = $result->dtend_iso;
+    // Store the event fields as post metadata.
+    foreach ($UPRESS_META_FIELDS as $field) {
+        $meta_key = "_event_${field}";
+        $value = $event->$field;
+        if (isset($value) && !empty($value)) {
+            if (!update_post_meta($post_id, $meta_key, $value))
+                add_post_meta($post_id, $meta_key, $value, true);
+        } else
+            delete_post_meta($post_id, $meta_key);
+    }
+}
+
+// Fix the datetime representation. There's a few things strototime
+// doesn't deal well with which are fixed here. Specifically:
+//  * Commas are removed (e.g. Jan 1, 2005 -> Jan 1 2005)
+//  * AM/PM are normalized (e.g. a.m -> am)
+function upress_fix_datetime($dt) {
+    return preg_replace(array('/,/', '/a.m/', '/p.m/'), array(' ', 'am', 'pm'), trim($dt));
+}
+
+// Validate the event date/time values and return all information
+// we need to display the event information, or decide whether or
+// not the event is valid.
+//
+// The result is an array with the following entries:
+//  * dtstart_iso -- ISO representation of the start date/time if
+//    the start date/time could be parsed
+//  * dtstart_text -- Textual representation of the start date/time
+//    if the start date/time could be parsed
+//  * dtstart_message -- An error message if the start date/time
+//    could not be parsed
+//  * dtend_iso -- ISO representation of the end date/time if
+//    the end date/time could be parsed
+//  * dtend_text -- Textual representation of the end date/time
+//    if the end date/time could be parsed
+//  * dtend_message -- An error message if the end date/time
+//    could not be parsed or validated with respect to the start
+//  * valid_dt -- True if the event start date/time is valid and
+//    the end date/time is valid or absent.
+function upress_validate_event_dt($dtstart, $dtend) {
+    global $UPRESS_SECONDS_IN_DAY;
+    $result = array();
+    // Determine if we have dtstart to parse, and then whether or
+    // not we can parse it.
+    $dtstart = upress_fix_datetime($dtstart);
+    if (empty($dtstart)) {
+        $dtstart = null;
+    } else if (($dt = strtotime($dtstart)) == -1 || $dt === false) {
+        $dtstart = null;
+        $result['dtstart_message'] = "I don't understand the event start date/time.";
+    } else {
+        // Determine if dtstart is a date or a date/time. Ugly but it works.
+        // For dates, you get 000000 even if you shift the base time.
+        // For today/saturday, you get the same time as the (shifted) base time.
+        $base = time();
+        $a_date = (date("His", strtotime($dtstart, $base)) == "000000" && date("His", strtotime($dtstart, $base + $UPRESS_SECONDS_IN_DAY - 1)) == "000000") ||
+            (date("His", strtotime($dtstart, $base)) == date("His", $base) && date("His", strtotime($dtstart, $base + $UPRESS_SECONDS_IN_DAY - 1)) == date("His", $base + $UPRESS_SECONDS_IN_DAY - 1));
+
+        // Create ISO/human representation of dtstart.
+        $timeZone = upress_get_iso_timezone();
+        $dtstart_real = strtotime($dtstart, upress_get_base_time());
+        $result['dtstart_iso'] = $a_date ? date("Ymd", $dtstart_real) : date("Ymd\THis", $dtstart_real).$timeZone;
+        $result['dtstart_text'] = $a_date ? date("F j, Y", $dtstart_real) : date("g:i a, F j, Y", $dtstart_real);
+        $result['valid_dt'] = true;
+    }
+
+    // Determine if we have dtend to parse, and then whether or
+    // not we can parse it. It is an error if dtstart is missing.
+    $dtend = upress_fix_datetime($dtend);
+    if (!empty($dtend)) {
+        if (($dt = strtotime($dtend)) == -1 || $dt === false) {
+            $result['dtend_message'] = "I don't understand the event end date/time.";
+            $result['valid_dt'] = false;
+        } else if (!$dtstart)
+            $result['dtend_message'] = "The event start date/time is missing.";
+        else {
+            $dtend_real = strtotime($dtend, $dtstart_real);
+            if ($a_date) {
+                // If dtstart is a date, then dtend must also be a date and must be at least a
+                // day later than dtstart.
+                if ($dtend_real >= $dtstart_real + $UPRESS_SECONDS_IN_DAY) {
+                    $result['dtend_iso'] = date("Ymd", $dtend_real);
+                    $result['dtend_text'] = date("F j, Y", $dtend_real);
+                } else {
+                    $result['dtend_message'] = "The event end date must be at least one day after the start date";
+                }
+            } else {
+                // If dtstart is date/time, then dtend must be dtstart or later.
+                if ($dtend_real >= $dtstart_real) {
+                    $result['dtend_iso'] = date("Ymd\THis", $dtend_real).$timeZone;
+                    $result['dtend_text'] = date("g:i a, F j, Y", $dtend_real);
+                } else {
+                    $result['dtend_message'] = "The event end date/time must be later than the start date/time";
+                }
+            }
+        }
+    }
+    return $result;
+}
+
+// Returns the time zone in seconds. This is either the time zone
+// configured for WP, or the time zone used by PHP.
+function upress_get_timezone_seconds() {
+    global $wp_version;
+    if (isset($wp_version))
+        return ((int)get_option("gmt_offset")) * 60;
+    else
+        return (int)date("Z");
+}
+
+// Returns the base time (i.e. now). This is the same time that will
+// be used for the post, or the PHP system time.
+function upress_get_base_time() {
+    global $wp_version;
+    if (isset($wp_version))
+        return strtotime(the_date("Y-m-d", null, null, false)." ".get_the_time("H:i:s"));
+    else
+        return time();
+}
+
+// Return the ISO representation of the time zone. See get_timezone_seconds.
+function upress_get_iso_timezone() {
+    global $wp_version;
+    if (isset($wp_version)) {
+        $offset = (int)get_option("gmt_offset");
+        return $offset == 0 ? 'Z' : ($offset < 0 ? "-" : "+").sprintf("%02d00", abs($offset));
+    } else {
+        $offset = (int)date("Z") / 60;
+        return $offset == 0 ? 'Z' : ($offset < 0 ? "-" : "+").sprintf("%02d%02d", abs($offset / 60), abs($offset % 60));
+    }
+}
+
+
+
+/**
+ * WordPress filters and actions
+ */
 
 function upress_edit_form() {
     global $post_ID;
-    $event = uPressEvent::load_from_post($post_ID);
+    $event = upress_load_from_post($post_ID);
 ?>
 <div id="upress" class="dbx-group" >
 <fieldset id="upress-event" class="dbx-box">
@@ -290,13 +299,13 @@ function upress_edit_form() {
 }
 
 function upress_edit_post($post_id) {
-    uPressEvent::update_from_request($post_id, $_POST);
+    upress_update_from_request($post_id, $_POST);
 }
 
 function upress_format_post($html) {
     global $post_ID, $post;
     $post_id = $post ? $post->ID : $post_ID;
-    $event = uPressEvent::load_from_post($post_id);
+    $event = upress_load_from_post($post_id);
     if ($event->is_valid()) {
         $ical = "BEGIN:VCALENDAR\nVERSION:1.0\nMETHOD:PUBLISH\nPRODID:-//uPress//upress.labnotes.org//EN\n".$event->ical($post, preg_replace("/\n/", "\\n", strip_tags($html)))."\nEND:VCALENDAR";
         $ical = "<a href=\"data:text/calendar,".preg_replace("/\n/", "%0a", $ical)."\" class=\"ical\" title=\"Add this event to you calendar\">iCal</a>";
