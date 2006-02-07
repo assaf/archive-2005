@@ -81,3 +81,17 @@ Labnotes.uPress.dbx = function() {
 
 Event.observe(window, 'load', Labnotes.uPress.dbx, false);
 
+
+
+Labnotes.uPress.Listing = {
+    toggle: function(enabled) {
+        var inputs = $("upress-listing").getElementsByTagName("input");
+        for (var i = 0; i < inputs.length; ++i) {
+            if (inputs[i].name != "listing_type")
+                inputs[i].disabled = !enabled;
+        }
+        inputs = $("upress-listing").getElementsByTagName("textarea");
+        for (var i = 0; i < inputs.length; ++i)
+            inputs[i].disabled = !enabled;
+    }
+};

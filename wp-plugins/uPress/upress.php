@@ -2,32 +2,23 @@
 /*
 Plugin Name: uPress
 Plugin URI: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/WPPlugin/uPress
-Description: Post events on your blog.
-Version: 0.3
+Description: Post listings and events on your blog.
+Version: 0.4
 Author: Assaf Arkin
 Author URI: http://labnotes.org/
 License: Creative Commons Attribution-ShareAlike
-Tags: microformats, microcontent, blogging
+Tags: microformats, microcontent, blogging, events, listings
 */
 
 
-if (isset($wp_version)) {
-
-    add_action("admin_head", "upress_admin_header");
-    add_action("edit_post", "upress_edit_post");
-    add_action("save_post", "upress_edit_post");
-    add_action("edit_form_advanced", "upress_edit_form");
-
-    // Post formatting adds microformatting.
-    add_filter("the_content", "upress_format_post", 9);
-    add_filter("the_excerpt", "upress_format_post", 9);
-    add_filter("the_excerpt_rss", "upress_format_post", 9);
-}
-
+/**
+ * Location classes and methods.
+ */
 
 $UPRESS_ADDRESS_PATTERN = "/((?#address)(?:\d{1,5}(?:[ ]+\w+\.?){1,})|(?:(?:pob|p\.o\.box)\s*\d{1,5}))((?#address2)(?:\s*(?:[,\n])\s*(?:(?:(?:#|apt|bldg|dept|fl|hngr|lot|pier|rm|s(?:lip|pc|t(?:e|op))|trlr|unit|room)\s*#?\s*[\w\-\/]+)|(?:bsmt|frnt|lbby|lowr|ofc|ph|rear|side|uppr)\.?)){0,2})\s*(?:[,\n])\s*((?#city)(?:[A-Za-z]{2,}\.?\s*){1,})\s*(?:[,\n])\s*((?#state)A[LKSZRAP]|C[AOT]|D[EC]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[ARW]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*((?#zipcode)(?<!0{5})\d{5}(-\d{4})?)?/iS";
 
 $UPRESS_LOCATION_META_FIELDS = array("address1", "address2", "city", "region", "zipcode");
+
 
 class uPressLocation {
 
@@ -42,13 +33,14 @@ class uPressLocation {
         $uformatted = "<div class='adr'><span class='street-address'>{$matches[1]}</span>";
         if ($matches[2])
             $uformatted .= " <span class='extended-address'>{$matches[2]}</span>";
-        $uformatted .= "<div class='locality'>{$matches[3]}</div><div><span class='region'>{$matches[4]}</state> <span class='postal-code'>{$matches[5]}</span></div></div>";
+        $uformatted .= "<div><span class='locality'>{$matches[3]}</span> <span class='region'>{$matches[4]}</span> <span class='postal-code'>{$matches[5]}</span></div></div>";
         return $uformatted;
 //    $address = str_replace("\n", ",", $matches[0]);
 //    return "<a href=\"".htmlentities($textagsOptions["mapUrl"]).urlencode($address)."\">".htmlentities($matches[0])."</a>";
     }
 
 }
+
 
 function upress_process_location($location) {
     $result = new uPressLocation();
@@ -63,31 +55,91 @@ function upress_process_location($location) {
 
 
 /**
- * Event handling class and global methods.
+ * Event classes and methods.
  */
-$UPRESS_META_FIELDS = array("dtstart", "dtend", "location");
+// List of fields we store as metadata. These are also used as HTTP request parameter names.
+$UPRESS_EVENT_META_FIELDS = array("dtstart", "dtend", "location");
 
 $UPRESS_SECONDS_IN_DAY = 86400;
 
+
 class uPressEvent {
 
-    // Returns true if this event is valid. A valid event has a valid start
-    // date/time, and either absent or valid end date/time.
+
+    /**
+     * Loads the event associated with that post.
+     */
+    function load_from_post($post_id) {
+        global $UPRESS_EVENT_META_FIELDS;
+        // Load all the meta fields from the post.
+        foreach ($UPRESS_EVENT_META_FIELDS as $field)
+            $this->$field = get_post_meta($post_id, "_event_{$field}", true);
+        // Validate the event date/time. This gives us the text to present
+        // in the form in human readable form, and also any error messages,
+        // e.g. about event being invalid.
+        $result = upress_validate_event_dt($this->dtstart, $this->dtend);
+        foreach ($result as $name=>$value)
+            $this->$name = $value;
+        // Validate the location. This gives us a map link if we can understand
+        // the address.
+        $this->address = upress_process_location($this->location);
+    }
+
+
+    /**
+     * Called to update the event from the HTTP request.
+     */
+    function update_from_request($post_id, $request) {
+        global $UPRESS_EVENT_META_FIELDS;
+        // Get all meta fields from the HTTP POST.
+        foreach ($UPRESS_EVENT_META_FIELDS as $field)
+            $this->$field = stripslashes(trim($request["event_{$field}"]));
+        // Validate the event date/time. This gives us the ISO representation
+        // of the date/time, the value we want to store in the database for
+        // meta-data queries.
+        $result = upress_validate_event_dt($this->dtstart, $this->dtend);
+        if ($result->dtstart_iso)
+            $result->dtstart = $result->dtstart_iso;
+        if ($result->dtend_iso)
+            $result->dtend = $result->dtend_iso;
+        // Store the event fields as post metadata.
+        foreach ($UPRESS_EVENT_META_FIELDS as $field) {
+            $meta_key = "_event_${field}";
+            $value = $this->$field;
+            if (isset($value) && !empty($value)) {
+                if (!update_post_meta($post_id, $meta_key, $value))
+                    add_post_meta($post_id, $meta_key, $value, true);
+            } else
+                delete_post_meta($post_id, $meta_key);
+        }
+    }
+
+
+    /**
+     * Is this a valid event? A valid event has a start time.
+     * Quick judgement to determine if we microformat post as event.
+     */
     function is_valid() {
         return $this->valid_dt;
     }
 
-    // Returns a microformat (hCal) representation of this event information.
-    // Returns HTML for the event start date/time, end date/time and location.
-    // Does not return the summary, description or outer vEvent parts.
-    function microformat() {
-        $html = "<div><strong>Starts:</strong> <abbr title=\"".$this->dtstart_iso."\" class=\"dtstart\">".$this->dtstart_text."</abbr></div>";
+
+    /**
+     * Create a microformat for the post.
+     */
+    function microformat($source, $title) {
+            // $ical = "BEGIN:VCALENDAR\nVERSION:1.0\nMETHOD:PUBLISH\nPRODID:-//uPress//upress.labnotes.org//EN\n".$event->ical($post, preg_replace("/\n/", "\\n", strip_tags($html)))."\nEND:VCALENDAR";
+            // $ical = "<a href=\"data:text/calendar,".preg_replace("/\n/", "%0a", $ical)."\" class=\"ical\" title=\"Add this event to you calendar\">iCal</a>";
+        $html = "<div class='vevent'>";
+        $html .= "<p><div><strong>Starts:</strong> <abbr title=\"".$this->dtstart_iso."\" class=\"dtstart\">".$this->dtstart_text."</abbr></div>";
         if ($this->dtend_iso)
-            $html .= "<div><strong>Ends:</strong> <abbr title=\"".$this->dtend_iso."\" class=\"dtend\">".$this->dtend_text."</abbr></div>";
+            $html .= "<div><strong>Ends:</strong> <abbr title=\"".$this->dtend_iso."\" class=\"dtend\">".$this->dtend_text."</abbr></div></p>";
         if (!empty($this->location))
             $html .= "<div class='location'><strong>Location</strong>: <span style=\"float:right\">{$this->address->link_to_map}</span>{$this->address->uformatted}</div>";
+        $html .= "</p><div class='description'>{$source}</div></div>";
         return $html;
     }
+
 
     function ical($post, $content) {
         $ical = "BEGIN:VEVENT\nDTSTART:{$this->dtstart_iso}\n";
@@ -97,79 +149,74 @@ class uPressEvent {
         return $ical;
     }
 
-}
 
-function upress_load_from_post($post_id) {
-    global $UPRESS_META_FIELDS;
-    $event = new uPressEvent();
-    // Load all the meta fields from the post.
-    foreach ($UPRESS_META_FIELDS as $field)
-        $event->$field = get_post_meta($post_id, "_event_{$field}", true);
-    // Validate the event date/time. This gives us the text to present
-    // in the form in human readable form, and also any error messages,
-    // e.g. about event being invalid.
-    $result = upress_validate_event_dt($event->dtstart, $event->dtend);
-    foreach ($result as $name=>$value)
-        $event->$name = $value;
-    // Validate the location. This gives us a map link if we can understand
-    // the address.
-    $event->address = upress_process_location($event->location);
-    return $event;
-}
-
-function upress_update_from_request($post_id, $request) {
-    global $UPRESS_META_FIELDS;
-    $event = new uPressEvent();
-    // Get all meta fields from the HTTP POST.
-    foreach ($UPRESS_META_FIELDS as $field)
-        $event->$field = stripslashes(trim($request["event_{$field}"]));
-    // Validate the event date/time. This gives us the ISO representation
-    // of the date/time, the value we want to store in the database for
-    // meta-data queries.
-    $result = upress_validate_event_dt($event->dtstart, $event->dtend);
-    if ($result->dtstart_iso)
-        $result->dtstart = $result->dtstart_iso;
-    if ($result->dtend_iso)
-        $result->dtend = $result->dtend_iso;
-    // Store the event fields as post metadata.
-    foreach ($UPRESS_META_FIELDS as $field) {
-        $meta_key = "_event_${field}";
-        $value = $event->$field;
-        if (isset($value) && !empty($value)) {
-            if (!update_post_meta($post_id, $meta_key, $value))
-                add_post_meta($post_id, $meta_key, $value, true);
-        } else
-            delete_post_meta($post_id, $meta_key);
+    /**
+     * Create an edit panel for the listing.
+     */
+    function edit_panel() {
+    ?>
+    <fieldset id="upress-event" class="dbx-box">
+        <h3 class="dbx-handle"><?php _e('Event') ?></h3>
+        <div class="dbx-content">
+            <p><?php _e('To create an event, start by entering the date/time (e.g. 5pm, Jan 1):') ?></p>
+            <table style="width:99%">
+                <tr>
+                    <th scope="row" align="right"><label for="event_dtstart"><?php _e('Starts:'); ?></label></th>
+                    <td width="100%"><input type="text" id="event_dtstart" name="event_dtstart" tabindex="6" size="30" value="<?php echo wp_specialchars($this->dtstart); ?>" /><span id="event_dtstart_message" style="margin-left:20px;color:red"><?php if ($this->dtstart_message) echo wp_specialchars($this->dtstart_message); ?></span></td>
+                </tr>
+                <tr>
+                    <th scope="row" align="right"><label for="event_dtend"><?php _e('Ends:'); ?></label></th>
+                    <td><input type="text" id="event_dtend" name="event_dtend" tabindex="6" size="30" value="<?php echo wp_specialchars($this->dtend); ?>" /><span id="event_dtend_message" style="margin-left:20px;color:red"><?php if ($this->dtend_message) echo wp_specialchars($this->dtend_message); ?></span></td>
+                </tr>
+                <tr>
+                    <th scope="row" align="right" valign="top"><label for="event_location"><?php _e('Location:'); ?></label></th>
+                    <td>
+                        <div id="event_location_map" style="float:right"><?php echo $this->address->link_to_map; ?></div>
+                        <textarea rows="3" cols="60" type="text" id="event_location" name="event_location" tabindex="6"><?php echo wp_specialchars($this->location); ?></textarea>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </fieldset>
+    <?php
     }
+
+
 }
 
-// Fix the datetime representation. There's a few things strototime
-// doesn't deal well with which are fixed here. Specifically:
-//  * Commas are removed (e.g. Jan 1, 2005 -> Jan 1 2005)
-//  * AM/PM are normalized (e.g. a.m -> am)
+
+/**
+ * Fix the datetime representation. There's a few things strototime
+ * doesn't deal well with which are fixed here. Specifically:
+ * * Commas are removed (e.g. Jan 1, 2005 -> Jan 1 2005)
+ * * AM/PM are normalized (e.g. a.m -> am)
+ */
 function upress_fix_datetime($dt) {
     return preg_replace(array('/,/', '/a.m/', '/p.m/'), array(' ', 'am', 'pm'), trim($dt));
 }
 
-// Validate the event date/time values and return all information
-// we need to display the event information, or decide whether or
-// not the event is valid.
-//
-// The result is an array with the following entries:
-//  * dtstart_iso -- ISO representation of the start date/time if
-//    the start date/time could be parsed
-//  * dtstart_text -- Textual representation of the start date/time
-//    if the start date/time could be parsed
-//  * dtstart_message -- An error message if the start date/time
-//    could not be parsed
-//  * dtend_iso -- ISO representation of the end date/time if
-//    the end date/time could be parsed
-//  * dtend_text -- Textual representation of the end date/time
-//    if the end date/time could be parsed
-//  * dtend_message -- An error message if the end date/time
-//    could not be parsed or validated with respect to the start
-//  * valid_dt -- True if the event start date/time is valid and
-//    the end date/time is valid or absent.
+
+/**
+ * Validate the event date/time values and return all information
+ * we need to display the event information, or decide whether or
+ * not the event is valid.
+ *
+ * The result is an array with the following entries:
+ * * dtstart_iso -- ISO representation of the start date/time if
+ *   the start date/time could be parsed
+ * * dtstart_text -- Textual representation of the start date/time
+ *   if the start date/time could be parsed
+ * * dtstart_message -- An error message if the start date/time
+ *   could not be parsed
+ * * dtend_iso -- ISO representation of the end date/time if
+ *   the end date/time could be parsed
+ * * dtend_text -- Textual representation of the end date/time
+ *   if the end date/time could be parsed
+ * * dtend_message -- An error message if the end date/time
+ *   could not be parsed or validated with respect to the start
+ * * valid_dt -- True if the event start date/time is valid and
+ *   the end date/time is valid or absent.
+ */
 function upress_validate_event_dt($dtstart, $dtend) {
     global $UPRESS_SECONDS_IN_DAY;
     $result = array();
@@ -231,8 +278,11 @@ function upress_validate_event_dt($dtstart, $dtend) {
     return $result;
 }
 
-// Returns the time zone in seconds. This is either the time zone
-// configured for WP, or the time zone used by PHP.
+
+/**
+ * Returns the time zone in seconds. This is either the time zone
+ * configured for WP, or the time zone used by PHP.
+ */
 function upress_get_timezone_seconds() {
     global $wp_version;
     if (isset($wp_version))
@@ -241,8 +291,11 @@ function upress_get_timezone_seconds() {
         return (int)date("Z");
 }
 
-// Returns the base time (i.e. now). This is the same time that will
-// be used for the post, or the PHP system time.
+
+/**
+ * Returns the base time (i.e. now). This is the same time that will
+ * be used for the post, or the PHP system time.
+ */
 function upress_get_base_time() {
     global $wp_version;
     if (isset($wp_version))
@@ -251,7 +304,10 @@ function upress_get_base_time() {
         return time();
 }
 
-// Return the ISO representation of the time zone. See get_timezone_seconds.
+
+/**
+ * Return the ISO representation of the time zone. See get_timezone_seconds.
+ */
 function upress_get_iso_timezone() {
     global $wp_version;
     if (isset($wp_version)) {
@@ -264,57 +320,249 @@ function upress_get_iso_timezone() {
 }
 
 
-
 /**
- * WordPress filters and actions
+ * Listing classes and methods.
  */
 
-function upress_edit_form() {
-    global $post_ID;
-    $event = upress_load_from_post($post_ID);
+// List of fields we store as metadata. These are also used as HTTP request parameter names.
+$UPRESS_LISTING_META_FIELDS = array("type", "dtexpired", "price", "location", "contact");
+
+// Represents a listing type.
+class uPressListingType {
+
+    function uPressListingType($code, $short_name, $description) {
+        $this->code = $code;
+        $this->short_name = $short_name;
+        $this->description = $description;
+    }
+
+}
+
+$UPRESS_LISTING_TYPES = array(
+    new uPressListingType("",                   "",                 "No listing"),
+    new uPressListingType("offer-sale",         "For sale",         "For sale listing"),
+    new uPressListingType("wanted-sale",        "Wanted",           "Wanted listing"),
+    new uPressListingType("offer-rent",         "Rental listing",   "Rental listing"),
+    new uPressListingType("wanted-rent",        "Rental wanted",    "Rent wanted listing"),
+    new uPressListingType("listing-barter",     "Barter/trade",     "Barter or trade listing"),
+    new uPressListingType("wanted-job",         "Job wanted",       "Job wanted listing"),
+    new uPressListingType("offer-job",          "Help wanted",      "Help wanted listing"),
+    new uPressListingType("listing-meet",       "Personal",         "Personal (dating, friends, etc) listing"),
+    new uPressListingType("listing-service",    "Service",          "A service listing"),
+    new uPressListingType("listing-announce",   "Annoucement",      "Announcement listing")
+);
+
+
+class uPressListing {
+
+
+    /**
+     * Loads the listing associated with that post.
+     */
+    function load_from_post($post_id) {
+        global $UPRESS_LISTING_META_FIELDS;
+        // Load all the meta fields from the post.
+        foreach ($UPRESS_LISTING_META_FIELDS as $field)
+            $this->$field = get_post_meta($post_id, "_listing_{$field}", true);
+        // Validate the location. This gives us a map link if we can understand
+        // the address.
+        $this->address = upress_process_location($this->location);
+    }
+
+
+    /**
+     * Called to update the listing from the HTTP request.
+     */
+    function update_from_request($post_id, $request) {
+        global $UPRESS_LISTING_META_FIELDS;
+        // Get all meta fields from the HTTP POST.
+        foreach ($UPRESS_LISTING_META_FIELDS as $field)
+            $this->$field = stripslashes(trim($request["listing_{$field}"]));
+        // Store the listing fields as post metadata.
+        foreach ($UPRESS_LISTING_META_FIELDS as $field) {
+            $meta_key = "_listing_${field}";
+            $value = $this->$field;
+            if (isset($value) && !empty($value)) {
+                if (!update_post_meta($post_id, $meta_key, $value))
+                    add_post_meta($post_id, $meta_key, $value, true);
+            } else
+                delete_post_meta($post_id, $meta_key);
+        }
+    }
+
+
+    /**
+     * Is this a valid listing? A valid listing has some type.
+     * Quick judgement to determine if we microformat post as listing.
+     */
+    function is_valid() {
+        return !empty($this->type);
+    }
+
+
+    /**
+     * Create a microformat for the post.
+     */
+    function microformat($source) {
+        global $UPRESS_LISTING_TYPES;
+        $html = "<div class='hlisting {$this->type}'><div class='description'>{$source}</div>";
+        if (!empty($this->price))
+            $html .= "<p><strong>Price</strong>: <span class='price'>{$this->price}</span></p>";
+        if (!empty($this->location)) {
+            $html .= "<p class='location'><strong>Location</strong>: ";
+            if ($this->address->link_to_map)
+                $html .= "<span style=\"float:right\">{$this->address->link_to_map}</span>";
+            $html .= "{$this->address->uformatted}</p>";
+        }
+        if (!empty($this->contact))
+            $html .= "<p class='contact'><strong>Contact me at</strong>: <span class=\"hcard\">{$this->contact}</span></p>";
+        $html .= "</div>";
+        return $html;
+    }
+
+
+    /**
+     * Create an edit panel for the listing.
+     */
+    function edit_panel() {
+        global $UPRESS_LISTING_TYPES;
+        $dtexpired = $this->dtexpired ? $this->dtexpired : time();
+        $disabled = empty($this->type) ? "disabled=\"disabled\"" : null;
 ?>
-<div id="upress" class="dbx-group" >
-<fieldset id="upress-event" class="dbx-box">
-<h3 class="dbx-handle"><?php _e('Event') ?></h3>
-<div class="dbx-content">
-<p><?php _e('To create an event, start by entering the date/time (e.g. 5pm, Jan 1):') ?></p>
-<table style="width:99%">
-<tr>
-<th scope="row" align="right"><label for="event_dtstart"><?php _e('Starts:'); ?></label></th>
-<td width="100%"><input type="text" id="event_dtstart" name="event_dtstart" tabindex="6" size="30" value="<?php echo wp_specialchars($event->dtstart); ?>" /><span id="event_dtstart_message" style="margin-left:20px;color:red"><?php if ($event->dtstart_message) echo wp_specialchars($event->dtstart_message); ?></span></td>
-</tr>
-<tr>
-<th scope="row" align="right"><label for="event_dtend"><?php _e('Ends:'); ?></label></th>
-<td><input type="text" id="event_dtend" name="event_dtend" tabindex="6" size="30" value="<?php echo wp_specialchars($event->dtend); ?>" /><span id="event_dtend_message" style="margin-left:20px;color:red"><?php if ($event->dtend_message) echo wp_specialchars($event->dtend_message); ?></span></td>
-</tr>
-<tr>
-<th scope="row" align="right" valign="top"><label for="event_location"><?php _e('Location:'); ?></label></th>
-<td><div id="event_location_map" style="float:right"><?php echo $event->address->link_to_map; ?></div><textarea rows="3" cols="60" type="text" id="event_location" name="event_location" tabindex="6"><?php echo wp_specialchars($event->location); ?></textarea></td>
-</tr>
-</table>
-</div>
+<fieldset id="upress-listing" class="dbx-box">
+    <h3 class="dbx-handle"><?php _e('Listing') ?></h3>
+    <div class="dbx-content">
+        <table style="width:99%">
+            </tr>
+                <th scope="row" align="right" valign="top">
+                    <label for="listing_type"><?php _e('Create a ..'); ?></label>
+                </th>
+                <td>
+                    <select name="listing_type" onchange="Labnotes.uPress.Listing.toggle(this.value != '')" tabindex="6">
+                        <?php foreach ($UPRESS_LISTING_TYPES as $type) { ?>
+                            <option value="<?php echo $type->code; ?>"
+                                <?php echo $this->type == $type->code ? "selected=\"selected\"" : null; ?>><?php echo $type->description; ?></option>
+                        <?php } ?>
+                    </select>
+                </td>
+            <tr>
+            </tr>
+                <th scope="row" align="right" valign="top">
+                    <label for="listing_price"><?php _e('Price:'); ?></label>
+                </th>
+                <td>
+                    <input type="text" id="listing_price" name="listing_price" tabindex="6" size="30" value="<?php echo wp_specialchars($this->price); ?>" <?php echo $disabled; ?>/>
+                    <div>(If your listing is for selling, buying or renting)</div>
+                </td>
+            <tr>
+            </tr>
+                <th scope="row" align="right" valign="top">
+                    <label for="listing_location"><?php _e('Location:'); ?></label>
+                </th>
+                <td>
+                    <textarea rows="3" cols="60" type="text" id="listing_location" name="listing_location" tabindex="6" <?php echo $disabled; ?>><?php echo wp_specialchars($this->location); ?></textarea>
+                </td>
+            <tr>
+            </tr>
+                <th scope="row" align="right" valign="top">
+                    <label for="listing_contact"><?php _e('Contact info:'); ?></label>
+                </th>
+                <td>
+                    <input type="text" id="listing_contact" name="listing_contact" tabindex="6" size="80" value="<?php echo wp_specialchars($this->contact); ?>" <?php echo $disabled; ?>/>
+                    <div>(E-mail, phone, etc where people can reach you)</div>
+                </td>
+            <tr>
+            <tr>
+                <th scope="row" align="right" valign="top">
+                    <label for="listing_dtexpired"><?php _e('Expired:'); ?></label>
+                </th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="listing_dtexpired" tabindex="6" value="<?php echo $dtexpired; ?>"
+                            <?php echo $this->dtexpired ? "checked=\"checked\"" : null; ?> <?php echo $disabled; ?>>
+                        Check to mark this listing as expired/taken instead of deleting it.
+                    </label>
+                </td>
+            </tr>
+        </table>
+    </div>
 </fieldset>
-</div>
 <?php
+    }
+
+
 }
 
+
+/**
+ * Called when the post is saved. Stores metadata contained in the post form.
+ */
 function upress_edit_post($post_id) {
-    upress_update_from_request($post_id, $_POST);
+    $event = new uPressEvent();
+    $event->update_from_request($post_id, $_POST);
+    $listing = new uPressListing();
+    $listing->update_from_request($post_id, $_POST);
 }
 
+
+/**
+ * Called to render the body of a post. Adds microformatted data from the
+ * post metadata where applicable.
+ */
 function upress_format_post($html) {
     global $post_ID, $post;
     $post_id = $post ? $post->ID : $post_ID;
-    $event = upress_load_from_post($post_id);
-    if ($event->is_valid()) {
-        $ical = "BEGIN:VCALENDAR\nVERSION:1.0\nMETHOD:PUBLISH\nPRODID:-//uPress//upress.labnotes.org//EN\n".$event->ical($post, preg_replace("/\n/", "\\n", strip_tags($html)))."\nEND:VCALENDAR";
-        $ical = "<a href=\"data:text/calendar,".preg_replace("/\n/", "%0a", $ical)."\" class=\"ical\" title=\"Add this event to you calendar\">iCal</a>";
-        return "<div class='vevent'><div class='summary' style='display:none'>{$post->post_title}</div>".$event->microformat()."<div class='description'>".$html."</div></div>";
-    } else
-        return $html;
+    # It's either listing or event.
+    $listing = new uPressListing();
+    $listing->load_from_post($post_id);
+    if ($listing->is_valid()) {
+        $html = $listing->microformat($html);
+    } else {
+        $event = new uPressEvent();
+        $event->load_from_post($post_id);
+        if ($event->is_valid())
+            $html = $event->microformat($html, $post->post_title);
+    }
+    return $html;
 }
 
 
+/**
+ * Called to render the title of the post. Adds additional information
+ * (e.g. price) but without formatting.
+ */
+function upress_format_title($title) {
+    global $post_ID, $post;
+    $post_id = $post ? $post->ID : $post_ID;
+    $listing = new uPressListing();
+    $listing->load_from_post($post_id);
+    if ($listing->is_valid() && !empty($listing->price)) {
+        $title .= " - ".$listing->price;
+    }
+    return $title;
+}
+
+
+/**
+ * Used from the post edit page. Creates the microformat editing panels.
+ */
+function upress_edit_form() {
+    global $post_ID;
+?><div id="upress" class="dbx-group" ><?php
+    $listing = new uPressListing();
+    $listing->load_from_post($post_ID);
+    $listing->edit_panel();
+    $event = new uPressEvent();
+    $event->load_from_post($post_ID);
+    $event->edit_panel();
+?></div><?php
+}
+
+
+/**
+ * Used from the post edit page. Adds scripts and stylings used by upress.
+ * TODO: We need to trim this so there's less loaded on each page.
+ */
 function upress_admin_header() {
     // Require prototype.js for all sort of AJAX goodness.
     $base_url = htmlentities(get_settings('siteurl').'/wp-content/plugins/upress/');
@@ -325,5 +573,25 @@ function upress_admin_header() {
     echo "\n--></script>";
     echo "<script type=\"text/javascript\" src=\"".wp_specialchars($base_url)."upress.js\"></script>";
 }
+
+
+/**
+ * Hook up to WordPress actions and filters.
+ */
+if (isset($wp_version)) {
+    // Post editing.
+    add_action("admin_head", "upress_admin_header");
+    add_action("edit_post", "upress_edit_post");
+    add_action("save_post", "upress_edit_post");
+    add_action("edit_form_advanced", "upress_edit_form");
+
+    // Post formatting.
+    add_filter("the_content", "upress_format_post", 10);
+    add_filter("the_excerpt", "upress_format_post", 10);
+    add_filter("the_excerpt_rss", "upress_format_post", 10);
+    add_filter("the_title", "upress_format_title", 10);
+    add_filter("the_title_rss", "upress_format_title", 10);
+}
+
 
 ?>

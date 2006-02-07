@@ -12,6 +12,10 @@
 	margin-top: .5em;
 }
 
+#upress input[disabled] {
+	color: gray;
+}
+
 #upress a.dbx-toggle, #upress a.dbx-toggle-open:visited {
 	height: 22px;
 	width: 22px;
@@ -22,4 +26,20 @@
 	height: 22px;
 	width: 22px;
 	background-position: 0 -28px;
+}
+
+#upress-listing label {
+	margin-right: 10px;
+}
+
+#upress-listing input[type=radio] {
+	font-size: 120%;
+}
+
+#upress-listing input[name=listing_location] {
+	width: 300px;
+}
+
+#upress-listing input[name=listing_contact] {
+	width: 300px;
 }
