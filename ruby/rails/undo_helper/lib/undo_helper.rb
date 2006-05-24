@@ -1,4 +1,4 @@
-# Undo plugins for Rails
+# Undo helper plugins for Rails
 #
 # Copyright (c) 2006 Assaf Arkin, under Creative Commons Attribution and/or MIT License
 # Developed for http://co.mments.com
