@@ -1,4 +1,4 @@
-== Undo plugin for Rails
+== Undo helper plugin for Rails
 
 Rails controller with a _create_ action that creates a new record, a _delete_ action that will undo it, and a _before_filter_ that removes undo actions from the stack:
 
