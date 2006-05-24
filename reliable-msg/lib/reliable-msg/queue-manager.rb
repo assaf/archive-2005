@@ -35,7 +35,7 @@ module ReliableMsg
 
         DEFAULT_DRB = {
             "port"=>Client::DRB_PORT,
-            "acl"=>"allow 127.0.0.1"
+            "acl"=>"allow 127.0.0.1, allow ::1"
         }
 
         INFO_LOADED_CONFIG = "Loaded queues configuration from: %s" #:nodoc:
