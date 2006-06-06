@@ -33,11 +33,9 @@ Object.extend(Keyboard.Shortcuts.prototype, {
         modifiers.ctrlKey = modifiers.ctrlKey || false;
         modifiers.altKey = modifiers.altKey || false;
         modifiers.metaKey = modifiers.metaKey || false;
-        for (var mod in modifiers) {
-            if ((modifiers[mod] && (!event[mod] || event[mod] == "undefined")) ||
-                (!modifiers[mod] && event[mod] && event[mod] != "undefined"))
+        for (var mod in modifiers)
+            if (!!modifiers[mod] != !!event[mod])
                 return null;
-        }
         if (event) {
             var keyCode = event.keyCode || event.which;
             return String.fromCharCode(keyCode).toLowerCase();
@@ -211,9 +209,9 @@ Keyboard.shortcuts = new Keyboard.Shortcuts();
  */
 Keyboard.Navigator = Class.create();
 Object.extend(Keyboard.Navigator, {
-    next: new Object(),
-    previous: new Object(),
-    remove: new Object(),
+    next: {},
+    previous: {},
+    remove: {},
     markerId: "navigator-marker",
     cookie: "navigator"
 });
@@ -248,11 +246,11 @@ Object.extend(Keyboard.Navigator.prototype, {
                     return list[0] ? list[0].href : null;
                 }
             }.bind(this)(options.nextPage);
-        } else if (typeof options.nextPage == "function") {
+        } else if (typeof options.nextPage == "function")
             this.nextPage = options.nextPage;
-        } else {
+        else
             this.nextPage = function() { return null; }
-        }
+
         if (typeof options.previousPage == "string") {
             this.previousPage = function(select) {
                 var selector = this.selector(select);
@@ -261,11 +259,10 @@ Object.extend(Keyboard.Navigator.prototype, {
                     return list[0] ? list[0].href : null;
                 }
             }.bind(this)(options.previousPage);
-        } else if (typeof options.previousPage == "function") {
+        } else if (typeof options.previousPage == "function")
             this.previousPage = options.previousPage;
-        } else {
+        else
             this.previousPage = function() { return null; }
-        }
 
         /* Key bindings and navigation by focus */
         var scrollOptions = {scroll: true, halfPage: true}
@@ -279,9 +276,6 @@ Object.extend(Keyboard.Navigator.prototype, {
         }.bind(this);
         Event.observe(document, 'click', function(event) {
             var element = Event.element(event || window.event);
-            //if (element.nodeType == 1 && (element.nodeName == "INPUT" ||
-            //    element.nodeName == "TEXTAREA" || element.nodeName == "SELECT"))
-            //    return true;
             return !this.navigateTo(element, {bestMatch:true});
         }.bind(this));
 
@@ -301,7 +295,7 @@ Object.extend(Keyboard.Navigator.prototype, {
 
     next: function(current) {
         var list = this.select();
-        for (var i = 0; i < list.length; ++i)
+        for (var i = 0, j = list.length; i < j; ++i)
             if (list[i].id == current.id)
                 return list[i + 1];
         return null;
@@ -309,7 +303,7 @@ Object.extend(Keyboard.Navigator.prototype, {
 
     previous: function(current) {
         var list = this.select();
-        for (var i = 0; i < list.length; ++i)
+        for (var i = 0, j = list.length; i < j; ++i)
             if (list[i].id == current.id)
                 return list[i - 1];
         return null;
@@ -376,19 +370,18 @@ Object.extend(Keyboard.Navigator.prototype, {
         /* Best match navigation */
         if (options.bestMatch) {
             var list = this.select();
-            for (var i = 0; i < list.length ; ++i) {
+            for (var i = 0, j = list.length; i < j; ++i)
                 if (list[i] == target || Element.childOf(target, list[i])) {
                     options.bestMatch = false;
                     return this.navigateTo(list[i], options);
                 }
-            }
             return false;
         }
 
         /* Lose focus is event happens on an input field */
         var inputs = document.getElementsByTagName("input");
-        for (var i = 0; i < inputs.length; i++)
-            inputs[i].blur();
+        for (var i = 0, input; input = inputs[i]; i++)
+            input.blur();
 
         /* Remove existing marker */
         if (this.current) {
@@ -517,18 +510,16 @@ Object.extend(Keyboard.Navigator.prototype, {
                 var content = options.content;
                 return function() { return content; }
             }();
-        } else if (typeof options.content == "function") {
+        } else if (typeof options.content == "function")
             content = options.content;
-        } else {
+        else
             content = function() { return "&raquo;"; }
-        }
 
         var insertion = options.insertion || Insertion.Top;
         return function(element, options) {
             var marked = selector(element)[0];
-            if (marked) {
+            if (marked)
                 new insertion(marked, "<span id=\"" + Keyboard.Navigator.markerId + "\">&raquo;</span>");
-            }
         }
     }
 
