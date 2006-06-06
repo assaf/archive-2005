@@ -1,0 +1,44 @@
+== Undo helper plugin for Rails
+
+Rails controller with a _create_ action that creates a new record, a _delete_ action that will undo it, and a _before_filter_ that removes undo actions from the stack:
+
+  # Remove undo action from stack.
+  before_filter do |controller|
+      controller.undo.pop(controller.params) if controller.params[:undo]
+  end
+
+  # The create action creates a new record, the undo action deletes it.
+  def create()
+      # Do something useful here
+      record = Record.create(@params)
+      # If this is not an undo, add an undo action to delete the record.
+      unless @params[:undo]
+          undo.push ("Delete newly created record",
+              :action=>"delete", :id=>record.id)
+      end
+      # Render page (see below).
+      . . .
+  end
+
+  def delete()
+     . . .
+  end
+
+Line from a view that creates a wrapper element and renders the undo form and button:
+
+  <div id="undo"><%= undo.render %></div>
+
+Using RJS to instruct the browser to update the undo button without reloading:
+
+  render :update do |page|
+      page["undo"].replace_html undo.render
+  end
+
+
+== License
+
+Copyright (c) 2006 Assaf Arkin, under Creative Commons Attribution and/or MIT License
+
+Developed for http://co.mments.com
+
+Code and documention: http://labnotes.org
