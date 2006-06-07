@@ -1,10 +1,19 @@
-require "test/unit"
-require File.dirname(__FILE__) + "/../lib/undo_helper"
+require File.dirname(__FILE__) + "/../../../../test/test_helper"
+require File.dirname(__FILE__) + "/../init"
 
+# Re-raise errors caught by the controller.
+class TestController < ActionController::Base ; def rescue_action(e) raise e end; end
 
 class UndoTest < Test::Unit::TestCase
 
     include UndoHelper
+
+    def setup
+        @controller = TestController.new
+        @request    = ActionController::TestRequest.new
+        @response   = ActionController::TestResponse.new
+    end
+
 
     def test_undo_method
         assert_kind_of Undo, undo
@@ -12,62 +21,53 @@ class UndoTest < Test::Unit::TestCase
 
 
     def test_push_new_action
-        assert_equal "", undo.render
-        undo.push "Undo title", {:controller=>"foo", :action=>"bar"}
-        assert_equal %Q{<form action="foo/bar"><input value="Undo" title="Undo title"></form>},
-            undo.render
-        undo.pop
-        assert_equal "", undo.render
+        assert_equal "", render("undo.render")
+        request = {:controller=>"foo", :action=>"bar"}
+        @controller.undo.push "Undo title", request
+        assert_equal %Q{<form action="/foo/bar?undo=true" method="post" onsubmit="new Ajax.Request('/foo/bar?undo=true', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;"><input name="commit" title="Undo title" type="submit" value="Undo" /></form>}, render("undo.render")
+        @controller.undo.pop request.merge(:undo=>"true")
+        assert_equal "", render("undo.render")
     end
 
 
     def test_set_button_and_class
-        undo.push "Undo title", {:controller=>"foo", :action=>"bar"}
-        assert_equal %Q{<form action="foo/bar" class="fc"><input value="Button" class="sc" title="Undo title"></form>},
-            undo.render("Button", :form=>{:class=>"fc"}, :button=>{:class=>"sc"})
+        assert_equal "", render("undo.render")
+        @controller.undo.push "Undo title", :controller=>"foo", :action=>"bar"
+        assert_equal %Q{<form action="/foo/bar?undo=true" class="fc" method="post" onsubmit="new Ajax.Request('/foo/bar?undo=true', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;"><input class="sc" name="commit" title="Undo title" type="submit" value="Button" /></form>},
+            render(%Q{undo.render("Button", :form=>{:class=>"fc"}, :button=>{:class=>"sc"})})
     end
 
 
     def test_disabled_button
-        assert_equal "", undo.render
-        assert_equal %Q{<form action="/" class="fc"><input value="Button" disabled="true" class="sc"></form>},
-            undo.render("Button", :form=>{:class=>"fc"}, :disabled=>{:class=>"sc"})
+        assert_equal "", render("undo.render")
+        assert_equal %Q{<form action="" class="fc" method="post" onsubmit="new Ajax.Request('', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;"><input class="sc" disabled="disabled" name="commit" type="submit" value="Button" /></form>},
+            render(%Q{undo.render("Button", :form=>{:class=>"fc"}, :disabled=>{:class=>"sc"})})
     end
 
 
     def test_multilevel_undo
         Undo.levels = 2
         assert_equal 2, Undo.levels
-        assert_equal "", undo.render
-        undo.push "Undo title", {:controller=>"foo", :action=>"bar1"}
-        assert_equal %Q{<form action="foo/bar1"><input value="Undo" title="Undo title"></form>}, undo.render
-        undo.push "Undo title", {:controller=>"foo", :action=>"bar2"}
-        assert_equal %Q{<form action="foo/bar2"><input value="Undo" title="Undo title"></form>}, undo.render
-        undo.pop
-        assert_equal %Q{<form action="foo/bar1"><input value="Undo" title="Undo title"></form>}, undo.render
-        undo.pop
-        assert_equal "", undo.render
+        assert_equal "", render("undo.render")
+        request1 = {:controller=>"foo", :action=>"bar1"}
+        @controller.undo.push "Undo title", request1
+        assert_equal %Q{<form action="/foo/bar1?undo=true" method="post" onsubmit="new Ajax.Request('/foo/bar1?undo=true', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;"><input name="commit" title="Undo title" type="submit" value="Undo" /></form>}, render("undo.render")
+        request2 = {:controller=>"foo", :action=>"bar2"}
+        @controller.undo.push "Undo title", request2
+        assert_equal %Q{<form action="/foo/bar2?undo=true" method="post" onsubmit="new Ajax.Request('/foo/bar2?undo=true', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;"><input name="commit" title="Undo title" type="submit" value="Undo" /></form>}, render("undo.render")
+        @controller.undo.pop request2.merge(:undo=>"true")
+        assert_equal %Q{<form action="/foo/bar1?undo=true" method="post" onsubmit="new Ajax.Request('/foo/bar1?undo=true', {asynchronous:true, evalScripts:true, parameters:Form.serialize(this)}); return false;"><input name="commit" title="Undo title" type="submit" value="Undo" /></form>}, render("undo.render")
+        @controller.undo.pop request1.merge(:undo=>"true")
+        assert_equal "", render("undo.render")
     end
 
 
-
-    def session
-        @session ||= {}
-    end
-
-    def form_remote_tag(options)
-        url = options[:url] || {}
-        html = options[:html].map {|k,v| " #{k}=\"#{v}\"" } if options[:html]
-        %Q{<form action="#{url[:controller]}/#{url[:action]}"#{html}>}
-    end
-
-    def submit_tag(name, options)
-        html = options.map {|k,v| " #{k}=\"#{v}\"" } if options
-        %Q{<input value="#{name}"#{html}>}
-    end
-
-    def end_form_tag()
-        "</form>"
+    def render(code)
+        @controller.class.send :define_method, :index do
+            render :inline=>"<%= #{code} %>"
+        end
+        get :index
+        return @response.body
     end
 
 end

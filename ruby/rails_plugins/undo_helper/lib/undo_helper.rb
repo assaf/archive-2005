@@ -82,7 +82,7 @@ module UndoHelper
             undos = @session[:undos]
             undos = @session[:undos] = [] unless undos
             undos.shift while undos.size >= Undo.levels
-            url = Hash[*url.collect{|k,v| [k.to_s, v.to_s]}.flatten]
+            url = Hash[*url.collect{|k,v| [k.to_sym, v.to_s]}.flatten]
             url[:undo] = "true"
             undos << {:title=>title, :url=>url}
             return nil
