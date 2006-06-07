@@ -1,9 +1,5 @@
-require File.dirname(__FILE__) + '/../../../../test/test_helper'
-require File.dirname(__FILE__) + "/../lib/keyboard_helper"
-
-ActionView::Base.send :include, KeyboardHelper
-ActionController::Base.send :include, KeyboardHelper
-
+require File.dirname(__FILE__) + "/../../../../test/test_helper"
+require File.dirname(__FILE__) + "/../init"
 
 # Re-raise errors caught by the controller.
 class TestController < ActionController::Base ; def rescue_action(e) raise e end; end
@@ -36,57 +32,37 @@ class KeyboardHelperTest < Test::Unit::TestCase
     
     
     def test_navigator_and_options
-        render %Q{navigator :nothing=>nil, :string=>"xyz",
-            :return_true=>Proc.new { "return true" },
-            :event=>"window.event".to_sym,
-            :hash=>{:foo=>:bar}
-        }
         assert_equal %Q{<script type="text/javascript">\n//<![CDATA[\nif (!Keyboard.navigator) Keyboard.navigator = new Keyboard.Navigator({event:window.event, hash:{foo:bar}, nothing:null, returnTrue:function(){return true}, string:"xyz"});\n//]]>\n</script>},
-            @response.body
+            render(%Q{navigator :nothing=>nil, :string=>"xyz",
+                :return_true=>Proc.new { "return true" },
+                :event=>"window.event".to_sym,
+                :hash=>{:foo=>:bar}
+            })
     end
 
 
-
     def test_navigate_to_helper
-        execute do
-            navigate_to("element", :scroll=>true)
-        end
+        execute { navigate_to("element", :scroll=>true) }
         assert_equal ["element"], @response.cookies["navigator"]
-        
-        execute do
-            navigate_to()
-        end
+        execute { navigate_to() }
         assert_equal [], @response.cookies["navigator"]
-        
-        execute do
-            navigate_to(:next)
-        end
+        execute { navigate_to(:next) }
         assert_equal [], @response.cookies["navigator"]
     end
 
 
     def test_navigate_to_rjs
-        update_page do |page|
-            page.navigate_to("element", :scroll=>true)
-        end
-        assert_equal %Q{Keyboard.navigator.navigateTo("element",{scroll:true});}, @response.body
+        assert_equal %Q{Keyboard.navigator.navigateTo("element",{scroll:true});},
+            update_page { |page| page.navigate_to("element", :scroll=>true) }
         assert_equal nil, @response.cookies["navigator"]
-        update_page do |page|
-            page.navigate_to()
-        end
-        assert_equal %Q{Keyboard.navigator.navigateTo(null,null);}, @response.body
-        update_page do |page|
-            page.navigate_to(:next)
-        end
-        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.next,null);}, @response.body
-        update_page do |page|
-            page.navigate_to(:previous)
-        end
-        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.previous,null);}, @response.body
-        update_page do |page|
-            page.navigate_to(:remove)
-        end
-        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.remove,null);}, @response.body
+        assert_equal %Q{Keyboard.navigator.navigateTo(null,null);},
+            update_page { |page| page.navigate_to() }
+        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.next,null);},
+            update_page { |page| page.navigate_to(:next) }
+        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.previous,null);},
+            update_page { |page| page.navigate_to(:previous) }
+        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.remove,null);},
+            update_page { |page| page.navigate_to(:remove) }
     end
 
 
@@ -98,6 +74,7 @@ class KeyboardHelperTest < Test::Unit::TestCase
             end
         end
         get :index
+        return @response.body
     end
     
 
@@ -106,6 +83,7 @@ class KeyboardHelperTest < Test::Unit::TestCase
             render :inline=>"<%= #{code} %>"
         end
         get :index
+        return @response.body
     end
     
     
