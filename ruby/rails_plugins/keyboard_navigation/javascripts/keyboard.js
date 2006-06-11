@@ -276,7 +276,7 @@ Object.extend(Keyboard.Navigator.prototype, {
         }.bind(this);
         Event.observe(document, 'click', function(event) {
             var element = Event.element(event || window.event);
-            return !this.navigateTo(element, {bestMatch:true});
+            return !this.navigateTo(element, {bestMatch:true, blur:false});
         }.bind(this));
 
         /* Position marker when (re)loading page */
@@ -379,9 +379,11 @@ Object.extend(Keyboard.Navigator.prototype, {
         }
 
         /* Lose focus is event happens on an input field */
-        var inputs = document.getElementsByTagName("input");
-        for (var i = 0, input; input = inputs[i]; i++)
-            input.blur();
+	if (options.blur !== false) {
+            var inputs = document.getElementsByTagName("input");
+            for (var i = 0, input; input = inputs[i]; i++)
+                input.blur();
+        }
 
         /* Remove existing marker */
         if (this.current) {
