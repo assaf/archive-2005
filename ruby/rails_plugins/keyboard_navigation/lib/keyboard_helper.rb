@@ -7,7 +7,8 @@
 
 module KeyboardHelper
 
-    @@navigator_cookie = "navigator"
+
+    @@navigator_store_id = "navigator-store"
 
     # Defines a keyboard shortcut. The first element specifies the key,
     # or two key combination. The second element provides the body of
@@ -137,7 +138,7 @@ module KeyboardHelper
     #       :scroll_options=>{:scroll=>true, :half_page=>true}
     #   %>
     def navigator(options)
-        @@navigator_cookie = options[:cookie]
+        @@navigator_store_id = options[:store_id]
         javascript_tag "if (!Keyboard.navigator) Keyboard.navigator = new Keyboard.Navigator(#{options_for_navigator(options)});"
     end
 
@@ -169,18 +170,6 @@ module KeyboardHelper
     #   update_page do |page|
     #     page.navigate_to "post-123", :scroll=>true, :half_page=>true
     #   end
-    #
-    # You can also use this function without rendering anything. For example,
-    # in response to a form action you may redirect the user and navigate to
-    # a specific element, or reset navigation to the first element on the page.
-    #
-    # With this option you can use a string to identify the element or +nil+
-    # to reset the current element. This method must be called before #render or
-    # #redirect_to since it changes the navigation cookie.
-    #
-    # For example:
-    #   navigate_to
-    #   redirect_to :back
     def navigate_to(id = nil, options = nil)
         element, id = case id
             when :next: ["Keyboard.Navigator.next", nil]
@@ -188,15 +177,19 @@ module KeyboardHelper
             when :remove: ["Keyboard.Navigator.remove", nil]
             else [id.to_json, id]
         end
-        if self.is_a?(ActionView::Helpers::PrototypeHelper::JavaScriptGenerator)
-            options = options ? @context.send(:options_for_navigator, options) : "null"
-            record "Keyboard.navigator.navigateTo(#{element},#{options});"
-        else
-            case id
-                when String: cookies[@@navigator_cookie || "navigator"] = {:value=>id}
-                when nil: cookies.delete "navigator"
-            end
-        end
+        options = options ? @context.send(:options_for_navigator, options) : "null"
+        record "Keyboard.navigator.navigateTo(#{element},#{options});"
+    end
+
+
+    # Place this in your template to create a hidden form that will store the
+    # current navigation position. Useful when the user wants to refresh the
+    # page or navigate back and forth.
+    #
+    # Call with an element identifier to navigate to this element when the
+    # page is refreshed.
+    def navigator_store(value = nil)
+        hidden_field_tag @@navigator_store_id, value
     end
 
 

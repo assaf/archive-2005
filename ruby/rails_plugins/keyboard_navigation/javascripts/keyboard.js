@@ -213,7 +213,7 @@ Object.extend(Keyboard.Navigator, {
     previous: {},
     remove: {},
     markerId: "navigator-marker",
-    cookie: "navigator"
+    storeId: "navigator-store"
 });
 Object.extend(Keyboard.Navigator.prototype, {
     initialize: function(options) {
@@ -283,7 +283,7 @@ Object.extend(Keyboard.Navigator.prototype, {
         Event.observe(window, 'load', function() {
             if (this.current)
                 this.navigateTo(this.current);
-            else if (id = this.getCookie(Keyboard.Navigator.cookie))
+            else if (id = this.getStoredId())
                 this.navigateTo(id, scrollOptions);
             if (!this.current) {
                 var current = (document.referrer == this.nextPage()) ?
@@ -389,7 +389,7 @@ Object.extend(Keyboard.Navigator.prototype, {
         if (this.current) {
             this.focusOff(this.current);
             this.current = null;
-            this.deleteCookie(Keyboard.Navigator.cookie);
+            this.setStoredId(null);
         }
         if (!(target = $(target)))
             return false;
@@ -397,7 +397,7 @@ Object.extend(Keyboard.Navigator.prototype, {
         if (target && target.id) {
             this.current = target;
             this.focusOn(target, options);
-            this.setCookie(Keyboard.Navigator.cookie, target.id);
+            this.setStoredId(target.id);
             return true;
         }
         return false;
@@ -463,23 +463,16 @@ Object.extend(Keyboard.Navigator.prototype, {
         window.scrollTo(0, newTop);
     },
 
-    getCookie: function(name) {
-        name = " " + name + "=";
-        var cookies = document.cookie.split(';');
-        var value = null;
-        cookies.each(function(cookie) {
-            if (cookie.indexOf(name) == 0)
-                value = cookie.substring(name.length, cookie.length);
-        }.bind(this));
-        return value;
+    getStoredId: function() {
+        var element = document.getElementById(Keyboard.Navigator.storeId);
+        if (element)
+            return element.value;
     },
 
-    setCookie: function(name, value, expires) {
-        document.cookie = name + "=" + value + "; path=/";
-    },
-
-    deleteCookie: function(name) {
-        document.cookie = name + "=; expires=31-Dec-19 00:00:00 GMT; path=/";
+    setStoredId: function(id) {
+        var element = document.getElementById(Keyboard.Navigator.storeId);
+        if (element)
+            element.value = id;
     },
 
     selector: function(expression) {

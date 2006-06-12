@@ -41,20 +41,9 @@ class KeyboardHelperTest < Test::Unit::TestCase
     end
 
 
-    def test_navigate_to_helper
-        execute { navigate_to("element", :scroll=>true) }
-        assert_equal ["element"], @response.cookies["navigator"]
-        execute { navigate_to() }
-        assert_equal [], @response.cookies["navigator"]
-        execute { navigate_to(:next) }
-        assert_equal [], @response.cookies["navigator"]
-    end
-
-
     def test_navigate_to_rjs
         assert_equal %Q{Keyboard.navigator.navigateTo("element",{scroll:true});},
             update_page { |page| page.navigate_to("element", :scroll=>true) }
-        assert_equal nil, @response.cookies["navigator"]
         assert_equal %Q{Keyboard.navigator.navigateTo(null,null);},
             update_page { |page| page.navigate_to() }
         assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.next,null);},
@@ -63,6 +52,14 @@ class KeyboardHelperTest < Test::Unit::TestCase
             update_page { |page| page.navigate_to(:previous) }
         assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.remove,null);},
             update_page { |page| page.navigate_to(:remove) }
+    end
+
+
+    def test_navigator_store
+        assert_equal %Q{<form action="/test" method="get" style="display:hidden"><input type="hidden" /></form>},
+            render(%Q{navigator_store})
+        assert_equal %Q{<form action="/test" method="get" style="display:hidden"><input type="hidden" value="foobar" /></form>},
+            render(%Q{navigator_store("foobar")})
     end
 
 
