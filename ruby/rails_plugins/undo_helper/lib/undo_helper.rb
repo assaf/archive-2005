@@ -62,7 +62,7 @@ module UndoHelper
 
         # Returns the number of undo levels.
         def self.levels()
-            @@levels ||= UNDO_LEVELS
+            @@levels || UNDO_LEVELS
         end
 
 
