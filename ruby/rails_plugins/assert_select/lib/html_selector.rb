@@ -137,7 +137,9 @@ module HTML
         # $4 attribute expressions (zero or more)
         # $5 separator/operator (empty, +, >, etc)
         # $6 anything else (no leading spaces)
-        REGEX = /^(\*|[[:alpha:]][\w\-:]*)?(#(?:\?|[\w\-:]+))?((?:\.[\w\-:]*){0,})((?:\[[[:alpha:]][\w\-:][^\]]*\]){0,})\s*([,+>~]?)\s*(.*)$/ #:nodoc:
+        unless const_defined? :REGEX
+            REGEX = /^(\*|[[:alpha:]][\w\-:]*)?(#(?:\?|[\w\-:]+))?((?:\.[\w\-:]*){0,})((?:\[[[:alpha:]][\w\-:][^\]]*\]){0,})\s*([,+>~]?)\s*(.*)$/ #:nodoc:
+        end
 
         # Parse each attribute expression into three parts:
         # $1 attribute name
@@ -145,7 +147,9 @@ module HTML
         # $3 matched value
         # Matching operation may be =, ~= or |=, etc (or nil).
         # Value may be empty.
-        ATTR_REGEX = /^([A-Za-z0-9_\-:]*)((?:[~|^$*])?=)?(.*)$/ #:nodoc:
+        unless const_defined? :ATTR_REGEX
+            ATTR_REGEX = /^([A-Za-z0-9_\-:]*)((?:[~|^$*])?=)?(.*)$/ #:nodoc:
+        end
 
 
         # :call-seq:
