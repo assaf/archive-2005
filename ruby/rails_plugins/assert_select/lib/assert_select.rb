@@ -1,8 +1,6 @@
-require "test/unit"
+require File.join(File.dirname(__FILE__), "html_selector")
 
-
-module Test::Unit::Assertions
-
+module AssertSelect
 
     # :call-seq:
     #   css_select(selector) => array
