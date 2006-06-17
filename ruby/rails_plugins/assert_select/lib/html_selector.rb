@@ -1,4 +1,4 @@
-module HTML
+module HTML #:nodoc:
 
     # Selects HTML elements using CSS 2 selectors.
     #
