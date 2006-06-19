@@ -325,11 +325,11 @@ class ScraperTest < Test::Unit::TestCase
         end
         scraper = new_scraper(URI.parse("http://localhost/source"))
         scraper.scrape
-        assert_equal "http://localhost/source", scraper.original_url.to_s
-        assert_equal "http://localhost/redirect", scraper.url.to_s
-        assert_equal time, scraper.last_modified
-        assert_equal "etag", scraper.etag
-        assert_equal "other-encoding", scraper.encoding
+        assert_equal "http://localhost/source", scraper.page_info[:original_url].to_s
+        assert_equal "http://localhost/redirect", scraper.page_info[:url].to_s
+        assert_equal time, scraper.page_info[:last_modified]
+        assert_equal "etag", scraper.page_info[:etag]
+        assert_equal "other-encoding", scraper.page_info[:encoding]
         assert_equal "html", scraper.document.name
     end
 
@@ -360,6 +360,12 @@ class ScraperTest < Test::Unit::TestCase
         html = %Q{<div id="1"></div>}
         scraper = new_scraper(html) do
             process "div", extractor(:div_id=>"@id")
+            attr :div_id
+        end
+        scraper.scrape
+        assert_equal "1", scraper.div_id
+        scraper = new_scraper(html) do
+            process "div", :div_id=>"@id"
             attr :div_id
         end
         scraper.scrape
@@ -427,12 +433,14 @@ class ScraperTest < Test::Unit::TestCase
 
 
     def test_should_support_scraper_extractors
-        html = %Q{<div><h1>first</h1><h2>second</h2></div>}
         headers = Class.new(Scraper::Base)
-        headers.root_element nil
-        headers.process "h1,h2", Scraper::Base.extractor(:h1=>"h1", :h2=>"h2")
-        headers.send :attr, :h1
-        headers.send :attr, :h2
+        headers.instance_eval do
+            root_element nil
+            process "h1,h2", :h1=>"h1", :h2=>"h2"
+            attr :h1
+            attr :h2
+        end
+        html = %Q{<div><h1>first</h1><h2>second</h2></div>}
         scraper = new_scraper(html) do
             process "div", extractor(:headers=>headers)
             attr :headers
@@ -495,29 +503,52 @@ class ScraperTest < Test::Unit::TestCase
 
 
     #
-    # Other tests.
+    # Root element tests.
     #
 
-    def test_should_allow_root_element_change
-        html = %Q{<html><head><meta/></head><body></body></html>}
-        scraper = new_scraper(html) do
-            root_element "head"
-            process "meta" do |element|
-                @meta = element
-            end
-            attr_accessor :meta
+    def test_should_scrape_body_by_default
+        html = %Q{<html><head></head><body></body></html>}
+        scraper = Class.new(Scraper::Base).new(html)
+        scraper.class.instance_eval do
+            process "head" do |element| @head = element end
+            attr :head
+            process "body" do |element| @body = element end
+            attr :body
         end
-        assert_equal "head", scraper.class.instance_variable_get(:@root_element)
-        assert_equal "body", Scraper::Base.instance_variable_get(:@root_element)
         scraper.scrape
-        assert !scraper.meta.nil?
-        scraper.class.root_element "body"
-        scraper.meta = nil
-        scraper.scrape
-        assert scraper.meta.nil?
-        scraper.class.root_element nil
-        scraper.scrape
-        assert !scraper.meta.nil?
+        assert scraper.head
+        assert scraper.body
+    end
+
+
+    def test_should_allow_root_element_change
+        html = %Q{<html><head></head><body></body></html>}
+        only_header = new_scraper(html) do
+            root_element "head"
+            process "head" do |element| @head = element end
+            attr :head
+            process "body" do |element| @body = element end
+            attr :body
+        end
+        only_body = Class.new(only_header.class).new(html)
+        only_body.class.root_element "body"
+        both_parts = Class.new(only_body.class).new(html)
+        both_parts.class.root_element nil
+        # We set this scraper to begin with the head element,
+        # so we can see the head element, but not the body.
+        only_header.scrape
+        assert only_header.head
+        assert only_header.body.nil?
+        # Now switch to a scraper that processes the body element,
+        # skipping the header.
+        only_body.scrape
+        assert only_body.head.nil?
+        assert only_body.body
+        # Now switch to a scraper that doesn't specify a root element,
+        # and it will process both header and body.
+        both_parts.scrape
+        assert both_parts.head
+        assert both_parts.body
     end
 
 

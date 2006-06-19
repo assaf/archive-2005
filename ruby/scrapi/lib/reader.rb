@@ -40,7 +40,6 @@ module Scraper
         class HTTPInvalidURLError < HTTPError ; end
         class HTTPRedirectLimitError < HTTPError ; end
 
-
         unless const_defined? :REDIRECT_LIMIT
             REDIRECT_LIMIT = 3
         end
@@ -159,57 +158,41 @@ module Scraper
         end
 
 
+        class HTMLParseError < StandardError
+
+            attr_reader :cause
+
+            def initialize(cause = nil)
+                @cause = cause
+            end
+
+        end
+
+
         # :call-seq:
         #   parse_page(html, encoding?) => html
         #
         # Parses an HTML page and returns the encoding and HTML element.
-        # Raises exceptions if cannot parse the HTML.
+        # Raises HTMLParseError exceptions if it cannot parse the HTML.
         def self.parse_page(content, encoding = nil, tidy_options = nil)
-            # Get the document encoding from the meta header.
-            if meta = content.match(/(<meta\s*([^>]*)http-equiv=['"]?content-type['"]?([^>]*))/i)
-                if meta = meta[0].match(/charset=([\w-]*)/i)
-                    encoding = meta[1]
-                end
-            end
-            encoding ||= "utf8"
-            # Parse HTML into HTML tree.
-            options = TIDY_OPTIONS.clone#.update(tidy_options || {})
-            options[:input_encoding] = encoding.gsub("-", "").downcase
-            Tidy.open(options) do |tidy|
-                html = tidy.clean(content)
-                # TODO: handle case when the meta encoding differs.
-=begin  Removed this since it only applies to script/style tags, and we get rid of those later on
-                # Turns CDATA sections into regular text.
-                if false
-                while idx = html.index("<![CDATA[")
-                    if ends = html.index("]]>")
-                        cdata = html[idx + 9..ends - 1]
-                        cdata.gsub!(/&/, "&amp;") # must come before gt/lt
-                        cdata.gsub!(/</, "&lt;")
-                        cdata.gsub!(/>/, "&gt;")
-                        html[idx..ends + 2] = cdata
-                    else
-                        html[idx, 9] = "&lt;![CDATA["
+            begin
+                # Get the document encoding from the meta header.
+                if meta = content.match(/(<meta\s*([^>]*)http-equiv=['"]?content-type['"]?([^>]*))/i)
+                    if meta = meta[0].match(/charset=([\w-]*)/i)
+                        encoding = meta[1]
                     end
                 end
-=end
-=begin  This regexp seems to overflow the stack!
-                html = html.gsub(/<!\[CDATA\[((?!\]\]>).)*\]\]>/m) do |match|
-                    match = match[9..-4]
-                    match.gsub!(/&/, "&amp;")
-                    match.gsub!(/</, "&lt;")
-                    match.gsub!(/>/, "&gt;")
-                    match
+                encoding ||= "utf8"
+                # Parse HTML into HTML tree.
+                options = TIDY_OPTIONS.clone#.update(tidy_options || {})
+                options[:input_encoding] = encoding.gsub("-", "").downcase
+                Tidy.open(options) do |tidy|
+                    html = tidy.clean(content)
+                    document = HTML::Document.new(html).find(:tag=>"html")
+                    return {:document=>document, :encoding=>encoding}
                 end
-=end
-                document = HTML::Document.new(html).find(:tag=>"html")
-                # Get rid of script tags. Style tags are moved to the head by Tidy.
-=begin
-                document.each do |node, value|
-                    node.detach if node.tag? && node.name == "script"
-                end
-=end
-                return {:document=>document, :encoding=>encoding}
+            rescue Exception=>error
+                raise HTMLParseError.new(error)
             end
         end
 
