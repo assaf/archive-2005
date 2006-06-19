@@ -9,7 +9,7 @@ require "rubygems"
 require "time"
 require "test/unit"
 require File.join(File.dirname(__FILE__), "mock_net_http")
-require File.join(File.dirname(__FILE__), "..", "scraper")
+require File.join(File.dirname(__FILE__), "../lib", "scraper")
 
 
 class ScraperTest < Test::Unit::TestCase
@@ -62,7 +62,7 @@ class ScraperTest < Test::Unit::TestCase
     def test_should_support_object_selectors
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
-            selector :test, HTML::Selector.new("div")
+            selector :test, Scraper::Selector.new("div")
         end
         assert_equal 3, scraper.test(scraper.document).size
     end
@@ -127,7 +127,7 @@ class ScraperTest < Test::Unit::TestCase
     def test_should_allow_processing_rules_with_selector
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
-            process HTML::Selector.new("div") do |element|
+            process Scraper::Selector.new("div") do |element|
                 @count = (@count || 0) + 1
             end
             attr :count

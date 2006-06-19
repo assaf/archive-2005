@@ -13,7 +13,7 @@ require "webrick/https"
 require "logger"
 require "stringio"
 require File.join(File.dirname(__FILE__), "mock_net_http")
-require File.join(File.dirname(__FILE__), "..", "scraper")
+require File.join(File.dirname(__FILE__), "../lib", "scraper")
 
 
 class ReaderTest < Test::Unit::TestCase

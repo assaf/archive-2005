@@ -5,12 +5,7 @@
 # Code and documention: http://labnotes.org
 
 
-unless Module.const_defined? :HTML
-    require File.join(File.dirname(__FILE__), "..", "html", "document")
-end
-
-
-module HTML #:nodoc:
+module Scraper
 
     # Selects HTML elements using CSS 2 selectors.
     #
@@ -18,7 +13,7 @@ module HTML #:nodoc:
     # HTML elements.
     #
     # For example:
-    #   selector = HTML::Selector.new "form.login[action=/login]"
+    #   selector = Scraper::Selector.new "form.login[action=/login]"
     # creates a new selector that matches any +form+ element with the class
     # +login+ and an attribute +action+ with the value <tt>/login</tt>.
     #
@@ -45,7 +40,7 @@ module HTML #:nodoc:
     # if no match is found
     #
     # For example:
-    #   selector = HTML::Selector.new "input[type=text]"
+    #   selector = Scraper::Selector.new "input[type=text]"
     #   matches = selector.select(element)
     #   matches.each do |match|
     #     puts "Found text field with name #{match.attributes['name']}"
@@ -70,7 +65,7 @@ module HTML #:nodoc:
     # attributes. Do not separate with spaces.
     #
     # For example:
-    #   selector = HTML::Selector.new "form.login[action=/login]"
+    #   selector = Scraper::Selector.new "form.login[action=/login]"
     # The matched element must be of type +form+ and have the class +login+.
     # It may have other classes, but the class +login+ is required to match.
     # It must also have an attribute called +action+ with the value
@@ -132,7 +127,7 @@ module HTML #:nodoc:
     # values are converted to strings.
     #
     # For example:
-    #   selector = HTML::Selector.new "#?", /^\d+$/
+    #   selector = Scraper::Selector.new "#?", /^\d+$/
     # matches any element whose identifier consists of one or more digits.
     class Selector
 
@@ -373,7 +368,7 @@ module HTML #:nodoc:
         # itself.
         #
         # For example:
-        #   selector = HTML::Selector.new "input[type=text]"
+        #   selector = Scraper::Selector.new "input[type=text]"
         #   matches = selector.select(element)
         #   matches.each do |match|
         #     puts "Found text field with name #{match.attributes['name']}"
@@ -420,7 +415,7 @@ module HTML #:nodoc:
     end
 
 
-    # See HTML::Selector.new
+    # See Scraper::Selector.new
     def self.selector(statement, *values)
         Selector.new(statement, *values)
     end

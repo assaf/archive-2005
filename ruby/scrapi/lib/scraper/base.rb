@@ -5,10 +5,6 @@
 # Code and documention: http://labnotes.org
 
 
-require File.join(File.dirname(__FILE__), "reader")
-require File.join(File.dirname(__FILE__), "html_selector")
-
-
 module Scraper
 
 
@@ -79,13 +75,13 @@ module Scraper
         # that are potential candidates for extraction. Each selected element is
         # passed to the extractor.
         #
-        # The +selector+ argument may be a string, an HTML::Selector object or
+        # The +selector+ argument may be a string, an Scraper::Selector object or
         # any object that responds to the +select+ method. Passing an Array
         # (responds to +select+) will not do anything useful.
         #
         # String selectors support value substitution, replacing question marks
         # (?) in the selector expression with values from the method arguments.
-        # See HTML::Selector for more information.
+        # See Scraper::Selector for more information.
         #
         # == Extractor
         #
@@ -156,7 +152,7 @@ module Scraper
                 "Missing selector: the first argument tells us what to select" if
                 selector.empty?
             if selector[0].is_a?(String)
-                selector = HTML::Selector.new(*selector)
+                selector = Scraper::Selector.new(*selector)
             else
                 raise ArgumentError, "Selector must respond to select() method" unless
                     selector.respond_to?(:select)
@@ -187,13 +183,13 @@ module Scraper
         # If the selector is defined with a block, all selected elements are
         # passed to the block and the result of the block is returned.
         #
-        # The +selector+ argument may be a string, an HTML::Selector object or
+        # The +selector+ argument may be a string, an Scraper::Selector object or
         # any object that responds to the +select+ method. Passing an Array
         # (responds to +select+) will not do anything useful.
         #
         # String selectors support value substitution, replacing question marks
         # (?) in the selector expression with values from the method arguments.
-        # See HTML::Selector for more information.
+        # See Scraper::Selector for more information.
         #
         # When using a block, the last statement is the response. Do not use
         # +return+, use +next+ if you want to return a value before the last
@@ -203,7 +199,7 @@ module Scraper
                 "Missing selector: the first argument tells us what to select" if
                 selector.empty?
             if selector[0].is_a?(String)
-                selector = HTML::Selector.new(*selector)
+                selector = Scraper::Selector.new(*selector)
             else
                 raise ArgumentError, "Selector must respond to select() method" unless
                     selector.respond_to?(:select)

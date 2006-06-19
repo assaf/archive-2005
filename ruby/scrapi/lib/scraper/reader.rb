@@ -10,14 +10,6 @@ require "net/http"
 require "net/https"
 require "tidy"
 
-unless Tidy.path
-    begin
-        Tidy.path = File.dirname(__FILE__) + "/libtidy.so"
-    rescue LoadError
-        Tidy.path = File.dirname(__FILE__) + "/libtidy.dll"
-    end
-end
-
 
 module Scraper
 
@@ -176,6 +168,7 @@ module Scraper
         # Raises HTMLParseError exceptions if it cannot parse the HTML.
         def self.parse_page(content, encoding = nil, tidy_options = nil)
             begin
+                find_tidy
                 # Get the document encoding from the meta header.
                 if meta = content.match(/(<meta\s*([^>]*)http-equiv=['"]?content-type['"]?([^>]*))/i)
                     if meta = meta[0].match(/charset=([\w-]*)/i)
@@ -193,6 +186,18 @@ module Scraper
                 end
             rescue Exception=>error
                 raise HTMLParseError.new(error)
+            end
+        end
+
+
+protected
+
+        def self.find_tidy()
+            return if Tidy.path
+            begin
+                Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.so")
+            rescue LoadError
+                Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.dll")
             end
         end
 

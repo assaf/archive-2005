@@ -2,7 +2,6 @@ require "rake"
 require "rake/testtask"
 require "rake/rdoctask"
 require "benchmark"
-require File.join(File.dirname(__FILE__), "scraper")
 
 
 desc "Generate documentation"
