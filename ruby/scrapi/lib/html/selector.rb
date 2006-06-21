@@ -5,7 +5,7 @@
 # Code and documention: http://labnotes.org
 
 
-module Scraper
+module HTML
 
     # Selects HTML elements using CSS 2 selectors.
     #
@@ -13,7 +13,7 @@ module Scraper
     # HTML elements.
     #
     # For example:
-    #   selector = Scraper::Selector.new "form.login[action=/login]"
+    #   selector = HTML::Selector.new "form.login[action=/login]"
     # creates a new selector that matches any +form+ element with the class
     # +login+ and an attribute +action+ with the value <tt>/login</tt>.
     #
@@ -40,7 +40,7 @@ module Scraper
     # if no match is found
     #
     # For example:
-    #   selector = Scraper::Selector.new "input[type=text]"
+    #   selector = HTML::Selector.new "input[type=text]"
     #   matches = selector.select(element)
     #   matches.each do |match|
     #     puts "Found text field with name #{match.attributes['name']}"
@@ -65,7 +65,7 @@ module Scraper
     # attributes. Do not separate with spaces.
     #
     # For example:
-    #   selector = Scraper::Selector.new "form.login[action=/login]"
+    #   selector = HTML::Selector.new "form.login[action=/login]"
     # The matched element must be of type +form+ and have the class +login+.
     # It may have other classes, but the class +login+ is required to match.
     # It must also have an attribute called +action+ with the value
@@ -127,7 +127,7 @@ module Scraper
     # values are converted to strings.
     #
     # For example:
-    #   selector = Scraper::Selector.new "#?", /^\d+$/
+    #   selector = HTML::Selector.new "#?", /^\d+$/
     # matches any element whose identifier consists of one or more digits.
     class Selector
 
@@ -368,7 +368,7 @@ module Scraper
         # itself.
         #
         # For example:
-        #   selector = Scraper::Selector.new "input[type=text]"
+        #   selector = HTML::Selector.new "input[type=text]"
         #   matches = selector.select(element)
         #   matches.each do |match|
         #     puts "Found text field with name #{match.attributes['name']}"
@@ -415,7 +415,7 @@ module Scraper
     end
 
 
-    # See Scraper::Selector.new
+    # See HTML::Selector.new
     def self.selector(statement, *values)
         Selector.new(statement, *values)
     end

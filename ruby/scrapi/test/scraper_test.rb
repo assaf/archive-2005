@@ -39,6 +39,7 @@ class ScraperTest < Test::Unit::TestCase
         end
     end
 
+
     def test_should_support_selector_blocks
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
@@ -50,6 +51,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal 2, scraper.test(scraper.document).size
     end
 
+
     def test_should_support_array_selectors
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
@@ -59,13 +61,15 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal "2", scraper.test(scraper.document)[0].attributes["id"]
     end
 
+
     def test_should_support_object_selectors
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
-            selector :test, Scraper::Selector.new("div")
+            selector :test, HTML::Selector.new("div")
         end
         assert_equal 3, scraper.test(scraper.document).size
     end
+
 
     def test_should_select_array_every_time
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
@@ -81,6 +85,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal 3,
             scraper.test3(scraper.document).size # Array of elements
     end
+
 
     def test_should_select_elements_in_order
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
@@ -112,6 +117,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal 3, scraper.count
     end
 
+
     def test_should_allow_processing_rules_with_array
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
@@ -124,10 +130,11 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal 1, scraper.count
     end
 
+
     def test_should_allow_processing_rules_with_selector
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
-            process Scraper::Selector.new("div") do |element|
+            process HTML::Selector.new("div") do |element|
                 @count = (@count || 0) + 1
             end
             attr :count
@@ -135,6 +142,7 @@ class ScraperTest < Test::Unit::TestCase
         scraper.scrape
         assert_equal 3, scraper.count
     end
+
 
     def test_should_pass_element_to_extractor
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
@@ -156,6 +164,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal "123", scraper.concat
     end
 
+
     def test_should_process_elements_in_order
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
@@ -167,6 +176,7 @@ class ScraperTest < Test::Unit::TestCase
         scraper.scrape
         assert_equal "12", scraper.concat
     end
+
 
     def test_should_process_once_if_extractor_returns_true
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
@@ -200,6 +210,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal nil, scraper.second
     end
 
+
     def test_should_process_once_if_skipped
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
@@ -219,6 +230,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal nil, scraper.second
     end
 
+
     def test_should_process_and_skip_skipped_children
         html = %Q{<div><div id="1"></div><div id="2"></div><div id="3"></div></div>}
         scraper = new_scraper(html) do
@@ -235,6 +247,7 @@ class ScraperTest < Test::Unit::TestCase
         scraper.scrape
         assert_equal "13", scraper.concat
     end
+
 
     def test_should_process_and_skip_descendants
         html = %Q{<div id="1"><div id="2"><div id="3"></div></div</div>}
@@ -302,6 +315,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal "2", scraper.concat
     end
 
+
     def test_should_provide_all_accessors
         time = Time.new.rfc2822
         Net::HTTP.on_get do |address, path, headers|
@@ -332,6 +346,7 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal "other-encoding", scraper.page_info[:encoding]
         assert_equal "html", scraper.document.name
     end
+
 
     def test_should_process_end_to_end
         Net::HTTP.on_get do |address, path, headers|
@@ -500,8 +515,6 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
-
-
     #
     # Root element tests.
     #
@@ -551,6 +564,26 @@ class ScraperTest < Test::Unit::TestCase
         assert both_parts.body
     end
 
+
+    # Test prepare/result.
+
+    def test_should_call_prepare_and_result
+        # Extracting the attribute skips the second match.
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = new_scraper(html) do
+            process "div" do |element|
+                @count +=1
+            end
+            define_method :prepare do
+                @count = 1
+            end
+            define_method :result do
+                @count
+            end
+        end
+        result = scraper.scrape
+        assert_equal 4, result
+    end
 
 
 private

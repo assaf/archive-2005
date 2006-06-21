@@ -69,19 +69,22 @@ module Scraper
         # that matches element, and an extractor that does something interesting
         # with their value.
         #
+        # Rules are processed in the order in which they are defined. Use #rules
+        # if you need to change the order of processing.
+        #
         # == Selector
         #
         # The first argument is a selector. It selects elements from the document
         # that are potential candidates for extraction. Each selected element is
         # passed to the extractor.
         #
-        # The +selector+ argument may be a string, an Scraper::Selector object or
+        # The +selector+ argument may be a string, an HTML::Selector object or
         # any object that responds to the +select+ method. Passing an Array
         # (responds to +select+) will not do anything useful.
         #
         # String selectors support value substitution, replacing question marks
         # (?) in the selector expression with values from the method arguments.
-        # See Scraper::Selector for more information.
+        # See HTML::Selector for more information.
         #
         # == Extractor
         #
@@ -152,7 +155,7 @@ module Scraper
                 "Missing selector: the first argument tells us what to select" if
                 selector.empty?
             if selector[0].is_a?(String)
-                selector = Scraper::Selector.new(*selector)
+                selector = HTML::Selector.new(*selector)
             else
                 raise ArgumentError, "Selector must respond to select() method" unless
                     selector.respond_to?(:select)
@@ -183,13 +186,13 @@ module Scraper
         # If the selector is defined with a block, all selected elements are
         # passed to the block and the result of the block is returned.
         #
-        # The +selector+ argument may be a string, an Scraper::Selector object or
+        # The +selector+ argument may be a string, an HTML::Selector object or
         # any object that responds to the +select+ method. Passing an Array
         # (responds to +select+) will not do anything useful.
         #
         # String selectors support value substitution, replacing question marks
         # (?) in the selector expression with values from the method arguments.
-        # See Scraper::Selector for more information.
+        # See HTML::Selector for more information.
         #
         # When using a block, the last statement is the response. Do not use
         # +return+, use +next+ if you want to return a value before the last
@@ -199,7 +202,7 @@ module Scraper
                 "Missing selector: the first argument tells us what to select" if
                 selector.empty?
             if selector[0].is_a?(String)
-                selector = Scraper::Selector.new(*selector)
+                selector = HTML::Selector.new(*selector)
             else
                 raise ArgumentError, "Selector must respond to select() method" unless
                     selector.respond_to?(:select)
@@ -391,6 +394,13 @@ module Scraper
         end
 
 
+        # Returns an array of rules defined for this class. You can use this
+        # array to change the order of rules.
+        def self.rules()
+            @rules
+        end
+
+
         # Scrapes the document and returns the result.
         #
         # If the scraper was created with a URL, retrieve the page and parse it.
@@ -413,6 +423,8 @@ module Scraper
             when HTML::Node: stack = [@document.find(:tag=>option(:root_element))]
             else return
             end
+            # Call prepare with the document, but before doing anything else.
+            prepare
             # @skip stores all the elements we want to skip (see #skip).
             # rules stores all the rules we want to process with this
             # scraper, based on the class definition.
@@ -553,6 +565,15 @@ module Scraper
         end
 
 
+        # Called by #scrape after creating the document, but before running
+        # any processing rules.
+        #
+        # You can override this method to do any preparation work. The document
+        # is accessible by calling #document.
+        def prepare()
+        end
+
+
         # Returns the result of a succcessful scrape.
         #
         # This method is called by #scrape after running all the rules on the
@@ -569,6 +590,17 @@ module Scraper
         # calling this method multiple times returns the same result.
         def result()
             return self if @extracted
+        end
+
+
+        # Returns the value of an option.
+        #
+        # Returns the value of an option passed to the scraper on creation.
+        # If not specified, return the value of the option set for this
+        # scraper class. Options are inherited from the parent class.
+        def option(symbol)
+            return @options.has_key?(symbol) ? @options[symbol] :
+                self.class.instance_variable_get(:@options)[symbol]
         end
 
 
@@ -682,17 +714,6 @@ private
             # Duplicate options and rules to any inherited class.
             child.instance_variable_set(:@options, @options.dup)
             child.instance_variable_set(:@rules, @rules.dup)
-        end
-
-
-        # Get the value of the option.
-        #
-        # If the option was passed to the object during instantiation,
-        # use that value. Otherwise, use the class value. The class
-        # value is inherited from the superclass when extending it.
-        def option(symbol)
-            return @options.has_key?(symbol) ? @options[symbol] :
-                self.class.instance_variable_get(:@options)[symbol]
         end
 
     end
