@@ -162,13 +162,16 @@ module Scraper
 
 
         # :call-seq:
-        #   parse_page(html, encoding?) => html
+        #   parse_page(html, encoding?, tidy_options?) => html
         #
         # Parses an HTML page and returns the encoding and HTML element.
         # Raises HTMLParseError exceptions if it cannot parse the HTML.
+        #
+        # To use Tidy, pass a Hash with the required Tidy options.
+        # If you don't have any specific options besides the default,
+        # pass an empty Hash.
         def self.parse_page(content, encoding = nil, tidy_options = nil)
             begin
-                find_tidy
                 # Get the document encoding from the meta header.
                 if meta = content.match(/(<meta\s*([^>]*)http-equiv=['"]?content-type['"]?([^>]*))/i)
                     if meta = meta[0].match(/charset=([\w-]*)/i)
@@ -177,13 +180,20 @@ module Scraper
                 end
                 encoding ||= "utf8"
                 # Parse HTML into HTML tree.
-                options = TIDY_OPTIONS.clone#.update(tidy_options || {})
-                options[:input_encoding] = encoding.gsub("-", "").downcase
-                Tidy.open(options) do |tidy|
-                    html = tidy.clean(content)
-                    document = HTML::Document.new(html).find(:tag=>"html")
-                    return {:document=>document, :encoding=>encoding}
+                if tidy_options
+                    # Make sure the Tidy path is set and always apply the default
+                    # options (these only control things like errors, output type).
+                    find_tidy
+                    tidy_options.update(TIDY_OPTIONS)
+                    tidy_options[:input_encoding] = encoding.gsub("-", "").downcase
+                    document = Tidy.open(tidy_options) do |tidy|
+                        html = tidy.clean(content)
+                        HTML::Document.new(html).find(:tag=>"html")
+                    end
+                else
+                    document = HTML::HTMLParser.parse(content).root
                 end
+                return {:document=>document, :encoding=>encoding}
             rescue Exception=>error
                 raise HTMLParseError.new(error)
             end

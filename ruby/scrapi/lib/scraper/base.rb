@@ -15,7 +15,7 @@ module Scraper
         end
 
         # Set these for the base class, they are inherited by all subclasses.
-        @options = {:root_element => "html"}
+        @options = {}
         @rules = []
 
 
@@ -306,8 +306,7 @@ module Scraper
         #
         # The first argument provides the input document. It can be one of:
         # * <tt>URI</tt> -- Retrieve an HTML page from this URL and scrape it.
-        # * <tt>String</tt> -- The HTML page as a string. Will be cleaned
-        #   up using Tidy.
+        # * <tt>String</tt> -- The HTML page as a string.
         # * <tt>HTML::Node</tt> -- An HTML node, can be a document or element.
         #
         # You can specify options for the scraper class, or override these
@@ -323,8 +322,8 @@ module Scraper
         # The following options are supported for parsing the HTML:
         # * <tt>:root_element</tt> -- The root element to scrape, see
         #   also #root_elements.
-        # * <tt>:tidy_options</tt> -- Additional options to pass to Tidy,
-        #   see also #tidy_options.
+        # * <tt>:tidy_options</tt> -- Options to pass to Tidy. Options are
+        #   required in order to use Tidy, see #tidy_options for details.
         #
         # The result is returned by calling the #result method. The default
         # implementation returns +self+ if any extractor returned true,
@@ -371,6 +370,10 @@ module Scraper
 
 
         # Options to pass to Tidy.
+        #
+        # You must provide options in order to use Tidy, otherwise it defaults
+        # to using the HTMLParser. If you don't have any options besides the
+        # default, pass an empty Hash.
         #
         # This method sets the option for the class. Classes inherit options
         # from their parents. You can also pass options to the scraper object
@@ -420,7 +423,15 @@ module Scraper
             # Retrieve the document. This may raise HTTPError or HTMLParseError.
             case document
             when Array: stack = @document.reverse # see below
-            when HTML::Node: stack = [@document.find(:tag=>option(:root_element))]
+            when HTML::Node:
+                # If a root element is specified, start selecting from there.
+                # The stack is empty if we can't find any root element (makes
+                # sense). However, the node we're going to process may be
+                # a tag, or an HTML::Document.root which is the equivalent of
+                # a document fragment.
+                root_element = option(:root_element)
+                root = root_element ? @document.find(:tag=>root_element) : @document
+                stack = root ? (root.tag? ? [root] : root.children.reverse) : []
             else return
             end
             # Call prepare with the document, but before doing anything else.

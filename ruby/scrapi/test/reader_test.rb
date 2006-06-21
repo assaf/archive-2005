@@ -13,7 +13,7 @@ require "webrick/https"
 require "logger"
 require "stringio"
 require File.join(File.dirname(__FILE__), "mock_net_http")
-require File.join(File.dirname(__FILE__), "../lib", "scraper")
+require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
 class ReaderTest < Test::Unit::TestCase
@@ -196,16 +196,27 @@ class ReaderTest < Test::Unit::TestCase
     #
 
     def test_should_parse_html_page
-        html = Reader.parse_page("<p>something</p>")[:document]
+        html = Reader.parse_page("<html><head></head><body><p>something</p></body></html>")[:document]
         assert_equal 1, html.find_all(:tag=>"head").size
         assert_equal 1, html.find_all(:tag=>"body").size
         assert_equal 1, html.find(:tag=>"body").find_all(:tag=>"p").size
         assert_equal "something", html.find(:tag=>"body").find(:tag=>"p").children.join
     end
-    
+
+
+    def test_should_use_tidy_if_specified
+        # This will only work with Tidy which adds the head/body parts,
+        # HTMLParser doesn't fix the HTML.
+        html = Reader.parse_page("<p>something</p>", nil, {})[:document]
+        assert_equal 1, html.find_all(:tag=>"head").size
+        assert_equal 1, html.find_all(:tag=>"body").size
+        assert_equal 1, html.find(:tag=>"body").find_all(:tag=>"p").size
+        assert_equal "something", html.find(:tag=>"body").find(:tag=>"p").children.join
+    end
+
 
     #
-    # Tests fetch_page and more.
+    # Other tests.
     #
 
     def test_should_handle_encoding_correctly

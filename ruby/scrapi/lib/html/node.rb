@@ -134,27 +134,7 @@ module HTML #:nodoc:
 
       equivalent
     end
-
-
-    def detach()
-        if @parent
-            @parent.children.delete_if { |child| child.equal?(self) }
-            @parent = nil
-        end
-    end
-
-
-    def each(value = nil, &block)
-        yield self, value
-        if @children
-            @children.each do |child|
-                child.each value, &block
-            end
-        end
-        value
-    end
- 
- 
+  
     class <<self
       def parse(parent, line, pos, content, strict=true)
         if content !~ /^<\S/

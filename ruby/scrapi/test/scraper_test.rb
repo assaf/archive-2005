@@ -9,7 +9,7 @@ require "rubygems"
 require "time"
 require "test/unit"
 require File.join(File.dirname(__FILE__), "mock_net_http")
-require File.join(File.dirname(__FILE__), "../lib", "scraper")
+require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
 class ScraperTest < Test::Unit::TestCase
@@ -344,7 +344,6 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal time, scraper.page_info[:last_modified]
         assert_equal "etag", scraper.page_info[:etag]
         assert_equal "other-encoding", scraper.page_info[:encoding]
-        assert_equal "html", scraper.document.name
     end
 
 
@@ -586,11 +585,27 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
-private
+protected
 
     def new_scraper(what, &block)
         cls = Class.new(Scraper::Base)
         cls.root_element nil
+        cls.instance_eval &block if block
+        cls.new(what)
+    end
+
+end
+
+
+# Repeats the same set of tests, but using Tidy instead of HTMLParser.
+class ScraperUsingTidyTest < ScraperTest
+
+protected
+
+    def new_scraper(what, &block)
+        cls = Class.new(Scraper::Base)
+        cls.root_element nil
+        cls.tidy_options({})
         cls.instance_eval &block if block
         cls.new(what)
     end

@@ -6,7 +6,7 @@
 
 
 require "test/unit"
-require File.join(File.dirname(__FILE__), "../lib", "scraper")
+require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
 class SelectorTest < Test::Unit::TestCase
