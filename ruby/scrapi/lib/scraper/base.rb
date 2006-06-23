@@ -5,6 +5,9 @@
 # Code and documention: http://labnotes.org
 
 
+require File.join(File.dirname(__FILE__), "reader")
+
+
 module Scraper
 
 
@@ -15,6 +18,7 @@ module Scraper
         end
 
         # Set these for the base class, they are inherited by all subclasses.
+        # :nodoc:
         @options = {}
         @rules = []
 
@@ -440,66 +444,72 @@ module Scraper
             # rules stores all the rules we want to process with this
             # scraper, based on the class definition.
             @skip = []
+            @stop = false
             rules = self.class.instance_variable_get(:@rules)
-            # Process the document one node at a time. We process elements from
-            # the end of the stack, so each time we visit child elements, we
-            # add them to the end of the stack in reverse order.
-            while node = stack.pop
-                skip_this = false
-                # Only match nodes that are elements, ignore text nodes.
-                # Also ignore any element that's on the skip list, and if found
-                # one, remove it from the list (since we never visit the same
-                # element twice). But an element may be added twice to the skip
-                # list.
-                # Note: equal? is faster than == for nodes.
-                next unless node.tag?
-                @skip.delete_if { |s| skip_this = true if s.equal?(node) }
-                next if skip_this
-
-                # Run through all the rules until we process the element or
-                # run out of rules. If skip_this=true then we processed the
-                # element and we can break out of the loop. However, we might
-                # process (and skip) descedants so also watch the skip list.
-                rules.each do |selector, extractor|
-                    break if skip_this
-                    # The result of calling match (selected) is nil, element
-                    # or array of elements. We turn it into an array to process
-                    # one element at a time. We process all elements that are
-                    # not on the skip list (we haven't visited them yet).
-                    if selected = selector.match(node)
-                        selected = [selected] unless selected.is_a?(Array)
-                        selected.each do |element|
-                            # Do not process elements we already skipped (see
-                            # above). However, this time we may visit an element
-                            # twice, since selected elements may be descendants
-                            # of the current element on the stack. In rare cases
-                            # two elements on the stack may pick the same
-                            # descendants.
-                            next if @skip.find { |s| s.equal?(element) }
-                            # Call the extractor method with this element.
-                            # If it returns true, skip the element and if the
-                            # current element, don't process any more rules.
-                            # Again, pay attention to descendants.
-                            @element = element
-                            if extractor.bind(self).call(element)
-                                @extracted = true
-                                if element.equal?(node)
-                                    skip_this = true
-                                else
-                                    @skip << element
+            begin
+                # Process the document one node at a time. We process elements
+                # from the end of the stack, so each time we visit child elements,
+                # we add them to the end of the stack in reverse order.
+                while node = stack.pop
+                    break if @stop
+                    skip_this = false
+                    # Only match nodes that are elements, ignore text nodes.
+                    # Also ignore any element that's on the skip list, and if
+                    # found one, remove it from the list (since we never visit
+                    # the same element twice). But an element may be added twice
+                    # to the skip list.
+                    # Note: equal? is faster than == for nodes.
+                    next unless node.tag?
+                    @skip.delete_if { |s| skip_this = true if s.equal?(node) }
+                    next if skip_this
+    
+                    # Run through all the rules until we process the element or
+                    # run out of rules. If skip_this=true then we processed the
+                    # element and we can break out of the loop. However, we might
+                    # process (and skip) descedants so also watch the skip list.
+                    rules.each do |selector, extractor|
+                        break if skip_this
+                        # The result of calling match (selected) is nil, element
+                        # or array of elements. We turn it into an array to
+                        # process one element at a time. We process all elements
+                        # that are not on the skip list (we haven't visited
+                        # them yet).
+                        if selected = selector.match(node)
+                            selected = [selected] unless selected.is_a?(Array)
+                            selected.each do |element|
+                                # Do not process elements we already skipped
+                                # (see above). However, this time we may visit
+                                # an element twice, since selected elements may
+                                # be descendants of the current element on the
+                                # stack. In rare cases two elements on the stack
+                                # may pick the same descendants.
+                                next if @skip.find { |s| s.equal?(element) }
+                                # Call the extractor method with this element.
+                                # If it returns true, skip the element and if
+                                # the current element, don't process any more
+                                # rules. Again, pay attention to descendants.
+                                @element = element
+                                if extractor.bind(self).call(element)
+                                    @extracted = true
+                                    if element.equal?(node)
+                                        skip_this = true
+                                    else
+                                        @skip << element
+                                    end
                                 end
                             end
                         end
                     end
+    
+                    # If we did not skip the element, we're going to process its
+                    # children. Reverse order since we're popping from the stack.
+                    if !skip_this && children = node.children
+                        stack += children.reverse
+                    end
                 end
-
-                # If we did not skip the element, we're going to process its
-                # children. Reverse order since we're popping from the stack.
-                if !skip_this && children = node.children
-                    stack += children.reverse
-                end
+            ensure
+                @skip = @element = nil
             end
-            @skip = @element = nil
             return result
         end
 
@@ -533,7 +543,8 @@ module Scraper
                 end
                 if @source.is_a?(String)
                     # Parse the page. May raise HTMLParseError.
-                    parsed = Reader.parse_page(@source, @page_info[:encoding], option(:tidy))
+                    parsed = Reader.parse_page(@source, @page_info[:encoding],
+                        option(:tidy))
                     @document = parsed[:document]
                     @page_info[:encoding] = parsed[:encoding]
                 elsif @source.is_a?(HTML::Node)
@@ -573,6 +584,14 @@ module Scraper
             # Calling skip(element) as the last statement is
             # redundant by design.
             return true
+        end
+
+
+        # Stops processing this page. You can call this early on if you
+        # discover there is no interesting information on the page, or
+        # done extracting all useful information.
+        def stop()
+            @stop = true
         end
 
 

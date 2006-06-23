@@ -316,6 +316,20 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
+    def test_should_stopped_when_asked_to
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = new_scraper(html) do
+            process "div" do |element|
+                @concat = (@concat || "") << (element.attributes["id"] || "")
+                stop
+            end
+            attr :concat
+        end
+        scraper.scrape
+        assert_equal "1", scraper.concat
+    end
+
+
     def test_should_provide_all_accessors
         time = Time.new.rfc2822
         Net::HTTP.on_get do |address, path, headers|
