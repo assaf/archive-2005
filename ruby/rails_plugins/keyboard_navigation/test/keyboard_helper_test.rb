@@ -1,5 +1,10 @@
-require File.dirname(__FILE__) + "/../../../../test/test_helper"
-require File.dirname(__FILE__) + "/../init"
+unless defined?(RAILS_ROOT)
+    RAILS_ROOT = ENV["RAILS_ROOT"] ||
+        File.join(File.dirname(__FILE__), "../../../../")
+end
+require File.join(RAILS_ROOT, "test", "test_helper")
+require File.join(File.dirname(__FILE__), "..", "init")
+
 
 # Re-raise errors caught by the controller.
 class TestController < ActionController::Base ; def rescue_action(e) raise e end; end

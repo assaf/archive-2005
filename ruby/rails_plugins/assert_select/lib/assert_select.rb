@@ -6,7 +6,7 @@
 
 
 require "test/unit"
-require File.join(File.dirname(__FILE__), "html_selector")
+
 
 module Test #:nodoc:
     module Unit #:nodoc:
@@ -210,7 +210,7 @@ module Test #:nodoc:
                         raise ArgumentError, "I don't support the equality test #{key}"
                     end
                 end
-                    
+        
                 yield matches if block_given?
                 matches
             end
