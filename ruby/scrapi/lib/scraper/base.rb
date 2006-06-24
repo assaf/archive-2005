@@ -174,14 +174,22 @@ module Scraper
                     selector.respond_to?(:select)
                 selector = selector[0]
             end
+            # Create a method for fast evaluation.
             define_method :__extractor, block
-            if name && find = @rules.find {|rule| rule[2] == name }
-                find[0] = selector
-                find[1] = instance_method(:__extractor)
-            else
-                @rules << [selector, instance_method(:__extractor), name]
-            end
+            method = instance_method(:__extractor)
             remove_method :__extractor
+            # Decide where to put the rule.
+            pos = @rules.length
+            if name
+                if find = @rules.find {|rule| rule[2] == name }
+                    find[0] = selector
+                    find[1] = method
+                else
+                    @rules << [selector, method, name]
+                end
+            else
+                @rules << [selector, method, name]
+            end
         end
 
 
@@ -476,7 +484,7 @@ module Scraper
                     next unless node.tag?
                     @skip.delete_if { |s| skip_this = true if s.equal?(node) }
                     next if skip_this
-    
+
                     # Run through all the rules until we process the element or
                     # run out of rules. If skip_this=true then we processed the
                     # element and we can break out of the loop. However, we might
@@ -514,7 +522,7 @@ module Scraper
                             end
                         end
                     end
-    
+
                     # If we did not skip the element, we're going to process its
                     # children. Reverse order since we're popping from the stack.
                     if !skip_this && children = node.children

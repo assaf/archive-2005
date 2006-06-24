@@ -599,6 +599,10 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
+    # TODO: Test the following:
+    # Named rules.
+    # before_ after_ named rules.
+
 protected
 
     def new_scraper(what, &block)
