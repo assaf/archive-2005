@@ -9,7 +9,7 @@ require "test/unit"
 require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
-class SelectorTest < Test::Unit::TestCase
+class NodeExtTest < Test::Unit::TestCase
 
     def setup
     end

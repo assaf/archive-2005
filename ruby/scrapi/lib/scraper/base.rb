@@ -66,15 +66,21 @@ module Scraper
 
 
         # :call-seq:
-        #   process(selector, values?, extractor)
-        #   process(selector, values?) { |element| ... }
+        #   process(symbol?, selector, values?, extractor)
+        #   process(symbol?, selector, values?) { |element| ... }
         #
         # Defines a processing rule. A processing rule consists of a selector
         # that matches element, and an extractor that does something interesting
         # with their value.
         #
+        # == Symbol
+        #
         # Rules are processed in the order in which they are defined. Use #rules
         # if you need to change the order of processing.
+        #
+        # Rules can be named or anonymous. If the first argument is a symbol,
+        # it is used as the rule name. You can use the rule name to position,
+        # remove or replace it.
         #
         # == Selector
         #
@@ -143,6 +149,9 @@ module Scraper
         #
         # posts = ScrapePosts.scrape(html).posts
         def self.process(*selector, &block)
+            # First argument may be the rule name.
+            name = selector.shift if
+                selector.first.is_a?(Symbol)
             # Extractor is either a block, or the last argument.
             unless block
                 if selector.last.is_a?(Proc)
@@ -166,7 +175,12 @@ module Scraper
                 selector = selector[0]
             end
             define_method :__extractor, block
-            @rules << [selector, instance_method(:__extractor)]
+            if name && find = @rules.find {|rule| rule[2] == name }
+                find[0] = selector
+                find[1] = instance_method(:__extractor)
+            else
+                @rules << [selector, instance_method(:__extractor), name]
+            end
             remove_method :__extractor
         end
 
