@@ -186,7 +186,7 @@ module Test #:nodoc:
                 equals.each do |type, value|
                     case type
                     when :text
-                        stack = matches.clone
+                        stack = matches.clone.reverse
                         text = ""
                         while node = stack.pop
                             if node.tag?
