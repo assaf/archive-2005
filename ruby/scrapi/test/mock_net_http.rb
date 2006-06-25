@@ -1,17 +1,8 @@
-# ScrAPI toolkit for Ruby
-#
-# Copyright (c) 2006 Assaf Arkin, under Creative Commons Attribution and/or MIT License
-# Developed for http://co.mments.com
-# Code and documention: http://labnotes.org
-
-
 require "net/http"
-
 
 class Net::HTTP
 
     @@on_get = nil
-
 
     # Reset get method to default behavior.
     def self.reset_on_get
@@ -35,26 +26,30 @@ class Net::HTTP
     end
 
 
-    alias :_request_get :request_get
+    unless method_defined?(:mocked_request_get)
+        alias :mocked_request_get :request_get
 
-    def request_get(path, headers)
-        # If we have prescribed behavior for the next search, execute it,
-        # otherwise, go with the default.
-        if @@on_get
-            response, body = @@on_get.call(@address, path, headers)
-            # Stuff the body into the response. No other way, since read_body
-            # attempts to read from a socket and we're too lazy to stub a socket.
-            response.instance_variable_set(:@mock_body, body.to_s)
-            class << response
-                def read_body()
-                    @mock_body
+        def request_get(path, headers)
+            # If we have prescribed behavior for the next search, execute it,
+            # otherwise, go with the default.
+            if @@on_get
+                response, body = @@on_get.call(@address, path, headers)
+                # Stuff the body into the response. No other way, since read_body
+                # attempts to read from a socket and we're too lazy to stub a socket.
+                response.instance_variable_set(:@mock_body, body.to_s)
+                class << response
+                    def read_body()
+                        @mock_body
+                    end
                 end
+                response
+            else
+                mocked_request_get(path, headers)
             end
-            response
-        else
-            _request_get(path, headers)
         end
+
     end
+
 
 end
 

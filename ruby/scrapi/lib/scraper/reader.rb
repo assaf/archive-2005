@@ -22,6 +22,11 @@ module Scraper
             def initialize(cause = nil)
                 @cause = cause
             end
+
+
+            def to_s
+                @cause ? "#{super}: #{@cause}" : super
+            end
         
         end
 
