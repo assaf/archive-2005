@@ -18,7 +18,7 @@ module Scraper
         class HTTPError < StandardError
 
             attr_reader :cause
-    
+
             def initialize(cause = nil)
                 @cause = cause
             end
@@ -27,7 +27,7 @@ module Scraper
             def to_s
                 @cause ? "#{super}: #{@cause}" : super
             end
-        
+
         end
 
         class HTTPTimeoutError < HTTPError ; end
@@ -37,8 +37,25 @@ module Scraper
         class HTTPInvalidURLError < HTTPError ; end
         class HTTPRedirectLimitError < HTTPError ; end
 
+
+        class HTMLParseError < StandardError
+
+            attr_reader :cause
+
+            def initialize(cause = nil)
+                @cause = cause
+            end
+
+            def to_s
+                @cause ? "#{super}: #{@cause}" : super
+            end
+
+        end
+
+
         unless const_defined? :REDIRECT_LIMIT
             REDIRECT_LIMIT = 3
+            DEFAULT_TIMEOUT = 30
         end
 
         unless const_defined? :TIDY_OPTIONS
@@ -55,6 +72,12 @@ module Scraper
         end
 
 
+        Page = Struct.new(:url, :content, :encoding, :last_modified, :etag)
+        Parsed = Struct.new(:document, :encoding)
+
+
+    module_function
+
         # :call-seq:
         #   read_page(url, options?) => response
         #
@@ -66,6 +89,7 @@ module Scraper
         # * :etag -- ETag header (from a previous request).
         # * :redirect_limit -- Number of redirects allowed (default is 3).
         # * :user_agent -- The User-Agent header to send.
+        # * :timeout -- HTTP open connection/read timeouts (in second).
         #
         # It returns a hash with the following information:
         # * :url -- The URL of the requested page (may change by permanent redirect)
@@ -77,7 +101,7 @@ module Scraper
         # If the page has not been modified from the last request, the content is nil.
         #
         # Raises HTTPError if an error prevents it from reading the page.
-        def self.read_page(url, options = nil)
+        def read_page(url, options = nil)
             options ||= {}
             redirect_limit = options[:redirect_limit] || REDIRECT_LIMIT
             raise HTTPRedirectLimitError if redirect_limit == 0
@@ -95,8 +119,8 @@ module Scraper
                 http = Net::HTTP.new(uri.host, uri.port)
                 http.use_ssl = (uri.scheme == "https")
                 http.close_on_empty_response = true
-                http.open_timeout = 30
-                http.read_timeout = 30
+                http.open_timeout = http.read_timeout =
+                    options[:http_timeout] || DEFAULT_TIMEOUT
                 path = uri.path.dup # required so we don't modify path
                 path << "?#{uri.query}" if uri.query
                 # TODO: Specify which content types are accepted.
@@ -119,19 +143,11 @@ module Scraper
                         match[1]
                     end
                 end
-                return {
-                    :url=>(options[:source_url] || uri),
-                    :content=>response.body,
-                    :encoding=>encoding,
-                    :last_modified=>response["Last-Modified"],
-                    :etag=>response["ETag"]
-                }
+                return Page[(options[:source_url] || uri), response.body, encoding,
+                    response["Last-Modified"], response["ETag"]]
             when Net::HTTPNotModified
-                return {
-                    :url=>(options[:source_url] || uri),
-                    :last_modified=>options[:last_modified],
-                    :etag=>options[:etag]
-                }
+                return Page[(options[:source_url] || uri), nil, nil,
+                    options[:last_modified], options[:etag]]
             when Net::HTTPMovedPermanently
                 return read_page(response["location"], # New URL takes effect
                     :last_modified=>options[:last_modified],
@@ -155,17 +171,6 @@ module Scraper
         end
 
 
-        class HTMLParseError < StandardError
-
-            attr_reader :cause
-
-            def initialize(cause = nil)
-                @cause = cause
-            end
-
-        end
-
-
         # :call-seq:
         #   parse_page(html, encoding?, tidy_options?) => html
         #
@@ -175,7 +180,7 @@ module Scraper
         # To use Tidy, pass a Hash with the required Tidy options.
         # If you don't have any specific options besides the default,
         # pass an empty Hash.
-        def self.parse_page(content, encoding = nil, tidy_options = nil)
+        def parse_page(content, encoding = nil, tidy_options = nil)
             begin
                 # Get the document encoding from the meta header.
                 if meta = content.match(/(<meta\s*([^>]*)http-equiv=['"]?content-type['"]?([^>]*))/i)
@@ -198,16 +203,17 @@ module Scraper
                 else
                     document = HTML::HTMLParser.parse(content).root
                 end
-                return {:document=>document, :encoding=>encoding}
+                return Parsed[document, encoding]
             rescue Exception=>error
                 raise HTMLParseError.new(error)
             end
         end
 
 
-protected
+    protected
+    module_function
 
-        def self.find_tidy()
+        def find_tidy()
             return if Tidy.path
             begin
                 Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.so")

@@ -353,11 +353,11 @@ class ScraperTest < Test::Unit::TestCase
         end
         scraper = new_scraper(URI.parse("http://localhost/source"))
         scraper.scrape
-        assert_equal "http://localhost/source", scraper.page_info[:original_url].to_s
-        assert_equal "http://localhost/redirect", scraper.page_info[:url].to_s
-        assert_equal time, scraper.page_info[:last_modified]
-        assert_equal "etag", scraper.page_info[:etag]
-        assert_equal "other-encoding", scraper.page_info[:encoding]
+        assert_equal "http://localhost/source", scraper.page_info.original_url.to_s
+        assert_equal "http://localhost/redirect", scraper.page_info.url.to_s
+        assert_equal time, scraper.page_info.last_modified
+        assert_equal "etag", scraper.page_info.etag
+        assert_equal "other-encoding", scraper.page_info.encoding
     end
 
 

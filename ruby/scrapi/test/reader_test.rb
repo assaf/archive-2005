@@ -54,10 +54,10 @@ class ReaderTest < Test::Unit::TestCase
         end
         response = Reader.read_page("http://localhost/path?query",
             :user_agent=>"MyUserAgent")
-        assert_equal "http://localhost/path?query", response[:url].to_s
-        assert_equal "nothing", response[:content]
-        assert_equal nil, response[:last_modified]
-        assert_equal nil, response[:etag]
+        assert_equal "http://localhost/path?query", response.url.to_s
+        assert_equal "nothing", response.content
+        assert_equal nil, response.last_modified
+        assert_equal nil, response.etag
     end
 
 
@@ -122,7 +122,7 @@ class ReaderTest < Test::Unit::TestCase
         end
         assert_nothing_raised() do
             response = Reader.read_page("http://localhost/path?query")
-            assert_equal "http://localhost/path?query", response[:url].to_s
+            assert_equal "http://localhost/path?query", response.url.to_s
         end
     end
 
@@ -141,7 +141,7 @@ class ReaderTest < Test::Unit::TestCase
         end
         assert_nothing_raised() do
             response = Reader.read_page("http://localhost/path?query")
-            assert_equal "http://localhost/", response[:url].to_s
+            assert_equal "http://localhost/", response.url.to_s
         end
     end
 
@@ -159,8 +159,8 @@ class ReaderTest < Test::Unit::TestCase
             [response, "nothing"]
         end
         response = Reader.read_page("http://localhost/path?query")
-        assert_equal time, response[:last_modified]
-        assert_equal "etag", response[:etag]
+        assert_equal time, response.last_modified
+        assert_equal "etag", response.etag
         Net::HTTP.on_get do |address, path, headers|
             if headers["Last-Modified"] == time and headers["ETag"] == "etag"
                 [Net::HTTPNotModified.new(Net::HTTP.version_1_2, 304, "Same"), ""]
@@ -169,12 +169,12 @@ class ReaderTest < Test::Unit::TestCase
             end
         end
         response = Reader.read_page("http://localhost/path?query")
-        assert_equal "nothing", response[:content]
+        assert_equal "nothing", response.content
         response = Reader.read_page("http://localhost/path?query",
             :last_modified=>time, :etag=>"etag")
-        assert_equal nil, response[:body]
-        assert_equal time, response[:last_modified]
-        assert_equal "etag", response[:etag]
+        assert_equal nil, response.content
+        assert_equal time, response.last_modified
+        assert_equal "etag", response.etag
     end
 
 
@@ -187,7 +187,7 @@ class ReaderTest < Test::Unit::TestCase
             [response, ""]
         end
         response = Reader.read_page("http://localhost/path?query")
-        assert_equal "bogus", response[:encoding]
+        assert_equal "bogus", response.encoding
     end
 
 
@@ -196,7 +196,7 @@ class ReaderTest < Test::Unit::TestCase
     #
 
     def test_should_parse_html_page
-        html = Reader.parse_page("<html><head></head><body><p>something</p></body></html>")[:document]
+        html = Reader.parse_page("<html><head></head><body><p>something</p></body></html>").document
         assert_equal 1, html.find_all(:tag=>"head").size
         assert_equal 1, html.find_all(:tag=>"body").size
         assert_equal 1, html.find(:tag=>"body").find_all(:tag=>"p").size
@@ -207,7 +207,7 @@ class ReaderTest < Test::Unit::TestCase
     def test_should_use_tidy_if_specified
         # This will only work with Tidy which adds the head/body parts,
         # HTMLParser doesn't fix the HTML.
-        html = Reader.parse_page("<p>something</p>", nil, {})[:document]
+        html = Reader.parse_page("<p>something</p>", nil, {}).document
         assert_equal 1, html.find_all(:tag=>"head").size
         assert_equal 1, html.find_all(:tag=>"body").size
         assert_equal 1, html.find(:tag=>"body").find_all(:tag=>"p").size
@@ -227,8 +227,8 @@ class ReaderTest < Test::Unit::TestCase
                 resp.body = "Content comes here"
             end
             page = Reader.read_page(WEBRICK_TEST_URL)
-            page = Reader.parse_page(page[:content], page[:encoding])
-            assert_equal "my-encoding", page[:encoding]
+            page = Reader.parse_page(page.content, page.encoding)
+            assert_equal "my-encoding", page.encoding
         end
         # Test content encoding in HTML http-equiv header
         # that overrides content encoding returned in HTTP.
@@ -245,8 +245,8 @@ class ReaderTest < Test::Unit::TestCase
                 }
             end
             page = Reader.read_page(WEBRICK_TEST_URL)
-            page = Reader.parse_page(page[:content], page[:encoding])
-            assert_equal "other-encoding", page[:encoding]
+            page = Reader.parse_page(page.content, page.encoding)
+            assert_equal "other-encoding", page.encoding
         end
     end
 
@@ -275,9 +275,9 @@ class ReaderTest < Test::Unit::TestCase
                 Reader.read_page(WEBRICK_TEST_URL)
             end
             page = Reader.read_page(WEBRICK_TEST_URL.gsub("http", "https"))
-            page = Reader.parse_page(page[:content], page[:encoding])
+            page = Reader.parse_page(page.content, page.encoding)
             assert_equal "<title>test https</title>",
-                 page[:document].find(:tag=>"title").to_s
+                 page.document.find(:tag=>"title").to_s
             server.shutdown
         ensure
             server.shutdown if server
