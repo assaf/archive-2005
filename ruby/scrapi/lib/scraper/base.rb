@@ -341,7 +341,7 @@ module Scraper
                 stack = element.children
                 while node = stack.pop
                     if node.tag?
-                        stack += node.children.reverse
+                        stack.concat node.children.reverse
                     else
                         text << node.content
                     end
@@ -661,7 +661,7 @@ module Scraper
                     # If we did not skip the element, we're going to process its
                     # children. Reverse order since we're popping from the stack.
                     if !skip_this && children = node.children
-                        stack += children.reverse
+                        stack.concat children.reverse
                     end
                 end
             ensure
@@ -734,7 +734,7 @@ module Scraper
         #   end
         def skip(elements = nil)
             case elements
-            when Array: @skip += elements
+            when Array: @skip.concat elements
             when HTML::Node: @skip << elements
             when nil: @skip << self.element
             end

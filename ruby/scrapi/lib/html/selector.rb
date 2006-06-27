@@ -264,7 +264,7 @@ module HTML
                         matches = []
                         while element = next_element(element)
                             if subset = second.match(element)
-                                matches += subset
+                                matches.concat subset
                             end
                         end
                         matches.empty? ? nil : matches
@@ -276,7 +276,7 @@ module HTML
                         matches = []
                         element.children.each do |child|
                             if child.tag? and subset = second.match(child)
-                                matches += subset
+                                matches.concat subset
                             end
                         end
                         matches.empty? ? nil : matches
@@ -290,9 +290,9 @@ module HTML
                         while node = stack.pop
                             next unless node.tag?
                             if subset = second.match(node)
-                                matches += subset
+                                matches.concat subset
                             elsif children = node.children
-                                stack += children.reverse
+                                stack.concat children.reverse
                             end
                         end
                         matches.empty? ? nil : matches
@@ -382,7 +382,7 @@ module HTML
                         matches << match unless matches.any? { |item| item.equal?(match) }
                     end
                 elsif children = node.children
-                    stack += children.reverse
+                    stack.concat children.reverse
                 end
             end
             matches
