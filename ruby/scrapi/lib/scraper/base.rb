@@ -369,7 +369,7 @@ module Scraper
             # from their parents. You can also pass options to the scraper object
             # itself using the +:tidy_options+ option.
             def tidy_options(options)
-                options[:tidy_options] = options
+                self.options[:tidy_options] = options
             end
 
 
@@ -383,9 +383,8 @@ module Scraper
             # this option from their parents. You can also pass a root element
             # to the scraper object itself using the +:root_element+ option.
             def root_element(name)
-                options[:root_element] = name ? name.to_s : nil
+                self.options[:root_element] = name ? name.to_s : nil
             end
-
 
             # Returns the options for this class.
             def options()
@@ -507,8 +506,8 @@ module Scraper
             def inherited(child)
                 super
                 # Duplicate options and rules to any inherited class.
-                child.options.merge options
-                child.rules.concat rules
+                child.options.update self.options
+                child.rules.concat self.rules
             end
 
         end
