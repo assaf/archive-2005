@@ -110,6 +110,14 @@ class ScraperTest < Test::Unit::TestCase
             scraper.test(scraper.document).size
         assert scraper.first_test(scraper.document)
         assert_equal "1", scraper.first_test(scraper.document).attributes["id"]
+
+        scraper = new_scraper(html) do
+            selector :test, "div" do |element|
+                element[0].attributes["id"]
+            end
+        end
+        assert scraper.first_test(scraper.document)
+        assert_equal "1", scraper.first_test(scraper.document)
     end
 
 
