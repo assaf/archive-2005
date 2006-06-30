@@ -5,9 +5,6 @@
 # Code and documention: http://labnotes.org
 
 
-require "test/unit"
-
-
 module Test #:nodoc:
     module Unit #:nodoc:
 
