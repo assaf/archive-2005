@@ -403,7 +403,7 @@ module HTML
                     stack.concat children.reverse
                 end
             end
-            matches
+            return matches
         end
 
 
@@ -418,7 +418,7 @@ module HTML
                     stack.concat children.reverse
                 end
             end
-            matches
+            return nil
         end
 
 
