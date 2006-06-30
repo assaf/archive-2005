@@ -148,10 +148,13 @@ module Scraper
             # If the selector is defined with a block, all selected elements are
             # passed to the block and the result of the block is returned.
             #
-            # For convenience, a <tt>first_</tt> method is also created that returns
-            # (and yields) only the first selected element. For example:
+            # For convenience, a <tt>first_</tt> method is also created that
+            # returns (and yields) only the first selected element. For example:
             #   selector :post, "#post"
             #   @post = first_post
+            #
+            # Since the selector is defined with a block, both methods call that
+            # block with an array of elements.
             #
             # The +selector+ argument may be a string, an HTML::Selector object or
             # any object that responds to the +select+ method. Passing an Array
@@ -182,7 +185,7 @@ module Scraper
                     end
                     define_method "first_#{symbol}" do |element|
                         selected = selector.select_one(element)
-                        return block.call(selected) unless selected.empty?
+                        return block.call([selected]) if selected
                     end
                 else
                     define_method symbol do |element|
