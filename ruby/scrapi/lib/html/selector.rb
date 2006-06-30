@@ -135,8 +135,8 @@ module HTML
         # An invalid selector.
         class InvalidSelectorError < StandardError
         end
-    
-    
+
+
         # Parse each selector into six parts:
         # $1 element name or * (optional)
         # $2 ID name (including leading #, optional, #? allowed)
@@ -253,18 +253,24 @@ module HTML
                 when "+"
                     # Sibling selector: second statement is returned that will match element
                     # following current element.
-                    @depends = proc do |element|
-                        element = next_element(element)
-                        return element ? second.match(element) : nil
+                    @depends = lambda do |element, first|
+                        if element = next_element(element)
+                            second.match(element, first)
+                        end
                     end
                 when "~"
                     # Sibling (indirect) selector: second statement is returned that will match
                     # element following the current element.
-                    @depends = proc do |element|
+                    @depends = lambda do |element, first|
                         matches = []
                         while element = next_element(element)
-                            if subset = second.match(element)
-                                matches.concat subset
+                            if subset = second.match(element, first)
+                                if first && !subset.empty?
+                                    matches << subset.first
+                                    break
+                                else
+                                    matches.concat subset
+                                end
                             end
                         end
                         matches.empty? ? nil : matches
@@ -272,11 +278,16 @@ module HTML
                 when ">"
                     # Child selector: second statement is returned that will match element
                     # that is a child of this element.
-                    @depends = proc do |element|
+                    @depends = lambda do |element, first|
                         matches = []
                         element.children.each do |child|
-                            if child.tag? and subset = second.match(child)
-                                matches.concat subset
+                            if child.tag? and subset = second.match(child, first)
+                                if first && !subset.empty?
+                                    matches << subset.first
+                                    break
+                                else
+                                    matches.concat subset
+                                end
                             end
                         end
                         matches.empty? ? nil : matches
@@ -284,13 +295,18 @@ module HTML
                 else
                     # Descendant selector: second statement is returned that will match all
                     # element that are children of this element.
-                    @depends = proc do |element|
+                    @depends = lambda do |element, first|
                         matches = []
                         stack = element.children.reverse
                         while node = stack.pop
                             next unless node.tag?
-                            if subset = second.match(node)
-                                matches.concat subset
+                            if subset = second.match(node, first)
+                                if first && !subset.empty?
+                                    matches << subset.first
+                                    break
+                                else
+                                    matches.concat subset
+                                end
                             elsif children = node.children
                                 stack.concat children.reverse
                             end
@@ -321,7 +337,7 @@ module HTML
 
 
         # :call-seq:
-        #   match(element) => array or nil
+        #   match(element, first?) => array or nil
         #
         # Matches an element against the selector.
         #
@@ -332,11 +348,13 @@ module HTML
         # returns an array with all matching elements, nil if no match is
         # found.
         #
+        # Use +first=true+ if you are only interested in the first element.
+        #
         # For example:
         #   if selector.match(element)
         #     puts "Element is a login form"
         #   end
-        def match(element)
+        def match(element, first = false)
             # Match element if no element name or element name same as element name
             if matched = (!@tag_name or @tag_name == element.name)
                 # No match if one of the attribute matches failed
@@ -349,10 +367,10 @@ module HTML
             end
             # If the element did not match, but we have an alternative match
             # (x+y), apply the alternative match instead
-            return @alt.match(element) if not matched and @alt
+            return @alt.match(element, first) if not matched and @alt
             # If the element did match, but depends on another match (child,
             # sibling, etc), apply the dependent match instead.
-            return @depends.call(element) if matched and @depends
+            return @depends.call(element, first) if matched and @depends
             matched ? [element] : nil
         end
 
@@ -377,10 +395,25 @@ module HTML
             matches = []
             stack = [root]
             while node = stack.pop
-                if node.tag? && subset = match(node)
+                if node.tag? && subset = match(node, false)
                     subset.each do |match|
                         matches << match unless matches.any? { |item| item.equal?(match) }
                     end
+                elsif children = node.children
+                    stack.concat children.reverse
+                end
+            end
+            matches
+        end
+
+
+        # Similar to #select but returns a single element. Returns +nil+
+        # if not element matches the selector.
+        def select_one(root)
+            stack = [root]
+            while node = stack.pop
+                if node.tag? && subset = match(node, true)
+                    return subset.first if !subset.empty?
                 elsif children = node.children
                     stack.concat children.reverse
                 end

@@ -92,69 +92,42 @@ module Scraper
             #
             # == Example
             #
-            # class ScrapePosts < Scraper::Base
-            #   # Select the title of a post
-            #   selector :select_title, "h2"
+            #   class ScrapePosts < Scraper::Base
+            #     # Select the title of a post
+            #     selector :select_title, "h2"
             #
-            #   # Select the body of a post
-            #   selector :select_body, ".body"
+            #     # Select the body of a post
+            #     selector :select_body, ".body"
             #
-            #   # All elements with class name post.
-            #   process ".post" do |element|
-            #     title = select_title(element)
-            #     body = select_body(element)
-            #     @posts << Post.new(title, body)
-            #     true
+            #     # All elements with class name post.
+            #     process ".post" do |element|
+            #       title = select_title(element)
+            #       body = select_body(element)
+            #       @posts << Post.new(title, body)
+            #       true
+            #     end
+            #
+            #     attr_reader :posts
             #   end
             #
-            #   attr_reader :posts
-            # end
+            #   posts = ScrapePosts.scrape(html).posts
             #
-            # posts = ScrapePosts.scrape(html).posts
+            # To process only a single element:
+            # 
+            #   process "html>head>title", :title=>text
             def process(*selector, &block)
-                # First argument may be the rule name.
-                name = selector.shift if
-                    selector.first.is_a?(Symbol)
-                # Extractor is either a block, or the last argument.
-                unless block
-                    if selector.last.is_a?(Proc)
-                        block = selector.pop
-                    elsif selector.last.is_a?(Hash)
-                        block = extractor(selector.pop)
-                    else
-                        raise ArgumentError, "Missing extractor: the last argument tells us what to extract"
-                    end
-                end
-                # And if we think the extractor is the last argument,
-                # it's certainly not the selector.
-                raise ArgumentError,
-                    "Missing selector: the first argument tells us what to select" if
-                    selector.empty?
-                if selector[0].is_a?(String)
-                    selector = HTML::Selector.new(*selector)
-                else
-                    raise ArgumentError, "Selector must respond to select() method" unless
-                        selector.respond_to?(:select)
-                    selector = selector[0]
-                end
-                # Create a method for fast evaluation.
-                define_method :__extractor, block
-                method = instance_method(:__extractor)
-                remove_method :__extractor
-                # Decide where to put the rule.
-                pos = rules.length
-                if name
-                    if find = rules.find {|rule| rule[2] == name }
-                        find[0] = selector
-                        find[1] = method
-                    else
-                        rules << [selector, method, name]
-                    end
-                else
-                    rules << [selector, method, name]
-                end
+                create_process(false, *selector, &block)
             end
 
+
+            # Similar to #process, but only extracts the first selected
+            # element. Faster if you know the document contains only one
+            # applicable element, or only interested in processing the
+            # first one.
+            def process_first(*selector, &block)
+                create_process(true, *selector, &block)
+            end
+            
 
             # :call-seq:
             #   selector(symbol, selector, values?)
@@ -174,6 +147,11 @@ module Scraper
             #
             # If the selector is defined with a block, all selected elements are
             # passed to the block and the result of the block is returned.
+            #
+            # For convenience, a <tt>first_</tt> method is also created that returns
+            # (and yields) only the first selected element. For example:
+            #   selector :post, "#post"
+            #   @post = first_post
             #
             # The +selector+ argument may be a string, an HTML::Selector object or
             # any object that responds to the +select+ method. Passing an Array
@@ -202,9 +180,16 @@ module Scraper
                         selected = selector.select(element)
                         return block.call(selected) unless selected.empty?
                     end
+                    define_method "first_#{symbol}" do |element|
+                        selected = selector.select_one(element)
+                        return block.call(selected) unless selected.empty?
+                    end
                 else
                     define_method symbol do |element|
                         return selector.select(element)
+                    end
+                    define_method "first_#{symbol}" do |element|
+                        return selector.select_one(element)
                     end
                 end
             end
@@ -400,6 +385,51 @@ module Scraper
 
 
         private
+
+            def create_process(first, *selector, &block)
+                # First argument may be the rule name.
+                name = selector.shift if
+                    selector.first.is_a?(Symbol)
+                # Extractor is either a block, or the last argument.
+                unless block
+                    if selector.last.is_a?(Proc)
+                        block = selector.pop
+                    elsif selector.last.is_a?(Hash)
+                        block = extractor(selector.pop)
+                    else
+                        raise ArgumentError, "Missing extractor: the last argument tells us what to extract"
+                    end
+                end
+                # And if we think the extractor is the last argument,
+                # it's certainly not the selector.
+                raise ArgumentError,
+                    "Missing selector: the first argument tells us what to select" if
+                    selector.empty?
+                if selector[0].is_a?(String)
+                    selector = HTML::Selector.new(*selector)
+                else
+                    raise ArgumentError, "Selector must respond to select() method" unless
+                        selector.respond_to?(:select)
+                    selector = selector[0]
+                end
+                # Create a method for fast evaluation.
+                define_method :__extractor, block
+                method = instance_method(:__extractor)
+                remove_method :__extractor
+                # Decide where to put the rule.
+                pos = rules.length
+                if name
+                    if find = rules.find {|rule| rule[2] == name }
+                        find[0] = selector
+                        find[1] = method
+                    else
+                        rules << [selector, method, name, first]
+                    end
+                else
+                    rules << [selector, method, name, first]
+                end
+            end
+
 
             # Returns a Proc that will extract a value from an element.
             #
@@ -601,7 +631,7 @@ module Scraper
             # scraper, based on the class definition.
             @skip = []
             @stop = false
-            rules = self.class.rules
+            rules = self.class.rules.clone
             begin
                 # Process the document one node at a time. We process elements
                 # from the end of the stack, so each time we visit child elements,
@@ -623,15 +653,16 @@ module Scraper
                     # run out of rules. If skip_this=true then we processed the
                     # element and we can break out of the loop. However, we might
                     # process (and skip) descedants so also watch the skip list.
-                    rules.each do |selector, extractor|
+                    rules.delete_if do |selector, extractor, rule_name, first_only|
                         break if skip_this
                         # The result of calling match (selected) is nil, element
                         # or array of elements. We turn it into an array to
                         # process one element at a time. We process all elements
                         # that are not on the skip list (we haven't visited
                         # them yet).
-                        if selected = selector.match(node)
+                        if selected = selector.match(node, first_only)
                             selected = [selected] unless selected.is_a?(Array)
+                            selected = [selected.first] if first_only
                             selected.each do |element|
                                 # Do not process elements we already skipped
                                 # (see above). However, this time we may visit
@@ -654,6 +685,7 @@ module Scraper
                                     end
                                 end
                             end
+                            first_only if !selected.empty?
                         end
                     end
 

@@ -13,7 +13,7 @@ module HTML
             return nil
         end
 
-        
+
         # Returns the previous sibling node.
         def previous_sibling()
             if siblings = parent.children
@@ -24,7 +24,7 @@ module HTML
             return nil
         end
 
-   
+
         # Return the next element after this one. Skips sibling text nodes.
         #
         # With the +name+ argument, returns the next element with that name,
@@ -67,6 +67,7 @@ module HTML
                 @parent.children.delete_if { |child| child.equal?(self) }
                 @parent = nil
             end
+            return self
         end
 
 

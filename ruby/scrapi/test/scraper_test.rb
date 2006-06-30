@@ -101,6 +101,18 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
+    def test_should_select_first_element
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = new_scraper(html) do
+            selector :test, "div"
+        end
+        assert_equal 3,
+            scraper.test(scraper.document).size
+        assert scraper.first_test(scraper.document)
+        assert_equal "1", scraper.first_test(scraper.document).attributes["id"]
+    end
+
+
     #
     # Tests process methods.
     #
@@ -327,6 +339,26 @@ class ScraperTest < Test::Unit::TestCase
         end
         scraper.scrape
         assert_equal "1", scraper.concat
+    end
+
+
+    def test_should_process_first_element_if_instructed
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = new_scraper(html) do
+            process "div" do |element|
+                @all = (@all || 0) + 1
+                false
+            end
+            process_first "div" do |element|
+                @first = (@first || 0) + 1
+                false
+            end
+            attr :all
+            attr :first
+        end
+        scraper.scrape
+        assert_equal 3, scraper.all
+        assert_equal 1, scraper.first
     end
 
 
