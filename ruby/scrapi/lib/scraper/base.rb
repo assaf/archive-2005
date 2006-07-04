@@ -184,7 +184,7 @@ module Scraper
                         return block.call(selected) unless selected.empty?
                     end
                     define_method "first_#{symbol}" do |element|
-                        selected = selector.select_one(element)
+                        selected = selector.select_first(element)
                         return block.call([selected]) if selected
                     end
                 else
@@ -192,7 +192,7 @@ module Scraper
                         return selector.select(element)
                     end
                     define_method "first_#{symbol}" do |element|
-                        return selector.select_one(element)
+                        return selector.select_first(element)
                     end
                 end
             end

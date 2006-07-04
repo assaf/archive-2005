@@ -306,7 +306,7 @@ module HTML #:nodoc:
     end
     
     def handle_charref(name)
-        n = Integer(name)
+        n = Integer(name) rescue -1
         if !(0 <= n && n <= 255)
         unknown_charref(name)
         return
@@ -392,7 +392,7 @@ module HTML #:nodoc:
         end
         
         def unknown_endtag(tag)
-            @current = @current.parent
+            @current = @current.parent if @current.parent
         end
         
         def unknown_charref(ref)

@@ -407,9 +407,9 @@ module HTML
         end
 
 
-        # Similar to #select but returns a single element. Returns +nil+
-        # if not element matches the selector.
-        def select_one(root)
+        # Similar to #select but returns the first matching element. Returns +nil+
+        # if no element matches the selector.
+        def select_first(root)
             stack = [root]
             while node = stack.pop
                 if node.tag? && subset = match(node, true)
