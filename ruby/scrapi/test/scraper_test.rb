@@ -393,33 +393,6 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
-    def test_should_create_accessors_for_processing_and_return_in_result
-        html = %Q{<div id="1">first</div><div id="2">second</div>}
-        scraper = new_scraper(html) do
-            process_first "div", :div_id=>"@id", :div_text=>:text
-            result :div_id
-        end
-        value = scraper.scrape
-        assert_equal "1", value
-
-        scraper = new_scraper(html) do
-            process_first "div", :div_id=>"@id", :div_text=>:text
-            result :div_id, :div_text
-        end
-        value = scraper.scrape
-        assert_equal "1", value.div_id
-        assert_equal "first", value.div_text
-
-        scraper = new_scraper(html) do
-            process "div", "div_ids[]"=>"@id"
-            result :div_ids
-        end
-        value = scraper.scrape
-        assert_equal "1", value[0]
-        assert_equal "2", value[1]
-    end
-
-
     def test_should_process_end_to_end
         Net::HTTP.on_get do |address, path, headers|
             [Net::HTTPSuccess.new(Net::HTTP.version_1_2, 200, "OK"), %Q{
@@ -587,6 +560,50 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
+    def test_should_create_accessors_and_return_in_result
+        html = %Q{<div id="1">first</div><div id="2">second</div>}
+        scraper = new_scraper(html) do
+            process_first "div", :div_id=>"@id", :div_text=>:text
+            result :div_id
+        end
+        value = scraper.scrape
+        assert_equal "1", value
+
+        scraper = new_scraper(html) do
+            process_first "div", :div_id=>"@id", :div_text=>:text
+            result :div_id, :div_text
+        end
+        value = scraper.scrape
+        assert_equal "1", value.div_id
+        assert_equal "first", value.div_text
+
+        scraper = new_scraper(html) do
+            process "div", "div_ids[]"=>"@id"
+            result :div_ids
+        end
+        value = scraper.scrape
+        assert_equal "1", value[0]
+        assert_equal "2", value[1]
+    end
+
+
+    def test_should_support_array_accessors
+        html = %Q{<div id="1">first</div><div id="2">second</div>}
+        scraper = new_scraper(html) do
+            array :div_id, :div_text
+            process "div", :div_id=>"@id", :div_text=>:text
+            result :div_id, :div_text
+        end
+        value = scraper.scrape
+        assert_equal 2, value.div_id.size
+        assert_equal 2, value.div_text.size
+        assert_equal "1", value.div_id[0]
+        assert_equal "2", value.div_id[1]
+        assert_equal "first", value.div_text[0]
+        assert_equal "second", value.div_text[1]
+    end
+
+
     #
     # Root element tests.
     #
@@ -658,9 +675,36 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
-    # TODO: Test the following:
-    # Named rules.
-    # before_ after_ named rules.
+    def test_should_support_anonymous_scrapers
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = Scraper.define do
+            array :ids
+            process "div", :ids=>"@id"
+            result :ids
+        end
+        result = scraper.scrape(html)
+        assert_equal "1", result[0]
+        assert_equal "2", result[1]
+        assert_equal "3", result[2]
+    end
+
+
+    def test_should_support_named_rules
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = Scraper.define do
+            array :ids1, :ids2
+            process :main, "div", :ids1=>"@id"
+            process :main, "div", :ids2=>"@id"
+            result :ids1, :ids2
+        end
+        result = scraper.scrape(html)
+        assert_equal nil, result.ids1
+        assert_equal 3, result.ids2.size
+        assert_equal "1", result.ids2[0]
+        assert_equal "2", result.ids2[1]
+        assert_equal "3", result.ids2[2]
+    end
+
 
 protected
 

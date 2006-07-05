@@ -267,12 +267,12 @@ module Scraper
             # object already has a method called +id+.
             #
             # If you want to extract multiple values into the same variables,
-            # append <tt>[]</tt> to the variable name. For example:
-            #   process "*", "ids[]"=>"@id"
-            # finds all the id attributes in the document and adds them to the
-            # array variable +ids+.
+            # use #array to declare that accessor as an array.
             #
-            # To return the value of one or more accessors, see #result.
+            # Alternatively, you can append <tt>[]</tt> to the variable name.
+            # For example:
+            #   process "*", "ids[]"=>"@id"
+            #   result :ids
             def extractor(map)
                 extracts = []
                 map.each_pair do |target, source|
@@ -450,6 +450,20 @@ module Scraper
             end
 
 
+            # Declares which accessors are arrays. You can declare the
+            # accessor here, or use "symbol[]" as the target.
+            #
+            # For example:
+            #   array :urls
+            #   process "a[href]", :urls=>"@href"
+            # Is equivalent to:
+            #   process "a[href]", "urls[]"=>"@href"
+            def array(*symbols)
+                @arrays ||= []
+                symbols.each { |sym| @arrays << sym.to_sym }
+            end
+
+
         private
 
 
@@ -587,41 +601,52 @@ module Scraper
             # value in, and the value.
             def extract_value_to(target)
                 target = target.to_s
-                if target[-2..-1] == "[]"
-                    target = target[0...-2]
+                if target[-2..-1] == "[]" or
+                   (@arrays && array = @arrays.include?(target.to_sym))
+                    target = target[0...-2] unless array
                     # Create an attribute accessor is not already defined.
                     begin
                         self.instance_method(target)
+                        # Target is an array, append extracted values there.
+                        symbol = "@#{target}".to_sym
+                        return lambda do |object, value|
+                            array = object.instance_variable_get(symbol)
+                            object.instance_variable_set(symbol, array = []) unless array
+                            array << value
+                        end
                     rescue NameError
                         attr_accessor target
-                    end
-                    # Target is an array, append extracted values there.
-                    symbol = "@#{target}".to_sym
-                    return lambda do |object, value|
-                        array = object.instance_variable_get(symbol)
-                        object.instance_variable_set(symbol, array = []) unless array
-                        array << value
+                        reader = "#{target}".to_sym
+                        writer = "#{target}=".to_sym
+                        return lambda do |object, value|
+                            array = object.send(reader)
+                            object.send(writer, array = []) unless array
+                            array << value
+                        end
                     end
                 else
                     # Create an attribute accessor is not already defined.
                     begin
                         self.instance_method(target)
+                        # Target is an instance variable, just set the new
+                        # value. Don't worry about overriding a previous value.
+                        symbol = "@#{target}".to_sym
+                        return lambda { |object, value| object.instance_variable_set(symbol, value) }
                     rescue NameError
                         attr_accessor target
+                        reader = "#{target}=".to_sym
+                        return lambda { |object, value| object.send(reader, value) }
                     end
-                    # Target is an instance variable, just set the new
-                    # value. Don't worry about overriding a previous value.
-                    symbol = "@#{target}".to_sym
-                    return lambda { |object, value| object.instance_variable_set(symbol, value) }
                 end
             end
 
 
             def inherited(child)
                 super
-                # Duplicate options and rules to any inherited class.
+                # Duplicate options, rules and arrays rules to any inherited class.
                 child.options.update self.options
                 child.rules.concat self.rules
+                child.instance_variable_set :@arrays, self.instance_variable_get(:@arrays)
             end
 
         end
@@ -797,14 +822,7 @@ module Scraper
                 # Attempt to read page. May raise HTTPError.
                 options = {}
                 READER_OPTIONS.each { |key| options[key] = option(key) }
-                if page = Reader.read_page(@document, options)
-                    @page_info.url = page.url
-                    @page_info.original_url = @document
-                    @page_info.last_modified = page.last_modified
-                    @page_info.etag = page.etag
-                    @page_info.encoding = page.encoding
-                    @document = page.content
-                end
+                request(@document, options)
             end
             if @document.is_a?(String)
                 # Parse the page. May raise HTMLParseError.
@@ -815,6 +833,18 @@ module Scraper
             end
             return @document if @document.is_a?(HTML::Node)
             raise RuntimeError, "No document to process"
+        end
+
+
+        def request(url, options)
+            if page = Reader.read_page(@document, options)
+                @page_info.url = page.url
+                @page_info.original_url = @document
+                @page_info.last_modified = page.last_modified
+                @page_info.etag = page.etag
+                @page_info.encoding = page.encoding
+                @document = page.content
+            end
         end
 
 
@@ -897,6 +927,22 @@ module Scraper
         end
 
 
+    end
+
+
+    # Define an anonymous scraper and returns the class.
+    #
+    # For example:
+    #   links = Scraper.define do
+    #      process "a[href]", :urls=>"@href"
+    #      result :urls
+    #   end
+    #
+    #   puts links.scrape(html)
+    def self.define(&block)
+        kls = Class.new(Scraper::Base)
+        kls.module_eval &block
+        return kls
     end
 
 end
