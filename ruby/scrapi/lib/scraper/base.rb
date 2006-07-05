@@ -5,6 +5,7 @@
 # Code and documention: http://labnotes.org
 
 
+require "rubygems"
 require File.join(File.dirname(__FILE__), "reader")
 
 
@@ -78,8 +79,7 @@ module Scraper
             # least one extractor returned +true+. However, you can override
             # #result and use extractors that return +false+.
             #
-            # A block extractor is called with a single element. It can also
-            # access the current element using the +element+ method.
+            # A block extractor is called with a single element.
             #
             # You can also use the #extractor method to create extractors that
             # assign elements, attributes and text values to instance variables,
@@ -113,17 +113,22 @@ module Scraper
             #   posts = ScrapePosts.scrape(html).posts
             #
             # To process only a single element:
-            # 
-            #   process "html>head>title", :title=>text
+            #
+            #   class ScrapeTitle < Scraper::Base
+            #     process "html>head>title", :title=>text
+            #     result :title
+            #   end
+            #
+            #   puts ScrapeTitle.scrape(html)
             def process(*selector, &block)
                 create_process(false, *selector, &block)
             end
 
 
-            # Similar to #process, but only extracts the first selected
-            # element. Faster if you know the document contains only one
-            # applicable element, or only interested in processing the
-            # first one.
+            # Similar to #process, but only extracts from the first
+            # selected element. Faster if you know the document contains
+            # only one applicable element, or only interested in processing
+            # the first one.
             def process_first(*selector, &block)
                 create_process(true, *selector, &block)
             end
@@ -221,43 +226,53 @@ module Scraper
             #
             # Extractors operate on the selected element, and can extract the
             # following values:
-            # * <tt>"elem_name"</tt> -- Extracts the element itself if it matches the
-            #   element name (e.g. "h2" will extract only level 2 header elements).
-            # * <tt>"attr_name"</tt> -- Extracts the attribute value from the element
-            #   if specified (e.g. "@id" will extract the id attribute).
-            # * <tt>"elem_name@attr_name"</tt> -- Extracts the attribute value from
-            #   the element if specified, but only if the element has the specified
-            #   name (e.g. "h2@id").
+            # * <tt>"elem_name"</tt> -- Extracts the element itself if it
+            #   matches the element name (e.g. "h2" will extract only level 2
+            #   header elements).
+            # * <tt>"attr_name"</tt> -- Extracts the attribute value from the
+            #   element if specified (e.g. "@id" will extract the id attribute).
+            # * <tt>"elem_name@attr_name"</tt> -- Extracts the attribute value
+            #   from the element if specified, but only if the element has the
+            #   specified name (e.g. "h2@id").
             # * <tt>:node</tt> -- Extracts the node itself.
             # * <tt>:text</tt> -- Extracts the text value of the node.
-            # * <tt>Scraper</tt> -- Using this class creates a scraper to process
-            #   the current element and extract the result. This can be used for
-            #   handling complex structure.
+            # * <tt>Scraper</tt> -- Using this class creates a scraper to
+            #   process the current element and extract the result. This can
+            #   be used for handling complex structure.
             #
-            # If you use an array of sources, the first source that matches anything
-            # is used. For example, <tt>["attr@title", :text]</tt> extracts the value
-            # of the +title+ attribute if the element is +abbr+, otherwise the text
-            # value of the element.
+            # If you use an array of sources, the first source that matches
+            # anything is used. For example, <tt>["attr@title", :text]</tt>
+            # extracts the value of the +title+ attribute if the element is
+            # +abbr+, otherwise the text value of the element.
             #
-            # If you use a hash, you can extract multiple values at the same time.
-            # For example, <tt>{:id=>"@id", :class=>"@class"}</tt> extracts the
-            # +id+ and +class+ attribute values.
+            # If you use a hash, you can extract multiple values at the same
+            # time. For example, <tt>{:id=>"@id", :class=>"@class"}</tt>
+            # extracts the +id+ and +class+ attribute values.
             #
-            # :node and :text are special cases of symbols. You can pass any symbol
-            # that matches a class method and that class method will be called to
-            # extract a value from the selected element. You can also pass a Proc
-            # or Method directly.
+            # :node and :text are special cases of symbols. You can pass any
+            # symbol that matches a class method and that class method will
+            # be called to extract a value from the selected element.
+            # You can also pass a Proc or Method directly.
             #
             # == Targets
             #
-            # Extractors assign the extracted value to an instance variable of the
-            # scraper. The instance variable contains the last value extracted.
+            # Extractors assign the extracted value to an instance variable
+            # of the scraper. The instance variable contains the last value
+            # extracted.
+            #
+            # Also creates an accessor for that instance variable. An accessor
+            # is created if no such method exists. For example,
+            # <tt>:title=>:text</tt> creates an accessor for +title+. However,
+            # <tt>:id=>"@id"</tt> does not create an accessor since each
+            # object already has a method called +id+.
             #
             # If you want to extract multiple values into the same variables,
             # append <tt>[]</tt> to the variable name. For example:
-            #   process "*", "id[]"=>"@id"
+            #   process "*", "ids[]"=>"@id"
             # finds all the id attributes in the document and adds them to the
-            # array variable +id+.
+            # array variable +ids+.
+            #
+            # To return the value of one or more accessors, see #result.
             def extractor(map)
                 extracts = []
                 map.each_pair do |target, source|
@@ -282,20 +297,25 @@ module Scraper
             # Scrapes the document and returns the result.
             #
             # The first argument provides the input document. It can be one of:
-            # * <tt>URI</tt> -- Retrieve an HTML page from this URL and scrape it.
+            # * <tt>URI</tt> -- Retrieve an HTML page from this URL and
+            #   scrape it.
             # * <tt>String</tt> -- The HTML page as a string.
-            # * <tt>HTML::Node</tt> -- An HTML node, can be a document or element.
+            # * <tt>HTML::Node</tt> -- An HTML node, can be a document
+            #   or element.
             #
-            # You can specify options for the scraper class, or override these
-            # by passing options in the second argument. Some options only make
-            # sense in the constructor.
+            # You can specify options for the scraper class, or override
+            # these by passing options in the second argument. Some options
+            # only make sense in the constructor.
             #
             # The following options are supported for reading HTML pages:
-            # * <tt>:last_modified</tt> -- Last-Modified header used for caching.
+            # * <tt>:last_modified</tt> -- Last-Modified header used for
+            #   caching.
             # * <tt>:etag</tt> -- ETag header used for caching.
-            # * <tt>:redirect_limit</tt> -- Limits number of redirects to follow.
+            # * <tt>:redirect_limit</tt> -- Limits number of redirects
+            #   to follow.
             # * <tt>:user_agent</tt> -- Value for User-Agent header.
-            # * <tt>:timeout</tt> -- HTTP open connection/read timeouts (in second).
+            # * <tt>:timeout</tt> -- HTTP open connection/read timeouts
+            #   (in second).
             #
             # The following options are supported for parsing the HTML:
             # * <tt>:root_element</tt> -- The root element to scrape, see
@@ -303,17 +323,17 @@ module Scraper
             # * <tt>:tidy_options</tt> -- Options to pass to Tidy. Options are
             #   required in order to use Tidy, see #tidy_options for details.
             #
-            # The result is returned by calling the #result method. The default
-            # implementation returns +self+ if any extractor returned true,
-            # +nil+ otherwise.
+            # The result is returned by calling the #result method.
+            # The default implementation returns +self+ if any extractor
+            # returned true, +nil+ otherwise.
             #
             # For example:
             #   result = MyScraper.scrape(url, :root_element=>"body")
             #
-            # The method may raise any number of exceptions. HTTPError indicates
-            # it failed to retrieve the HTML page, and HTMLParseError that it failed
-            # to parse the page. Other exceptions come from extractors and the
-            # #result method.
+            # The method may raise any number of exceptions. HTTPError
+            # indicates it failed to retrieve the HTML page, and HTMLParseError
+            # that it failed to parse the page. Other exceptions come from
+            # extractors and the #result method.
             def scrape(source, options = nil)
                 scraper = self.new(source, options);
                 return scraper.scrape
@@ -374,6 +394,7 @@ module Scraper
                 self.options[:root_element] = name ? name.to_s : nil
             end
 
+
             # Returns the options for this class.
             def options()
                 @options ||= {}
@@ -386,9 +407,56 @@ module Scraper
                 @rules ||= []
             end
 
+            
+            # Modifies this scraper to return a single value or a structure.
+            # Use in combination with accessors.
+            #
+            # When called with one symbol, scraping returns the result of
+            # calling that method (typically an accessor). When called with
+            # two or more symbols, scraping returns a structure of values,
+            # one for each symbol.
+            #
+            # For example:
+            #   class ScrapeTitle < Scraper::Base
+            #     process_first "html>head>title", :title=>:text
+            #     result :title
+            #   end
+            #
+            #   puts "Title: " + ScrapeTitle.scrape(html)
+            #
+            #   class ScrapeDts < Scraper::Base
+            #     process ".dtstart", :dtstart=>["abbr@title", :text]
+            #     process ".dtend", :dtend=>["abbr@title", :text]
+            #     result :dtstart, :dtend
+            #   end
+            #
+            #   dts = ScrapeDts.scrape(html)
+            #   puts "Starts: #{dts.dtstart}"
+            #   puts "Ends: #{dts.dtend}"
+            def result(*symbols)
+                raise ArgumentError, "Use one symbol to return the value of this accessor, multiple symbols to returns a structure" if
+                    symbols.empty?
+                symbols = symbols.map {|s| s.to_sym}
+                if symbols.size == 1
+                    define_method :result do
+                        return self.send(symbols[0])
+                    end
+                else
+                    struct = Struct.new(*symbols)
+                    define_method :result do
+                        return struct.new(*symbols.collect {|s| self.send(s) })
+                    end
+                end
+            end
+
 
         private
 
+
+            # Called by #process and #process_first, see there for
+            # documentation. First argument indicates whether to
+            # process only the first matching element (+true+) or
+            # all matching elements (+false+).
             def create_process(first, *selector, &block)
                 # First argument may be the rule name.
                 name = selector.shift if
@@ -520,14 +588,27 @@ module Scraper
             def extract_value_to(target)
                 target = target.to_s
                 if target[-2..-1] == "[]"
+                    target = target[0...-2]
+                    # Create an attribute accessor is not already defined.
+                    begin
+                        self.instance_method(target)
+                    rescue NameError
+                        attr_accessor target
+                    end
                     # Target is an array, append extracted values there.
-                    symbol = "@#{target[0...-2]}".to_sym
+                    symbol = "@#{target}".to_sym
                     return lambda do |object, value|
                         array = object.instance_variable_get(symbol)
                         object.instance_variable_set(symbol, array = []) unless array
                         array << value
                     end
                 else
+                    # Create an attribute accessor is not already defined.
+                    begin
+                        self.instance_method(target)
+                    rescue NameError
+                        attr_accessor target
+                    end
                     # Target is an instance variable, just set the new
                     # value. Don't worry about overriding a previous value.
                     symbol = "@#{target}".to_sym
@@ -549,11 +630,6 @@ module Scraper
         unless const_defined? :READER_OPTIONS
             READER_OPTIONS = [:last_modified, :etag, :redirect_limit, :user_agent, :timeout]
         end
-
-
-        # Used by extractors to access the current element (also passed as
-        # argument).
-        attr_reader :element
 
 
         # Set to true when the first extractor returns true.
@@ -585,9 +661,9 @@ module Scraper
             @options = options || {}
             case source
             when URI
-                @source = source
+                @document = source
             when String, HTML::Node
-                @source = source
+                @document = source
                 # TODO: document and test case these two.
                 @page_info.url = @page_info.original_url = @options[:url]
                 @page_info.encoding = @options[:encoding]
@@ -678,7 +754,6 @@ module Scraper
                                 # If it returns true, skip the element and if
                                 # the current element, don't process any more
                                 # rules. Again, pay attention to descendants.
-                                @element = element
                                 if extractor.bind(self).call(element)
                                     @extracted = true
                                     if element.equal?(node)
@@ -699,7 +774,7 @@ module Scraper
                     end
                 end
             ensure
-                @skip = @element = nil
+                @skip = nil
             end
             return result
         end
@@ -718,31 +793,28 @@ module Scraper
         #
         # The document is parsed only the first time this method is called.
         def document
-            unless @document
-                if @source.is_a?(URI)
-                    # Attempt to read page. May raise HTTPError.
-                    options = {}
-                    READER_OPTIONS.each { |key| options[key] = option(key) }
-                    if page = Reader.read_page(@source, options)
-                        @page_info.url = page.url
-                        @page_info.original_url = @source
-                        @page_info.last_modified = page.last_modified
-                        @page_info.etag = page.etag
-                        @page_info.encoding = page.encoding
-                        @source = page.content
-                    end
-                end
-                if @source.is_a?(String)
-                    # Parse the page. May raise HTMLParseError.
-                    parsed = Reader.parse_page(@source, @page_info.encoding,
-                        option(:tidy_options))
-                    @document = parsed.document
-                    @page_info.encoding = parsed.encoding
-                elsif @source.is_a?(HTML::Node)
-                    @document = @source
+            if @document.is_a?(URI)
+                # Attempt to read page. May raise HTTPError.
+                options = {}
+                READER_OPTIONS.each { |key| options[key] = option(key) }
+                if page = Reader.read_page(@document, options)
+                    @page_info.url = page.url
+                    @page_info.original_url = @document
+                    @page_info.last_modified = page.last_modified
+                    @page_info.etag = page.etag
+                    @page_info.encoding = page.encoding
+                    @document = page.content
                 end
             end
-            return @document
+            if @document.is_a?(String)
+                # Parse the page. May raise HTMLParseError.
+                parsed = Reader.parse_page(@document, @page_info.encoding,
+                    option(:tidy_options))
+                @document = parsed.document
+                @page_info.encoding = parsed.encoding
+            end
+            return @document if @document.is_a?(HTML::Node)
+            raise RuntimeError, "No document to process"
         end
 
 

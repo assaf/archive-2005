@@ -8,7 +8,11 @@
 require "uri"
 require "net/http"
 require "net/https"
-require "tidy"
+begin
+    require "rubygems"
+    require "tidy"
+rescue LoadError
+end
 
 
 module Scraper

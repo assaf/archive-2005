@@ -174,14 +174,6 @@ class ScraperTest < Test::Unit::TestCase
         end
         scraper.scrape
         assert_equal "123", scraper.concat
-        scraper = new_scraper(html) do
-            process "div" do |element|
-                @concat = (@concat || "") << self.element.attributes["id"]
-            end
-            attr :concat
-        end
-        scraper.scrape
-        assert_equal "123", scraper.concat
     end
 
 
@@ -398,6 +390,33 @@ class ScraperTest < Test::Unit::TestCase
         assert_equal time, scraper.page_info.last_modified
         assert_equal "etag", scraper.page_info.etag
         assert_equal "other-encoding", scraper.page_info.encoding
+    end
+
+
+    def test_should_create_accessors_for_processing_and_return_in_result
+        html = %Q{<div id="1">first</div><div id="2">second</div>}
+        scraper = new_scraper(html) do
+            process_first "div", :div_id=>"@id", :div_text=>:text
+            result :div_id
+        end
+        value = scraper.scrape
+        assert_equal "1", value
+
+        scraper = new_scraper(html) do
+            process_first "div", :div_id=>"@id", :div_text=>:text
+            result :div_id, :div_text
+        end
+        value = scraper.scrape
+        assert_equal "1", value.div_id
+        assert_equal "first", value.div_text
+
+        scraper = new_scraper(html) do
+            process "div", "div_ids[]"=>"@id"
+            result :div_ids
+        end
+        value = scraper.scrape
+        assert_equal "1", value[0]
+        assert_equal "2", value[1]
     end
 
 
