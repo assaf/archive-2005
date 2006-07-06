@@ -215,8 +215,8 @@ module Scraper
             # and puts it in the instance variable +@article+.
             #
             #   class ArticleScraper < Scraper::Base
-            #     process ".article", extractor(:id=>"@id", :article=>:node)
-            #     attr_reader :id, :node
+            #     process ".article", extractor(:id=>"@id", :article=>:element)
+            #     attr_reader :id, :article
             #   end
             #   result = ArticleScraper.scrape(html)
             #   puts result.id
@@ -234,7 +234,7 @@ module Scraper
             # * <tt>"elem_name@attr_name"</tt> -- Extracts the attribute value
             #   from the element if specified, but only if the element has the
             #   specified name (e.g. "h2@id").
-            # * <tt>:node</tt> -- Extracts the node itself.
+            # * <tt>:element</tt> -- Extracts the element itself.
             # * <tt>:text</tt> -- Extracts the text value of the node.
             # * <tt>Scraper</tt> -- Using this class creates a scraper to
             #   process the current element and extract the result. This can
@@ -249,7 +249,7 @@ module Scraper
             # time. For example, <tt>{:id=>"@id", :class=>"@class"}</tt>
             # extracts the +id+ and +class+ attribute values.
             #
-            # :node and :text are special cases of symbols. You can pass any
+            # :element and :text are special cases of symbols. You can pass any
             # symbol that matches a class method and that class method will
             # be called to extract a value from the selected element.
             # You can also pass a Proc or Method directly.
@@ -346,7 +346,7 @@ module Scraper
             #   process "title", :title=>:text
             def text(element)
                 text = ""
-                stack = element.children
+                stack = element.children.reverse
                 while node = stack.pop
                     if node.tag?
                         stack.concat node.children.reverse
@@ -361,8 +361,8 @@ module Scraper
             # Returns the element itself.
             #
             # You can use this method from an extractor, e.g.:
-            #   process "h1", :header=>:node
-            def node(element)
+            #   process "h1", :header=>:element
+            def element(element)
                 element
             end
 
@@ -475,16 +475,30 @@ module Scraper
                 # First argument may be the rule name.
                 name = selector.shift if
                     selector.first.is_a?(Symbol)
-                # Extractor is either a block, or the last argument.
-                unless block
-                    if selector.last.is_a?(Proc)
-                        block = selector.pop
-                    elsif selector.last.is_a?(Hash)
-                        block = extractor(selector.pop)
-                    else
-                        raise ArgumentError, "Missing extractor: the last argument tells us what to extract"
-                    end
+                # Extractor is either a block, last argument or both.
+                if selector.last.is_a?(Proc)
+                    extractor = selector.pop
+                elsif selector.last.is_a?(Hash)
+                    extractor = extractor(selector.pop)
                 end
+                if block && extractor
+                    # Ugly, but no other way to chain two calls bound to the
+                    # scraper instance.
+                    define_method :__extractor, extractor
+                    extractor1 = instance_method(:__extractor)
+                    define_method :__extractor, block
+                    extractor2 = instance_method(:__extractor)
+                    remove_method :__extractor
+                    extractor = lambda do |element|
+                        extractor1.bind(self).call(element)
+                        extractor2.bind(self).call(element)
+                    end
+                elsif block
+                    extractor = block
+                end
+                raise ArgumentError,
+                    "Missing extractor: the last argument tells us what to extract" unless
+                    extractor
                 # And if we think the extractor is the last argument,
                 # it's certainly not the selector.
                 raise ArgumentError,
@@ -498,7 +512,7 @@ module Scraper
                     selector = selector[0]
                 end
                 # Create a method for fast evaluation.
-                define_method :__extractor, block
+                define_method :__extractor, extractor
                 method = instance_method(:__extractor)
                 remove_method :__extractor
                 # Decide where to put the rule.
@@ -600,6 +614,17 @@ module Scraper
             # The Proc is called with two arguments: the object to set the
             # value in, and the value.
             def extract_value_to(target)
+                if target.is_a?(Array)
+                    setters = target.collect do |target|
+                        [target,extract_value_to(target)]
+                    end
+                    return lambda do |object,value|
+                        setters.each do |setter|
+                            setter[1].call(object, value.send(setter[0]))
+                        end
+                    end
+                end
+            
                 target = target.to_s
                 if target[-2..-1] == "[]" or
                    (@arrays && array = @arrays.include?(target.to_sym))
@@ -607,36 +632,25 @@ module Scraper
                     # Create an attribute accessor is not already defined.
                     begin
                         self.instance_method(target)
-                        # Target is an array, append extracted values there.
-                        symbol = "@#{target}".to_sym
-                        return lambda do |object, value|
-                            array = object.instance_variable_get(symbol)
-                            object.instance_variable_set(symbol, array = []) unless array
-                            array << value
-                        end
                     rescue NameError
                         attr_accessor target
-                        reader = "#{target}".to_sym
-                        writer = "#{target}=".to_sym
-                        return lambda do |object, value|
-                            array = object.send(reader)
-                            object.send(writer, array = []) unless array
-                            array << value
-                        end
+                    end
+                    reader = "#{target}".to_sym
+                    writer = "#{target}=".to_sym
+                    return lambda do |object, value|
+                        array = object.send(reader)
+                        object.send(writer, array = []) unless array
+                        array << value
                     end
                 else
                     # Create an attribute accessor is not already defined.
                     begin
                         self.instance_method(target)
-                        # Target is an instance variable, just set the new
-                        # value. Don't worry about overriding a previous value.
-                        symbol = "@#{target}".to_sym
-                        return lambda { |object, value| object.instance_variable_set(symbol, value) }
                     rescue NameError
                         attr_accessor target
-                        reader = "#{target}=".to_sym
-                        return lambda { |object, value| object.send(reader, value) }
                     end
+                    reader = "#{target}=".to_sym
+                    return lambda { |object, value| object.send(reader, value) }
                 end
             end
 
@@ -714,6 +728,8 @@ module Scraper
         #
         # See also Base#scrape.
         def scrape()
+            # Call prepare with the document, but before doing anything else.
+            prepare document
             # Retrieve the document. This may raise HTTPError or HTMLParseError.
             case document
             when Array: stack = @document.reverse # see below
@@ -728,8 +744,6 @@ module Scraper
                 stack = root ? (root.tag? ? [root] : root.children.reverse) : []
             else return
             end
-            # Call prepare with the document, but before doing anything else.
-            prepare
             # @skip stores all the elements we want to skip (see #skip).
             # rules stores all the rules we want to process with this
             # scraper, based on the class definition.
@@ -891,9 +905,8 @@ module Scraper
         # Called by #scrape after creating the document, but before running
         # any processing rules.
         #
-        # You can override this method to do any preparation work. The document
-        # is accessible by calling #document.
-        def prepare()
+        # You can override this method to do any preparation work.
+        def prepare(document)
         end
 
 

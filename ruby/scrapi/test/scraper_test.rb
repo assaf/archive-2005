@@ -437,7 +437,7 @@ class ScraperTest < Test::Unit::TestCase
         html = %Q{<div>some text</div>}
         # Extract the node itself.
         scraper = new_scraper(html) do
-            process "div", extractor(:value=>:node)
+            process "div", extractor(:value=>:element)
             attr :value
         end
         scraper.scrape
@@ -456,7 +456,7 @@ class ScraperTest < Test::Unit::TestCase
         html = %Q{<h1 class="header"></h1><h2 class="header"></h2>}
         # Extract both elements based on class, return the second one.
         scraper = new_scraper(html) do
-            process ".header", extractor(:header=>:node)
+            process ".header", extractor(:header=>:element)
             attr :header
         end
         scraper.scrape
@@ -541,6 +541,19 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
+    def test_should_support_multi_value_extractors
+        html = %Q{<div><h1 id="1" class="header">first</h1></div>}
+        scraper = new_scraper(html) do
+            process "h1", [:text, :kls]=>Scraper.define {
+                process "*", :text=>:text, :kls=>"@class"
+            }
+        end
+        result = scraper.scrape
+        assert "first", result.text
+        assert "header", result.kls
+    end
+
+
     def test_should_support_conditional_extractors
         # Look for id attribute (second header only),
         # if not found look for class attribute (first
@@ -576,6 +589,22 @@ class ScraperTest < Test::Unit::TestCase
         value = scraper.scrape
         assert_equal "1", value.div_id
         assert_equal "first", value.div_text
+
+        scraper = new_scraper(html) do
+            process_first "div", :div_id=>"@id", :div_text=>:text
+        end
+        value = scraper.scrape
+        assert_equal "1", value.div_id
+        assert_equal "first", value.div_text
+
+        scraper = new_scraper(html) do
+            attr_accessor :div_class
+            process_first "div", :div_id=>"@id", :div_text=>:text
+            result :div_id, :div_class
+        end
+        value = scraper.scrape
+        assert_equal "1", value.div_id
+        assert_raise(NoMethodError) { value.div_text }
 
         scraper = new_scraper(html) do
             process "div", "div_ids[]"=>"@id"
@@ -672,6 +701,24 @@ class ScraperTest < Test::Unit::TestCase
         end
         result = scraper.scrape
         assert_equal 4, result
+    end
+
+
+    def test_should_pass_prepare_document_allow_change
+        # Extracting the attribute skips the second match.
+        html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
+        scraper = new_scraper(html) do
+            selector :divs, "div"
+            define_method :prepare do |document|
+                @document = divs(document)[1]
+            end
+            array :ids
+            process "div", :ids=>"@id"
+            result :ids
+        end
+        result = scraper.scrape
+        assert_equal 1, result.size
+        assert_equal "2", result[0]
     end
 
 
