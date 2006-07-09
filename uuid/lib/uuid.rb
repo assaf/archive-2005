@@ -151,6 +151,14 @@ module UUID
 
     IFCONFIG_PATTERN = /[^:\-](?:[0-9A-Za-z][0-9A-Za-z][:\-]){5}[0-9A-Za-z][0-9A-Za-z][^:\-]/ #:nodoc:
 
+
+    # Regular expression to identify a 36 character UUID. Can be used for a partial match.
+    REGEXP = /[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}/
+
+    # Regular expression to identify a 36 character UUID. Can only be used for a full match.
+    REGEXP_FULL = /^[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}$/
+
+
     @@mutex = Mutex.new
     @@last_clock = @@logger = @@state_file = nil
 
@@ -379,6 +387,19 @@ private
     end
 
 end
+
+
+class ActiveRecord::Base
+
+    def self.uuid_primary_key
+        define_method(:save) do
+            write_attribute(:id, UUID.new) unless read_attribute(:id)
+            super
+        end
+    end
+
+end
+
 
 
 if __FILE__ == $0
