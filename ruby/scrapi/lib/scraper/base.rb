@@ -320,8 +320,9 @@ module Scraper
             # The following options are supported for parsing the HTML:
             # * <tt>:root_element</tt> -- The root element to scrape, see
             #   also #root_elements.
-            # * <tt>:tidy_options</tt> -- Options to pass to Tidy. Options are
-            #   required in order to use Tidy, see #tidy_options for details.
+            # * <tt>:parser_options</tt> -- Specifies which parser to use.
+            #   (Typically, you set this for the class).
+            # * <tt>:parser_options</tt> -- Options to pass to the parser.
             #
             # The result is returned by calling the #result method.
             # The default implementation returns +self+ if any extractor
@@ -367,17 +368,22 @@ module Scraper
             end
 
 
-            # Options to pass to Tidy.
+            # Specifies which parser to use. The default is +:tidy+.
+            def parser(name = :tidy)
+                self.options[:parser] = name
+            end
+
+
+            # Options to pass to the parser.
             #
-            # You must provide options in order to use Tidy, otherwise it defaults
-            # to using the HTMLParser. If you don't have any options besides the
-            # default, pass an empty Hash.
+            # For example, when using Tidy, you can use these options to
+            # tell Tidy how to clean up the HTML.
             #
             # This method sets the option for the class. Classes inherit options
             # from their parents. You can also pass options to the scraper object
-            # itself using the +:tidy_options+ option.
-            def tidy_options(options)
-                self.options[:tidy_options] = options
+            # itself using the +:parser_options+ option.
+            def parser_options(options)
+                self.options[:parser_options] = options
             end
 
 
@@ -841,7 +847,7 @@ module Scraper
             if @document.is_a?(String)
                 # Parse the page. May raise HTMLParseError.
                 parsed = Reader.parse_page(@document, @page_info.encoding,
-                    option(:tidy_options))
+                    option(:parser_options), option(:parser))
                 @document = parsed.document
                 @page_info.encoding = parsed.encoding
             end

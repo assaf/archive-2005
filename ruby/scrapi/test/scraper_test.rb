@@ -758,6 +758,7 @@ protected
     def new_scraper(what, &block)
         cls = Class.new(Scraper::Base)
         cls.root_element nil
+        cls.parser :html_parser
         cls.instance_eval &block if block
         cls.new(what)
     end
@@ -773,7 +774,7 @@ protected
     def new_scraper(what, &block)
         cls = Class.new(Scraper::Base)
         cls.root_element nil
-        cls.tidy_options({})
+        cls.parser :tidy
         cls.instance_eval &block if block
         cls.new(what)
     end

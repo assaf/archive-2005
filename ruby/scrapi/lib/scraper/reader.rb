@@ -60,6 +60,7 @@ module Scraper
         unless const_defined? :REDIRECT_LIMIT
             REDIRECT_LIMIT = 3
             DEFAULT_TIMEOUT = 30
+            PARSERS = [:tidy, :html_parser]
         end
 
         unless const_defined? :TIDY_OPTIONS
@@ -176,15 +177,17 @@ module Scraper
 
 
         # :call-seq:
-        #   parse_page(html, encoding?, tidy_options?) => html
+        #   parse_page(html, encoding?, options?, parser) => html
         #
         # Parses an HTML page and returns the encoding and HTML element.
         # Raises HTMLParseError exceptions if it cannot parse the HTML.
         #
-        # To use Tidy, pass a Hash with the required Tidy options.
-        # If you don't have any specific options besides the default,
-        # pass an empty Hash.
-        def parse_page(content, encoding = nil, tidy_options = nil)
+        # Options are passed to the parser. For example, when using Tidy
+        # you can pass Tidy cleanup options in the hash.
+        #
+        # The last option specifies which parser to use (see PARSERS).
+        # By default Tidy is used.
+        def parse_page(content, encoding = nil, options = nil, parser = :tidy)
             begin
                 # Get the document encoding from the meta header.
                 if meta = content.match(/(<meta\s*([^>]*)http-equiv=['"]?content-type['"]?([^>]*))/i)
@@ -193,19 +196,21 @@ module Scraper
                     end
                 end
                 encoding ||= "utf8"
-                # Parse HTML into HTML tree.
-                if tidy_options
+                case (parser || :tidy)
+                when :tidy
                     # Make sure the Tidy path is set and always apply the default
                     # options (these only control things like errors, output type).
                     find_tidy
-                    tidy_options.update(TIDY_OPTIONS)
-                    tidy_options[:input_encoding] = encoding.gsub("-", "").downcase
-                    document = Tidy.open(tidy_options) do |tidy|
+                    options = (options || {}).update(TIDY_OPTIONS)
+                    options[:input_encoding] = encoding.gsub("-", "").downcase
+                    document = Tidy.open(options) do |tidy|
                         html = tidy.clean(content)
                         HTML::Document.new(html).find(:tag=>"html")
                     end
-                else
+                when :html_parser
                     document = HTML::HTMLParser.parse(content).root
+                else
+                    raise HTMLParseError, "No parser #{parser || "unspecified"}"
                 end
                 return Parsed[document, encoding]
             rescue Exception=>error
