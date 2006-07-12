@@ -1,5 +1,44 @@
 == ScrAPI toolkit for Ruby
 
+A framework for writing scrapers using CSS selectors and simple
+select => extract => store processing rules.
+
+Here’s an example that scrapes auctions from eBay:
+
+  ebay_auction = Scraper.define do
+    process "h3.ens>a", :description=>:text,
+                        :url=>"@href"
+    process "td.ebcPr>span", :price=>:text
+    process "div.ebPicture >a>img", :image=>"@src"
+
+    result :description, :url, :price, :image
+  end
+
+  ebay = Scraper.define do
+    array :auctions
+
+    process "table.ebItemlist tr.single",
+            :auctions => ebay_auction
+
+    result :auctions
+  end
+
+And using the scraper:
+
+  auctions = ebay.scrape(html)
+
+  # No. of auctions found
+  puts auctions.size
+
+  # First auction:
+  auction = auctions[0]
+  puts auction.description
+  puts auction.url
+
+
+To get the latest source code with regular updates:
+
+svn co http://labnotes.org/svn/public/ruby/scrapi
 
 
 == License
@@ -10,10 +49,10 @@ Developed for http://co.mments.com
 
 Code and documention: http://labnotes.org
 
+HTML cleanup and good hygene by Tidy, Copyright (c) 1998-2003 World Wide Web Consortium.
+License at http://tidy.sourceforge.net/license.html
 
-TODO: Add full credits
-Inclues Tidy ...
+HTML DOM extracted from Rails, Copyright (c) 2004 David Heinemeier Hansson. Under MIT license.
 
-HTML Scanner by ....
-
-HTML Parser derived from ...
+HTML parser by Takahiro Maebashi and Katsuyuki Komatsu, Ruby license.
+http://www.jin.gr.jp/~nahi/Ruby/html-parser/README.html
