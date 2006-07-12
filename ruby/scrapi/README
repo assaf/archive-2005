@@ -54,9 +54,17 @@ And the Tidy binary libraries, available here:
 
 By default scrAPI looks for the Tidy DLL (Windows) or shared library (Linux) in the directory lib/tidy. That's one place to place the Tidy library.
 
-Alternatively, just point Tidy to the library (if you're running Linux it may already be installed) with:
+Alternatively, just point Tidy to the library with:
 
   Tidy.path = "...."
+
+On Linux this would probably be:
+
+  Tidy.path = "/usr/local/lib/libtidy.so"
+
+On OS/X this would probably be:
+
+  Tidy.path = “/usr/lib/libtidy.dylib”
 
 For testing purposes, you can also use the built in HTML parser. It's useful for testing and getting up to grabs with scrAPI, but it doesn't deal well with broken HTML. So for testing only:
 

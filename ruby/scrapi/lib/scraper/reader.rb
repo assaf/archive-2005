@@ -227,7 +227,11 @@ module Scraper
             begin
                 Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.so")
             rescue LoadError
-                Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.dll")
+                begin
+                    Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.dll")
+                rescue LoadError
+                    Tidy.path = File.join(File.dirname(__FILE__), "../tidy", "libtidy.dylib")
+                end
             end
         end
 
