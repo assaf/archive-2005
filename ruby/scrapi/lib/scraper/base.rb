@@ -254,6 +254,9 @@ module Scraper
             # be called to extract a value from the selected element.
             # You can also pass a Proc or Method directly.
             #
+            # And it's always possible to pass a static value, quite useful for
+            # processing an element with more than one rule (<tt>:skip=>false</tt>).
+            #
             # == Targets
             #
             # Extractors assign the extracted value to an instance variable
@@ -273,6 +276,13 @@ module Scraper
             # For example:
             #   process "*", "ids[]"=>"@id"
             #   result :ids
+            #
+            # The special target <tt>:skip</tt> allows you to control whether
+            # other rules can apply to the same element. By default a processing
+            # rule without a block (or a block that returns true) will skip
+            # that element so no other processing rule sees it.
+            #
+            # You can change this with <tt>:skip=>false</tt>.
             def extractor(map)
                 extracts = []
                 map.each_pair do |target, source|
@@ -280,7 +290,7 @@ module Scraper
                     target = extract_value_to(target)
                     define_method :__extractor do |element|
                         value = source.call(element)
-                        target.call(self, value) if value
+                        target.call(self, value) if !value.nil?
                     end
                     extracts << instance_method(:__extractor)
                     remove_method :__extractor
@@ -605,6 +615,9 @@ module Scraper
                             element.name == tag_name
                     end
                 else
+                    return lambda do |element|
+                        source
+                    end
                     # Anything else and pianos fall from the sky.
                     raise ArgumentError, "Invalid extractor #{source.to_s}"
                 end
@@ -630,7 +643,13 @@ module Scraper
                         end
                     end
                 end
-            
+           
+                if target.to_sym == :skip
+                    return lambda do |object, value|
+                        object.send(:skip, value)
+                    end
+                end
+
                 target = target.to_s
                 if target[-2..-1] == "[]" or
                    (@arrays && array = @arrays.include?(target.to_sym))
@@ -799,7 +818,8 @@ module Scraper
                                 # If it returns true, skip the element and if
                                 # the current element, don't process any more
                                 # rules. Again, pay attention to descendants.
-                                if extractor.bind(self).call(element)
+                                skip = extractor.bind(self).call(element)
+                                if (skip || @skip.delete(true)) && @skip.delete(false).nil?
                                     @extracted = true
                                     if element.equal?(node)
                                         skip_this = true
@@ -893,6 +913,7 @@ module Scraper
             when Array: @skip.concat elements
             when HTML::Node: @skip << elements
             when nil: @skip << self.element
+            when true, false: @skip << elements
             end
             # Calling skip(element) as the last statement is
             # redundant by design.

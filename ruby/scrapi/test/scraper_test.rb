@@ -328,6 +328,36 @@ class ScraperTest < Test::Unit::TestCase
     end
 
 
+    def test_should_support_skip_extractor
+        html = %Q{<div id="1">this</div>"}
+        scraper = new_scraper(html) do
+            process "#1", :this1=>:text
+            process "#1", :this2=>:text
+        end
+        scraper.scrape
+        assert_equal "this", scraper.this1
+        assert_equal nil, scraper.this2
+
+        scraper = new_scraper(html) do
+            process "#1", :this1=>:text, :skip=>false
+            process "#1", :this2=>:text
+        end
+        scraper.scrape
+        #assert_equal "this", scraper.this1
+        #assert_equal "this", scraper.this2
+
+        scraper = new_scraper(html) do
+            process "#1", :this1=>:text, :skip=>true do
+                false
+            end
+            process "#1", :this2=>:text
+        end
+        scraper.scrape
+        assert_equal "this", scraper.this1
+        assert_equal nil, scraper.this2
+    end
+
+
     def test_should_stopped_when_asked_to
         html = %Q{<div id="1"></div><div id="2"></div><div id="3"></div>}
         scraper = new_scraper(html) do
