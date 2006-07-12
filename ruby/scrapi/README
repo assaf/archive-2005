@@ -41,6 +41,24 @@ To get the latest source code with regular updates:
 svn co http://labnotes.org/svn/public/ruby/scrapi
 
 
+== Using TIDY
+
+By default scrAPI uses Tidy to cleanup the HTML.
+
+You need to install the Tidy Gem for Ruby:
+  gem install tidy
+
+And the Tidy binary libraries, available here:
+
+  http://tidy.sourceforge.net/
+
+By default scrAPI looks for the Tidy DLL (Windows) or shared library (Linux) in the directory lib/tidy. That's one place to place the Tidy library.
+
+Alternatively, just point Tidy to the library (if you're running Linux it may already be installed) with:
+
+  Tidy.path = "...."
+
+
 == License
 
 Copyright (c) 2006 Assaf Arkin, under Creative Commons Attribution and/or MIT License
