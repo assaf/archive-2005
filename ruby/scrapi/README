@@ -58,6 +58,10 @@ Alternatively, just point Tidy to the library (if you're running Linux it may al
 
   Tidy.path = "...."
 
+For testing purposes, you can also use the built in HTML parser. It's useful for testing and getting up to grabs with scrAPI, but it doesn't deal well with broken HTML. So for testing only:
+
+  Scraper::Base.parser :html_parser
+
 
 == License
 
