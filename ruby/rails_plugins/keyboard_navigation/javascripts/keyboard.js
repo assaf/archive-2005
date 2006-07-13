@@ -276,7 +276,8 @@ Object.extend(Keyboard.Navigator.prototype, {
         }.bind(this);
         Event.observe(document, 'click', function(event) {
             var element = Event.element(event || window.event);
-            return !this.navigateTo(element, {bestMatch:true, blur:false});
+            this.navigateTo(element, {bestMatch:true, blur:false});
+            return true;
         }.bind(this));
 
         /* Position marker when (re)loading page */

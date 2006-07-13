@@ -189,7 +189,7 @@ module KeyboardHelper
     # Call with an element identifier to navigate to this element when the
     # page is refreshed.
     def navigator_store(value = nil)
-        form_tag({}, {:method=>"get", :style=>"display:hidden"}) +
+        form_tag({}, {:method=>"get", :style=>"display:none"}) +
             hidden_field_tag(@@navigator_store_id, value) +
             end_form_tag
     end
