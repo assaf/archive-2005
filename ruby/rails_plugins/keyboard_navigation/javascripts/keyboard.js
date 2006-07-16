@@ -1,3 +1,58 @@
+// Code originally from jQuery: http://jquery.com/
+(OnReady = {
+    initialize: function() {
+        var browser = navigator.userAgent.toLowerCase()
+        if ((/mozilla/.test(browser) && !/compatible/.test(browser)) ||
+            /opera/.test(browser)) {
+            // Use the handy event callback
+            document.addEventListener( "DOMContentLoaded", OnReady.fire, false );
+        } else if (/msie/.test(browser) && !/opera/.test(browser)) {
+            document.write("<scr" + "ipt id=__ie_init defer=true " + 
+                           "src=https:///><\/script>");
+            var script = document.getElementById("__ie_init");
+            script.onreadystatechange = function() {
+            if (OnReady.readyState == "complete")
+                OnReady.fire();
+            };
+            script = null;
+        } else if (/webkit/.test(browser)) {
+            OnReady.safariTimer = setInterval(function() {
+                if (document.readyState == "loaded" || document.readyState == "complete") {
+                    clearInterval( jQuery.safariTimer );
+                    OnReady.safariTimer = null;
+                    OnReady.fire();
+                }
+            }, 10);
+        }
+        Event.observe(window, 'load', OnReady.fire);
+    },
+
+    isReady: false,
+    readyList: [],
+
+    register: function(func) {
+        // From jQuery.
+        if (OnReady.isReady )
+            func.apply( document );
+        else
+            OnReady.readyList.push(func);
+        return this;
+    },
+
+    fire: function() {
+        if (!OnReady.isReady) {
+            OnReady.isReady = true;
+            if (OnReady.readyList) {
+                for (var i = 0, func; func = OnReady.readyList[i]; ++i)
+                    func.apply(document);
+                OnReady.readyList = null;
+            }
+        }
+    }
+}).initialize();
+
+
+
 var Keyboard = Class.create();
 
 /**
@@ -281,7 +336,8 @@ Object.extend(Keyboard.Navigator.prototype, {
         }.bind(this));
 
         /* Position marker when (re)loading page */
-        Event.observe(window, 'load', function() {
+        //Event.observe(window, 'load', function() {
+        OnReady.register(function() {
             if (this.current)
                 this.navigateTo(this.current);
             else if (id = this.getStoredId())
