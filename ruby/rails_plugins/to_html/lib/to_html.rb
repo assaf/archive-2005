@@ -109,6 +109,7 @@ module ToHtml
         def to_html(options = {}, &block)
             level = options[:level] ||= 1
             options[:indent] ||= 2
+            options[:root] = true unless options[:root] == false
             builder = options[:builder] ||= Builder::XmlMarkup.new(:indent => options[:indent])
             options[:name] ||= "record"
             path = (options[:path] || options[:name]).to_s
@@ -116,50 +117,56 @@ module ToHtml
             unless options[:in_body]
                 return ToHtml::envelope(options) do |where, options|
                     where.main do
-                        builder.div do
-                            to_html(options, &block)
-                            block.call Where.new(path), builder, self if block
-                        end
+                        to_html(options, &block)
+                        block.call Where.new(path), builder, self if block
                     end
                     block.call where, builder, nil if block
                 end
             end
             builder.tag! "h#{level}", options[:name].titleize
 
-            each do |name, value|
-                case value
-                when nil # Nothing
-                when Array:
-                    value.to_html options.merge(:name=>name, :level=>level + 1, :path=>"#{path} #{name}"), &block
-                when Hash:
-                    attributes = {}
-                    attributes[:id] = value[:id] if value[:id]
-                    builder.div(attributes) do
-                        value.to_html options.merge(:name=>name, :level=>level + 1, :path=>"#{path} #{name}"), &block
-                    end
-                else
-                    builder.dt "#{name.to_s.titleize}:"
-                    class_name = name.to_s.dasherize
-                    if name.to_s =~ /(^|_)url$/
-                        builder.dd(:class=>class_name) do
-                            builder << HTML_FORMATTING["url"].call(value)
-                            block.call Where.new("#{path} #{name}"), builder, value if block
+            #builder.dl(:class=>options[:name].to_s.dasherize) do
+            builder.dl do
+                each do |name, value|
+                    case value
+                    when nil # Nothing
+                    when Array # Skip to end
+                    when Hash:
+                        builder.dt "#{name.to_s.titleize}:"
+                        attributes = {:class=>name.to_s.dasherize}
+                        attributes[:id] = value[:id] if value[:id]
+                        builder.dd(attributes) do
+                            value.to_html options.merge(:root=>false, :name=>name, :level=>level + 1, :path=>"#{path} #{name}"), &block
                         end
                     else
-                        type_name = HTML_TYPE_NAMES[value.class.to_s]
-                        class_name << " #{type_name}" if type_name && class_name != type_name && type_name != "url"
-                        if HTML_FORMATTING[type_name]
+                        builder.dt "#{name.to_s.titleize}:"
+                        class_name = name.to_s.dasherize
+                        if name.to_s =~ /(^|_)url$/
                             builder.dd(:class=>class_name) do
-                                builder << HTML_FORMATTING[type_name].call(value)
+                                builder << HTML_FORMATTING["url"].call(value)
                                 block.call Where.new("#{path} #{name}"), builder, value if block
                             end
                         else
-                            builder.dd :class=>class_name do
-                                builder.text! value.to_s
-                                block.call Where.new("#{path} #{name}"), builder, value if block
+                            type_name = HTML_TYPE_NAMES[value.class.to_s]
+                            class_name << " #{type_name}" if type_name && class_name != type_name && type_name != "url"
+                            if HTML_FORMATTING[type_name]
+                                builder.dd(:class=>class_name) do
+                                    builder << HTML_FORMATTING[type_name].call(value)
+                                    block.call Where.new("#{path} #{name}"), builder, value if block
+                                end
+                            else
+                                builder.dd :class=>class_name do
+                                    builder.text! value.to_s
+                                    block.call Where.new("#{path} #{name}"), builder, value if block
+                                end
                             end
                         end
                     end
+                end
+             end
+            each do |name, value|
+                if value.is_a?(Array) && !value.empty?
+                    value.to_html options.merge(:root=>false, :name=>name, :level=>level + 1, :path=>"#{path} #{name}"), &block
                 end
             end
         end
@@ -178,10 +185,8 @@ module ToHtml
             unless options[:in_body]
                 return ToHtml::envelope(options) do |where, options|
                     where.main do
-                        builder.div do
-                            to_html(options, &block)
-                            block.call Where.new(path), builder, self if block
-                        end
+                        to_html(options, &block)
+                        block.call Where.new(path), builder, self if block
                     end
                     block.call where, builder, nil if block
                 end
