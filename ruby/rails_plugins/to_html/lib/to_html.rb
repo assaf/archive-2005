@@ -20,6 +20,8 @@ module ToHtml
     def self.envelope(options)
         builder = options[:builder] or raise ArgumentError
         options = options.merge(:in_body=>true)
+        builder.declare! :DOCTYPE, :html, :PUBLIC,
+            "-//W3C//DTD XHTML 1.0 Strict//EN", "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"
         return builder.html do
             builder.head do
                 builder.title options[:name].to_s.titleize if options[:name]
@@ -123,7 +125,11 @@ module ToHtml
                     block.call where, builder, nil if block
                 end
             end
-            builder.tag! "h#{level}", options[:name].titleize
+            if self[:href].blank?
+                builder.tag! "h#{level}", options[:name].titleize
+            else
+                builder.tag!("h#{level}") { builder.a options[:name].titleize, :href=>self[:href] }
+            end
 
             #builder.dl(:class=>options[:name].to_s.dasherize) do
             builder.dl do
@@ -139,6 +145,7 @@ module ToHtml
                             value.to_html options.merge(:root=>false, :name=>name, :level=>level + 1, :path=>"#{path} #{name}"), &block
                         end
                     else
+                        next if name.to_s == "href"
                         builder.dt "#{name.to_s.titleize}:"
                         class_name = name.to_s.dasherize
                         if name.to_s =~ /(^|_)url$/
