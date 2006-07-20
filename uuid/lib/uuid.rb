@@ -392,10 +392,7 @@ end
 class ActiveRecord::Base
 
     def self.uuid_primary_key
-        define_method(:save) do
-            write_attribute(:id, UUID.new) unless read_attribute(:id)
-            super
-        end
+        before_create { |record| record.id = UUID.new unless record.id }
     end
 
 end
