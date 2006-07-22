@@ -218,7 +218,7 @@ module HTML
             value = values.shift
             @source.sub! "?", value.to_s
           end
-          value = Regexp.escape(value.to_s) unless value.is_a?(Regexp) or value.empty?
+          value = Regexp.escape(value.to_s) unless value.is_a?(Regexp)
           case type
             when "=" then
               # Match the attribute value in full
