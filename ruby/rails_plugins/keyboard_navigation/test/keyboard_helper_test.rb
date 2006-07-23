@@ -1,6 +1,6 @@
 unless defined?(RAILS_ROOT)
-    RAILS_ROOT = ENV["RAILS_ROOT"] ||
-        File.join(File.dirname(__FILE__), "../../../../")
+  RAILS_ROOT = ENV["RAILS_ROOT"] ||
+    File.join(File.dirname(__FILE__), "../../../../")
 end
 require File.join(RAILS_ROOT, "test", "test_helper")
 require File.join(File.dirname(__FILE__), "..", "init")
@@ -11,90 +11,90 @@ class TestController < ActionController::Base ; def rescue_action(e) raise e end
 
 class KeyboardHelperTest < Test::Unit::TestCase
 
-    include KeyboardHelper
+  include KeyboardHelper
 
-    def setup
-        @controller = TestController.new
-        @request    = ActionController::TestRequest.new
-        @response   = ActionController::TestResponse.new
+  def setup
+    @controller = TestController.new
+    @request    = ActionController::TestRequest.new
+    @response   = ActionController::TestResponse.new
+  end
+  
+  
+  def test_shortcut
+    update_page do |page|
+      page.shortcut "x", "alert(event)"
     end
-    
-    
-    def test_shortcut
-        update_page do |page|
-            page.shortcut "x", "alert(event)"
-        end
-        assert_equal %Q{Keyboard.shortcuts.bindings["x"]=function(event){\nalert(event)\n};},
-            @response.body
-        update_page do |page|
-            page.shortcut "x" do
-                page.alert("x")
-            end
-        end
-        assert_equal %Q{Keyboard.shortcuts.bindings["x"]=function(event){\nalert("x");\n};},
-            @response.body
+    assert_equal %Q{Keyboard.shortcuts.bindings["x"]=function(event){\nalert(event)\n};}, @response.body
+    update_page do |page|
+      page.shortcut "x" do
+        page.alert("x")
+      end
     end
-    
-    
-    def test_navigator_and_options
-        assert_equal %Q{<script type="text/javascript">\n//<![CDATA[\nif (!Keyboard.navigator) Keyboard.navigator = new Keyboard.Navigator({event:window.event, hash:{foo:bar}, nothing:null, returnTrue:function(){return true}, string:"xyz"});\n//]]>\n</script>},
-            render(%Q{navigator :nothing=>nil, :string=>"xyz",
-                :return_true=>Proc.new { "return true" },
-                :event=>"window.event".to_sym,
-                :hash=>{:foo=>:bar}
-            })
+    assert_equal %Q{Keyboard.shortcuts.bindings["x"]=function(event){\nalert("x");\n};}, @response.body
+  end
+  
+  
+  def test_navigator_and_options
+    assert_equal %Q{<script type="text/javascript">\n//<![CDATA[\nif (!Keyboard.navigator) Keyboard.navigator = new Keyboard.Navigator({event:window.event, hash:{foo:bar}, nothing:null, returnTrue:function(){return true}, string:"xyz"});\n//]]>\n</script>},
+      render(%Q{navigator :nothing=>nil, :string=>"xyz",
+        :return_true=>Proc.new { "return true" },
+        :event=>"window.event".to_sym,
+        :hash=>{:foo=>:bar}
+      })
+  end
+
+
+  def test_navigate_to_rjs
+    assert_equal %Q{Keyboard.navigator.navigateTo("element",{scroll:true});},
+                 update_page { |page| page.navigate_to("element", :scroll=>true) }
+    assert_equal %Q{Keyboard.navigator.navigateTo(null,null);},
+                 update_page { |page| page.navigate_to() }
+    assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.next,null);},
+                 update_page { |page| page.navigate_to(:next) }
+    assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.previous,null);},
+                   update_page { |page| page.navigate_to(:previous) }
+    assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.remove,null);},
+                   update_page { |page| page.navigate_to(:remove) }
+  end
+
+
+  def test_navigator_store
+    assert_equal %Q{<form action="/test" method="get" style="display:none"><input type="hidden" /></form>},
+                 render(%Q{navigator_store})
+    assert_equal %Q{<form action="/test" method="get" style="display:none"><input type="hidden" value="foobar" /></form>},
+                 render(%Q{navigator_store("foobar")})
+  end
+
+
+
+protected
+
+  def update_page(&block)
+    @controller.class.send :define_method, :index do
+      render :update do |page|
+        block.call(page)
+      end
     end
+    get :index
+    return @response.body
+  end
+  
 
-
-    def test_navigate_to_rjs
-        assert_equal %Q{Keyboard.navigator.navigateTo("element",{scroll:true});},
-            update_page { |page| page.navigate_to("element", :scroll=>true) }
-        assert_equal %Q{Keyboard.navigator.navigateTo(null,null);},
-            update_page { |page| page.navigate_to() }
-        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.next,null);},
-            update_page { |page| page.navigate_to(:next) }
-        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.previous,null);},
-            update_page { |page| page.navigate_to(:previous) }
-        assert_equal %Q{Keyboard.navigator.navigateTo(Keyboard.Navigator.remove,null);},
-            update_page { |page| page.navigate_to(:remove) }
+  def render(code)
+    @controller.class.send :define_method, :index do
+      render :inline=>"<%= #{code} %>"
     end
-
-
-    def test_navigator_store
-        assert_equal %Q{<form action="/test" method="get" style="display:hidden"><input type="hidden" /></form>},
-            render(%Q{navigator_store})
-        assert_equal %Q{<form action="/test" method="get" style="display:hidden"><input type="hidden" value="foobar" /></form>},
-            render(%Q{navigator_store("foobar")})
+    get :index
+    return @response.body
+  end
+  
+  
+  def execute(&block)
+    @controller.class.send :define_method, :index do
+      instance_eval &block
+      render :text=>""
     end
-
-
-
-    def update_page(&block)
-        @controller.class.send :define_method, :index do
-            render :update do |page|
-                block.call(page)
-            end
-        end
-        get :index
-        return @response.body
-    end
-    
-
-    def render(code)
-        @controller.class.send :define_method, :index do
-            render :inline=>"<%= #{code} %>"
-        end
-        get :index
-        return @response.body
-    end
-    
-    
-    def execute(&block)
-        @controller.class.send :define_method, :index do
-            instance_eval &block
-            render :text=>""
-        end
-        get :index
-    end
+    get :index
+  end
     
 end

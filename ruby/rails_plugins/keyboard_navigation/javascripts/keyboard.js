@@ -1,56 +1,54 @@
 // Code originally from jQuery: http://jquery.com/
 (OnReady = {
-    initialize: function() {
-        var browser = navigator.userAgent.toLowerCase()
-        if ((/mozilla/.test(browser) && !/compatible/.test(browser)) ||
-            /opera/.test(browser)) {
-            // Use the handy event callback
-            document.addEventListener( "DOMContentLoaded", OnReady.fire, false );
-        } else if (/msie/.test(browser) && !/opera/.test(browser)) {
-            document.write("<scr" + "ipt id=__ie_init defer=true " + 
-                           "src=https:///><\/script>");
-            var script = document.getElementById("__ie_init");
-            script.onreadystatechange = function() {
-            if (OnReady.readyState == "complete")
-                OnReady.fire();
-            };
-            script = null;
-        } else if (/webkit/.test(browser)) {
-            OnReady.safariTimer = setInterval(function() {
-                if (document.readyState == "loaded" || document.readyState == "complete") {
-                    clearInterval( jQuery.safariTimer );
-                    OnReady.safariTimer = null;
-                    OnReady.fire();
-                }
-            }, 10);
+  initialize: function() {
+    var browser = navigator.userAgent.toLowerCase()
+    if ((/mozilla/.test(browser) && !/compatible/.test(browser)) ||
+      /opera/.test(browser)) {
+      // Use the handy event callback
+      document.addEventListener( "DOMContentLoaded", OnReady.fire, false );
+    } else if (/msie/.test(browser) && !/opera/.test(browser)) {
+      document.write("<scr" + "ipt id=__ie_init defer=true " + "src=https:///><\/script>");
+      var script = document.getElementById("__ie_init");
+      script.onreadystatechange = function() {
+        if (OnReady.readyState == "complete")
+          OnReady.fire();
+      };
+      script = null;
+    } else if (/webkit/.test(browser)) {
+      OnReady.safariTimer = setInterval(function() {
+        if (document.readyState == "loaded" || document.readyState == "complete") {
+          clearInterval( jQuery.safariTimer );
+          OnReady.safariTimer = null;
+          OnReady.fire();
         }
-        Event.observe(window, 'load', OnReady.fire);
-    },
-
-    isReady: false,
-    readyList: [],
-
-    register: function(func) {
-        // From jQuery.
-        if (OnReady.isReady )
-            func.apply( document );
-        else
-            OnReady.readyList.push(func);
-        return this;
-    },
-
-    fire: function() {
-        if (!OnReady.isReady) {
-            OnReady.isReady = true;
-            if (OnReady.readyList) {
-                for (var i = 0, func; func = OnReady.readyList[i]; ++i)
-                    func.apply(document);
-                OnReady.readyList = null;
-            }
-        }
+      }, 10);
     }
-}).initialize();
+    Event.observe(window, 'load', OnReady.fire);
+  },
 
+  isReady: false,
+  readyList: [],
+
+  register: function(func) {
+    // From jQuery.
+    if (OnReady.isReady )
+      func.apply( document );
+    else
+      OnReady.readyList.push(func);
+    return this;
+  },
+
+  fire: function() {
+    if (!OnReady.isReady) {
+      OnReady.isReady = true;
+      if (OnReady.readyList) {
+        for (var i = 0, func; func = OnReady.readyList[i]; ++i)
+          func.apply(document);
+        OnReady.readyList = null;
+      }
+    }
+  }
+}).initialize();
 
 
 var Keyboard = Class.create();
@@ -73,59 +71,59 @@ var Keyboard = Class.create();
  */
 Keyboard.Shortcuts = Class.create();
 Object.extend(Keyboard.Shortcuts.prototype, {
-    initialize: function() {
-        this.bindings = {};
-        Event.observe(document, 'keypress', this.onKeypress.bind(this), true);
-        this.prefix = null;
-    },
+  initialize: function() {
+    this.bindings = {};
+    Event.observe(document, 'keypress', this.onKeypress.bind(this), true);
+    this.prefix = null;
+  },
 
-    /**
-     * Returns the keycode of the keypress event.
-     */ 
-    getKeyChar: function(event, modifiers) {
-        event = event || window.event;
-        modifiers = modifiers || {}
-        modifiers.ctrlKey = modifiers.ctrlKey || false;
-        modifiers.altKey = modifiers.altKey || false;
-        modifiers.metaKey = modifiers.metaKey || false;
-        for (var mod in modifiers)
-            if (!!modifiers[mod] != !!event[mod])
-                return null;
-        if (event) {
-            var keyCode = event.keyCode || event.which;
-            return String.fromCharCode(keyCode).toLowerCase();
-        }
+  /**
+   * Returns the keycode of the keypress event.
+   */ 
+  getKeyChar: function(event, modifiers) {
+    event = event || window.event;
+    modifiers = modifiers || {}
+    modifiers.ctrlKey = modifiers.ctrlKey || false;
+    modifiers.altKey = modifiers.altKey || false;
+    modifiers.metaKey = modifiers.metaKey || false;
+    for (var mod in modifiers)
+      if (!!modifiers[mod] != !!event[mod])
         return null;
-    },
-
-    /**
-     * Handles the keypress event. Ignores the event if it occurrs
-     * inside an input control.
-     */
-    onKeypress: function(event) {
-        event = event || window.event;
-        var target = Event.element(event);
-        if (target.nodeType == 1 && (target.nodeName == "INPUT" ||
-            target.nodeName == "TEXTAREA" || target.nodeName == "SELECT"))
-            return true;
-
-        var keyCode = this.getKeyChar(event);
-        if (this.prefix) {
-            var pair = this.prefix + keyCode;
-            if (this.bindings[pair] && this.bindings[pair](event)) {
-                this.prefix = null;
-                Event.stop(event);
-                return false;
-            }
-        }
-        if (this.bindings[keyCode] && this.bindings[keyCode](event)) {
-            this.prefix = null;
-            Event.stop(event);
-            return false;
-        }
-        this.prefix = keyCode;
-        return true;
+    if (event) {
+      var keyCode = event.keyCode || event.which;
+      return String.fromCharCode(keyCode).toLowerCase();
     }
+    return null;
+  },
+
+  /**
+   * Handles the keypress event. Ignores the event if it occurrs
+   * inside an input control.
+   */
+  onKeypress: function(event) {
+    event = event || window.event;
+    var target = Event.element(event);
+    if (target.nodeType == 1 && (target.nodeName == "INPUT" ||
+        target.nodeName == "TEXTAREA" || target.nodeName == "SELECT"))
+      return true;
+
+    var keyCode = this.getKeyChar(event);
+    if (this.prefix) {
+      var pair = this.prefix + keyCode;
+      if (this.bindings[pair] && this.bindings[pair](event)) {
+        this.prefix = null;
+        Event.stop(event);
+        return false;
+      }
+    }
+    if (this.bindings[keyCode] && this.bindings[keyCode](event)) {
+      this.prefix = null;
+      Event.stop(event);
+      return false;
+    }
+    this.prefix = keyCode;
+    return true;
+  }
 });
 Keyboard.shortcuts = new Keyboard.Shortcuts();
 
@@ -264,315 +262,315 @@ Keyboard.shortcuts = new Keyboard.Shortcuts();
  */
 Keyboard.Navigator = Class.create();
 Object.extend(Keyboard.Navigator, {
-    next: {},
-    previous: {},
-    remove: {},
-    markerId: "navigator-marker",
-    storeId: "navigator-store"
+  next: {},
+  previous: {},
+  remove: {},
+  markerId: "navigator-marker",
+  storeId: "navigator-store"
 });
 Object.extend(Keyboard.Navigator.prototype, {
-    initialize: function(options) {
-        this.current = null;
+  initialize: function(options) {
+    this.current = null;
 
-        /* Setup the navigation marker */
-        if (typeof options.marker == "function")
-            this.marker = options.marker;
-        else if (typeof options.marker == "string")
-            this.marker = this.createMarker({select: options.marker});
-        else
-            this.marker = this.createMarker(options.marker || {});
+    /* Setup the navigation marker */
+    if (typeof options.marker == "function")
+      this.marker = options.marker;
+    else if (typeof options.marker == "string")
+      this.marker = this.createMarker({select: options.marker});
+    else
+      this.marker = this.createMarker(options.marker || {});
 
-        /* Select all elements we can navigate through */
-        if (typeof options.select == "string")
-            this.select = this.selector(options.select);
-        else if (typeof options.select == "function")
-            this.select = options.select;
-        else if (options.select.constructor == Array)
-            this.select = function() { return options.select; };
-        else
-            this.select = function() { return []; }
+    /* Select all elements we can navigate through */
+    if (typeof options.select == "string")
+      this.select = this.selector(options.select);
+    else if (typeof options.select == "function")
+      this.select = options.select;
+    else if (options.select.constructor == Array)
+      this.select = function() { return options.select; };
+    else
+      this.select = function() { return []; }
 
-        /* Get next and previous page's URL */
-        if (typeof options.nextPage == "string") {
-            this.nextPage = function(select) {
-                var selector = this.selector(select);
-                return function() {
-                    var list = selector();
-                    return list[0] ? list[0].href : null;
-                }
-            }.bind(this)(options.nextPage);
-        } else if (typeof options.nextPage == "function")
-            this.nextPage = options.nextPage;
-        else
-            this.nextPage = function() { return null; }
-
-        if (typeof options.previousPage == "string") {
-            this.previousPage = function(select) {
-                var selector = this.selector(select);
-                return function() {
-                    var list = selector();
-                    return list[0] ? list[0].href : null;
-                }
-            }.bind(this)(options.previousPage);
-        } else if (typeof options.previousPage == "function")
-            this.previousPage = options.previousPage;
-        else
-            this.previousPage = function() { return null; }
-
-        /* Key bindings and navigation by focus */
-        var scrollOptions = {scroll: true, halfPage: true}
-        if (options.scrollOptions)
-            Object.extend(scrollOptions, options.scrollOptions);
-        Keyboard.shortcuts.bindings[options.keyNext || "j"] = function(event) {
-            this.navigateTo(Keyboard.Navigator.next, scrollOptions);
-        }.bind(this);
-        Keyboard.shortcuts.bindings[options.keyPrevious || "k"] = function(event) {
-            this.navigateTo(Keyboard.Navigator.previous, scrollOptions);
-        }.bind(this);
-        Event.observe(document, 'click', function(event) {
-            var element = Event.element(event || window.event);
-            this.navigateTo(element, {bestMatch:true, blur:false});
-            return true;
-        }.bind(this));
-
-        /* Position marker when (re)loading page */
-        //Event.observe(window, 'load', function() {
-        OnReady.register(function() {
-            if (this.current)
-                this.navigateTo(this.current);
-            else if (id = this.getStoredId())
-                this.navigateTo(id, scrollOptions);
-            if (!this.current) {
-                var current = (document.referrer == this.nextPage()) ?
-                    this.select().last() : this.select().first();
-                this.navigateTo(current, scrollOptions);
-            }
-        }.bind(this));
-    },
-
-    next: function(current) {
-        var list = this.select();
-        for (var i = 0, j = list.length; i < j; ++i)
-            if (list[i].id == current.id)
-                return list[i + 1];
-        return null;
-    },
-
-    previous: function(current) {
-        var list = this.select();
-        for (var i = 0, j = list.length; i < j; ++i)
-            if (list[i].id == current.id)
-                return list[i - 1];
-        return null;
-    },
-
-    /**
-     * Call this method to navigate to a different element. Target can be an
-     * element or identifier.
-     *
-     * Users can only navigate to elements returned by the select() method
-     * (see the select option).
-     *
-     * If target is Keyboard.Navigator.next, navigates to the next elemenet,
-     * or if on the last element of the page, to the next page.
-     *
-     * If target is Keyboard.Navigator.previous, navigates to the previous
-     * elemenet, or if on the first element of the page, to the previous page.
-     *
-     * If target is Keyboard.Navigator.remove, navigates to the next element
-     * following the removed elements, if last, to the previous element.
-     * The removed element is specified by the removed option, if null, assumes
-     * the current element.
-     *
-     * The options argument is passed to the focusOn function. The default
-     * implementation will them pass it to the marker and scrollTo functions.
-     * The default implementation supports the following options:
-     * *  scroll -- If true, scroll the page so the selected element is viewed
-     *    in full (top part if bigger than screen)
-     * *  halfPage -- If true, scroll by at least half page when the next
-     *    element navigated to is off screen.
-     */
-    navigateTo: function(target, options) {
-        /* Navigate next/previous */
-        if (target == Keyboard.Navigator.next) {
-            var next = this.current ? this.next(this.current) : this.select().first();
-            if (next)
-                return this.navigateTo(next, options);
-            next = this.nextPage();
-            if (next != null)
-                location.href = next;
-            return true;
+    /* Get next and previous page's URL */
+    if (typeof options.nextPage == "string") {
+      this.nextPage = function(select) {
+        var selector = this.selector(select);
+        return function() {
+          var list = selector();
+          return list[0] ? list[0].href : null;
         }
-        if (target == Keyboard.Navigator.previous) {
-            var previous = this.current ? this.previous(this.current) : this.select().last();
-            if (previous)
-                return this.navigateTo(previous, options);
-            previous = this.previousPage();
-            if (previous != null)
-                location.href = previous;
-            return true;
+      }.bind(this)(options.nextPage);
+    } else if (typeof options.nextPage == "function")
+      this.nextPage = options.nextPage;
+    else
+      this.nextPage = function() { return null; }
+
+    if (typeof options.previousPage == "string") {
+      this.previousPage = function(select) {
+        var selector = this.selector(select);
+        return function() {
+          var list = selector();
+          return list[0] ? list[0].href : null;
         }
-        /* When removing specified element */
-        if (target == Keyboard.Navigator.remove) {
-            var removed = $(options.removed || this.current);
-            options.removed = null;
-            if (removed) {
-                var next = this.next(this.current);
-                if (!next)
-                    next = this.previous(this.current);
-                return this.navigateTo(next, options);
-            }
-        }
+      }.bind(this)(options.previousPage);
+    } else if (typeof options.previousPage == "function")
+      this.previousPage = options.previousPage;
+    else
+      this.previousPage = function() { return null; }
 
-        /* Best match navigation */
-        if (options.bestMatch) {
-            var list = this.select();
-            for (var i = 0, j = list.length; i < j; ++i)
-                if (list[i] == target || Element.childOf(target, list[i])) {
-                    options.bestMatch = false;
-                    return this.navigateTo(list[i], options);
-                }
-            return false;
-        }
+    /* Key bindings and navigation by focus */
+    var scrollOptions = {scroll: true, halfPage: true}
+    if (options.scrollOptions)
+      Object.extend(scrollOptions, options.scrollOptions);
+    Keyboard.shortcuts.bindings[options.keyNext || "j"] = function(event) {
+      this.navigateTo(Keyboard.Navigator.next, scrollOptions);
+    }.bind(this);
+    Keyboard.shortcuts.bindings[options.keyPrevious || "k"] = function(event) {
+      this.navigateTo(Keyboard.Navigator.previous, scrollOptions);
+    }.bind(this);
+    Event.observe(document, 'click', function(event) {
+      var element = Event.element(event || window.event);
+      this.navigateTo(element, {bestMatch:true, blur:false});
+      return true;
+    }.bind(this));
 
-        /* Lose focus is event happens on an input field */
-	if (options.blur !== false) {
-            var inputs = document.getElementsByTagName("input");
-            for (var i = 0, input; input = inputs[i]; i++)
-                input.blur();
-        }
+    /* Position marker when (re)loading page */
+    //Event.observe(window, 'load', function() {
+    OnReady.register(function() {
+      if (this.current)
+        this.navigateTo(this.current);
+      else if (id = this.getStoredId())
+        this.navigateTo(id, scrollOptions);
+      if (!this.current) {
+        var current = (document.referrer == this.nextPage()) ?
+          this.select().last() : this.select().first();
+        this.navigateTo(current, scrollOptions);
+      }
+    }.bind(this));
+  },
 
-        /* Remove existing marker */
-        if (this.current) {
-            this.focusOff(this.current);
-            this.current = null;
-            this.setStoredId(null);
-        }
-        if (!(target = $(target)))
-            return false;
+  next: function(current) {
+    var list = this.select();
+    for (var i = 0, j = list.length; i < j; ++i)
+      if (list[i].id == current.id)
+        return list[i + 1];
+    return null;
+  },
 
-        if (target && target.id) {
-            this.current = target;
-            this.focusOn(target, options);
-            this.setStoredId(target.id);
-            return true;
-        }
-        return false;
-    },
+  previous: function(current) {
+    var list = this.select();
+    for (var i = 0, j = list.length; i < j; ++i)
+      if (list[i].id == current.id)
+        return list[i - 1];
+    return null;
+  },
 
-    /**
-     * Override this method if you want to implement different
-     * behavior when focusing on an element.
-     */
-    focusOn: function(element, options) {
-        options = options || {};
-        this.marker(element, options);
-        if (options.scroll)
-            this.scrollTo(element, options);
-    },
-
-    /**
-     * Override this method if you want to implement different
-     * behavior when element loses focus.
-     */
-    focusOff: function(element) {
-        if (marker = $(Keyboard.Navigator.markerId))
-            marker.remove();
-    },
-
-    /**
-     * Convenience function for invoking an action by matching a form
-     * based on its action URL. The form must be part of the currently
-     * selected element.
-     *
-     * For example:
-     *   Keyboard.navigator.invoke(/\/post\/publish/)
-     * Submits a form with an action that contains the URL /post/publish.
-     */
-    invoke: function(action) {
-        if (this.current) {
-            var forms = this.current.getElementsByTagName("form");
-            for (var i = 0; i < forms.length ; ++i) {
-                if (forms[i].action && forms[i].action.match(action)) {
-                    forms[i].onsubmit ?
-                        forms[i].onsubmit() : forms[i].submit();
-                    return true;
-                }
-            }
-        }
-        return false;
-    },
-
-    scrollTo: function(element, options) {
-        var focusTop = Position.cumulativeOffset(element)[1];
-        var focusBottom = focusTop + Element.getHeight(element);
-        var viewTop = window.pageYOffset || document.body.scrollTop || document.documentElement.scrollTop;
-        var viewBottom = viewTop + (window.innerHeight || document.documentElement.clientHeight);
-        var newTop = viewTop;
-        if (focusBottom > viewBottom) {
-            newTop += focusBottom - viewBottom;
-            var height = window.innerHeight || window.screen.height;
-            if (options.halfPage && height)
-                newTop += height / 2;
-        }
-        if (focusTop < newTop)
-            newTop = focusTop;
-        window.scrollTo(0, newTop);
-    },
-
-    getStoredId: function() {
-        var element = document.getElementById(Keyboard.Navigator.storeId);
-        if (element)
-            return element.value;
-    },
-
-    setStoredId: function(id) {
-        var element = document.getElementById(Keyboard.Navigator.storeId);
-        if (element)
-            element.value = id;
-    },
-
-    selector: function(expression) {
-        var selectors = expression.strip().split(/\s+/).map(function(expression) {
-            return new Selector(expression);
-        });
-        return function(scope) {
-            return selectors.inject([scope], function(results, selector) {
-                return results.map(selector.findElements.bind(selector)).flatten();
-            }).flatten();
-        }
-    },
-
-    createMarker: function(options) {
-        var selector;
-        if (typeof options.select == "string")
-            selector = this.selector(options.select);
-        else if (typeof options.select == "function")
-            selector = options.select;
-        else
-            selector = function(element) { return [element]; }
-
-        var content;
-        if (options.image) {
-            new Image().src = options.image;
-            var image = "<img src=\"" + options.image + "\" />";
-            content = function() { return image;  }
-        } else if (typeof options.content == "string") {
-            content = function() {
-                var content = options.content;
-                return function() { return content; }
-            }();
-        } else if (typeof options.content == "function")
-            content = options.content;
-        else
-            content = function() { return "&raquo;"; }
-
-        var insertion = options.insertion || Insertion.Top;
-        return function(element, options) {
-            var marked = selector(element)[0];
-            if (marked)
-                new insertion(marked, "<span id=\"" + Keyboard.Navigator.markerId + "\">&raquo;</span>");
-        }
+  /**
+   * Call this method to navigate to a different element. Target can be an
+   * element or identifier.
+   *
+   * Users can only navigate to elements returned by the select() method
+   * (see the select option).
+   *
+   * If target is Keyboard.Navigator.next, navigates to the next elemenet,
+   * or if on the last element of the page, to the next page.
+   *
+   * If target is Keyboard.Navigator.previous, navigates to the previous
+   * elemenet, or if on the first element of the page, to the previous page.
+   *
+   * If target is Keyboard.Navigator.remove, navigates to the next element
+   * following the removed elements, if last, to the previous element.
+   * The removed element is specified by the removed option, if null, assumes
+   * the current element.
+   *
+   * The options argument is passed to the focusOn function. The default
+   * implementation will them pass it to the marker and scrollTo functions.
+   * The default implementation supports the following options:
+   * *  scroll -- If true, scroll the page so the selected element is viewed
+   *    in full (top part if bigger than screen)
+   * *  halfPage -- If true, scroll by at least half page when the next
+   *    element navigated to is off screen.
+   */
+  navigateTo: function(target, options) {
+    /* Navigate next/previous */
+    if (target == Keyboard.Navigator.next) {
+      var next = this.current ? this.next(this.current) : this.select().first();
+      if (next)
+        return this.navigateTo(next, options);
+      next = this.nextPage();
+      if (next != null)
+        location.href = next;
+      return true;
     }
+    if (target == Keyboard.Navigator.previous) {
+      var previous = this.current ? this.previous(this.current) : this.select().last();
+      if (previous)
+        return this.navigateTo(previous, options);
+      previous = this.previousPage();
+      if (previous != null)
+        location.href = previous;
+      return true;
+    }
+    /* When removing specified element */
+    if (target == Keyboard.Navigator.remove) {
+      var removed = $(options.removed || this.current);
+      options.removed = null;
+      if (removed) {
+        var next = this.next(this.current);
+        if (!next)
+          next = this.previous(this.current);
+        return this.navigateTo(next, options);
+      }
+    }
+
+    /* Best match navigation */
+    if (options.bestMatch) {
+      var list = this.select();
+      for (var i = 0, j = list.length; i < j; ++i)
+        if (list[i] == target || Element.childOf(target, list[i])) {
+          options.bestMatch = false;
+          return this.navigateTo(list[i], options);
+        }
+      return false;
+    }
+
+    /* Lose focus is event happens on an input field */
+    if (options.blur !== false) {
+      var inputs = document.getElementsByTagName("input");
+      for (var i = 0, input; input = inputs[i]; i++)
+        input.blur();
+    }
+
+    /* Remove existing marker */
+    if (this.current) {
+      this.focusOff(this.current);
+      this.current = null;
+      this.setStoredId(null);
+    }
+    if (!(target = $(target)))
+      return false;
+
+    if (target && target.id) {
+      this.current = target;
+      this.focusOn(target, options);
+      this.setStoredId(target.id);
+      return true;
+    }
+    return false;
+  },
+
+  /**
+   * Override this method if you want to implement different
+   * behavior when focusing on an element.
+   */
+  focusOn: function(element, options) {
+    options = options || {};
+    this.marker(element, options);
+    if (options.scroll)
+      this.scrollTo(element, options);
+  },
+
+  /**
+   * Override this method if you want to implement different
+   * behavior when element loses focus.
+   */
+  focusOff: function(element) {
+    if (marker = $(Keyboard.Navigator.markerId))
+      marker.remove();
+  },
+
+  /**
+   * Convenience function for invoking an action by matching a form
+   * based on its action URL. The form must be part of the currently
+   * selected element.
+   *
+   * For example:
+   *   Keyboard.navigator.invoke(/\/post\/publish/)
+   * Submits a form with an action that contains the URL /post/publish.
+   */
+  invoke: function(action) {
+    if (this.current) {
+      var forms = this.current.getElementsByTagName("form");
+      for (var i = 0; i < forms.length ; ++i) {
+        if (forms[i].action && forms[i].action.match(action)) {
+          forms[i].onsubmit ?
+            forms[i].onsubmit() : forms[i].submit();
+          return true;
+        }
+      }
+    }
+    return false;
+  },
+
+  scrollTo: function(element, options) {
+    var focusTop = Position.cumulativeOffset(element)[1];
+    var focusBottom = focusTop + Element.getHeight(element);
+    var viewTop = window.pageYOffset || document.body.scrollTop || document.documentElement.scrollTop;
+    var viewBottom = viewTop + (window.innerHeight || document.documentElement.clientHeight);
+    var newTop = viewTop;
+    if (focusBottom > viewBottom) {
+      newTop += focusBottom - viewBottom;
+      var height = window.innerHeight || window.screen.height;
+      if (options.halfPage && height)
+        newTop += height / 2;
+    }
+    if (focusTop < newTop)
+      newTop = focusTop;
+    window.scrollTo(0, newTop);
+  },
+
+  getStoredId: function() {
+    var element = document.getElementById(Keyboard.Navigator.storeId);
+    if (element)
+      return element.value;
+  },
+
+  setStoredId: function(id) {
+    var element = document.getElementById(Keyboard.Navigator.storeId);
+    if (element)
+      element.value = id;
+  },
+
+  selector: function(expression) {
+    var selectors = expression.strip().split(/\s+/).map(function(expression) {
+      return new Selector(expression);
+    });
+    return function(scope) {
+      return selectors.inject([scope], function(results, selector) {
+        return results.map(selector.findElements.bind(selector)).flatten();
+      }).flatten();
+    }
+  },
+
+  createMarker: function(options) {
+    var selector;
+    if (typeof options.select == "string")
+      selector = this.selector(options.select);
+    else if (typeof options.select == "function")
+      selector = options.select;
+    else
+      selector = function(element) { return [element]; }
+
+    var content;
+    if (options.image) {
+      new Image().src = options.image;
+      var image = "<img src=\"" + options.image + "\" />";
+      content = function() { return image;  }
+    } else if (typeof options.content == "string") {
+      content = function() {
+        var content = options.content;
+        return function() { return content; }
+      }();
+    } else if (typeof options.content == "function")
+      content = options.content;
+    else
+      content = function() { return "&raquo;"; }
+
+    var insertion = options.insertion || Insertion.Top;
+    return function(element, options) {
+      var marked = selector(element)[0];
+      if (marked)
+        new insertion(marked, "<span id=\"" + Keyboard.Navigator.markerId + "\">&raquo;</span>");
+    }
+  }
 
 });
