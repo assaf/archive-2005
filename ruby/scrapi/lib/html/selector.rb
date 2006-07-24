@@ -7,6 +7,7 @@
 
 module HTML
 
+
   # Selects HTML elements using CSS 2 selectors.
   #
   # The +Selector+ class uses CSS selector expressions to match and select
@@ -129,6 +130,8 @@ module HTML
   # For example:
   #   selector = HTML::Selector.new "#?", /^\d+$/
   # matches any element whose identifier consists of one or more digits.
+  #
+  # See http://www.w3.org/TR/css3-selectors/
   class Selector
 
 
@@ -137,22 +140,37 @@ module HTML
 
 
     unless const_defined? :REGEX
-      # Parse each selector into six parts:
-      # $1 element name or * (optional)
-      # $2 ID name (including leading #, optional, #? allowed)
-      # $3 class names (including leading ., zero or more)
-      # $4 attribute expressions (zero or more)
-      # $5 separator/operator (empty, +, >, etc)
-      # $6 anything else (no leading spaces)
-      REGEX = /^(\*|[[:alpha:]][\w\-:]*)?(#(?:\?|[\w\-:]+))?((?:\.[\w\-:]*){0,})((?:\[[[:alpha:]][\w\-:][^\]]*\]){0,})\s*([,+>~]?)\s*(.*)$/ #:nodoc:
-
       # Parse each attribute expression into three parts:
       # $1 attribute name
       # $2 matching operation
       # $3 matched value
       # Matching operation may be =, ~= or |=, etc (or nil).
       # Value may be empty.
-      ATTR_REGEX = /^([A-Za-z0-9_\-:]*)((?:[~|^$*])?=)?(.*)$/ #:nodoc:
+      ATTR_REGEX = /^([A-Za-z0-9_\-:]*)\s*((?:[~|^$*])?=)?(.*)$/ #:nodoc:
+
+      # TODO: More regular selections based on CSS3 lexical rules.
+    end
+
+
+    class << self
+
+      # :call-seq:
+      #   Selector.for_class(cls) => selector
+      #
+      # Creates a new selector for the given class name.
+      def for_class(cls)
+        self.new([".?", cls])
+      end
+
+
+      # :call-seq:
+      #   Selector.for_id(id) => selector
+      #
+      # Creates a new selector for the given id.
+      def for_id(id)
+        self.new(["#?", id])
+      end
+
     end
 
 
@@ -167,180 +185,145 @@ module HTML
     # Throws InvalidSelectorError is the selector expression is invalid.
     def initialize(statement, *values)
       raise ArgumentError, "CSS expression cannot be empty" if statement.empty?
-      @source = statement = statement.strip
-      # Parse the first selector expression into $1-$4, anything else goes in $5
-      parts = Selector::REGEX.match(statement)
-      raise InvalidSelectorException, "Invalid (empty) selector statement" if parts[0].length == 0
+      statement = statement.dup.strip
+      @source = ""
 
-      # Set tag_name to the element name if specified and not *
-      @tag_name = parts[1] if parts[1] and !parts[1].empty? and parts[1] != '*'
-      # This array holds the regular expressions for matching attributes.
-      # We use an array since we allow multiple expressions on the same attribute,
-      # e.g. to find an element with both class 'foo' and class 'bar'.
-      @attrs = []
-
-      # Match the ID attribute if specified
-      unless parts[2].nil? || parts[2].empty?
-        value = parts[2][1..-1]
-        if value == "?"
-          value = values.shift
-          @source.sub! "?", value.to_s
-        end
-        value = Regexp.new("^#{Regexp.escape(value.to_s)}$") unless value.is_a?(Regexp)
-        @attrs << ["id", value]
+      # Get element name. Asterisk matches everything.
+      statement.sub!(/^(\*|[[:alpha:]][\w\-:]*)/) do |match|
+        @name = match unless @name == "*"
+        @source << @name
+        "" # Remove
       end
 
-      # The third part is a collection of class names, prefixed with dot
-      # Create an attribute matching regular expression for each class
-      # The class attribute is a set of space-separated names, so match accordingly
-      unless parts[3].empty?
-        parts[3].split('.').each do |value|
-          unless value.empty?
-            if value == "?"
-              value = values.shift
-              @source.sub! "?", value.to_s
-            end
-            value = Regexp.new("(^|\s)#{Regexp.escape(value.to_s)}($|\s)") unless value.is_a?(Regexp)
-            @attrs << ["class", value]
+      # Get identifier, class, attribute name, pseudo or negation.
+      while true
+        statement.strip!
+        # Element identifier.
+        next if statement.sub!(/^#(?:\?|[\w\-:]+)/) do |match|
+          id = match[1..-1]
+          if id == "?"
+            id = values.shift
           end
+          @source << "##{id}"
+          id = Regexp.new("^#{Regexp.escape(id.to_s)}$") unless id.is_a?(Regexp)
+          (@attributes ||= []) << ["id", id]
+          "" # Remove
         end
-      end
-
-      # Process the remaining attribute expressions. Each expression is enclosed
-      # within square brackets, so split the expressions into anything between the
-      # square brackets. The result may include empty elements, skip those.
-      parts[4].split(/\[|\]/).each do |expr|
-        if not expr.empty?
+        # Class name.
+        next if statement.sub!(/^\.[\w\-:]+/) do |match|
+          class_name = match[1..-1]
+          @source << ".#{class_name}"
+          class_name = Regexp.new("(^|\s)#{Regexp.escape(class_name.to_s)}($|\s)") unless class_name.is_a?(Regexp)
+          (@attributes ||= []) << ["class", class_name]
+          "" # Remove
+        end
+        # Attribute value.
+        next if statement.sub!(/^\[\s*[[:alpha:]][\w\-:]\s*[^\]]*\]/) do |match|
           # Parse the attribute expression and created a regular expression
           # for matching the attribute value, based on the operation.
-          name, type, value = ATTR_REGEX.match(expr)[1..3]
+          name, equality, value = ATTR_REGEX.match(expr)[1..3]
           if value == "?"
             value = values.shift
-            @source.sub! "?", value.to_s
+            @source << "[#{name}#{equality}#{value}]"
+          else
+            @source << "[#{name}#{equality}#{value}]"
+            value.strip!
+            if (value[0] == ?" or value[0] == ?') and value[0] == value[-1]
+              value = value[1..-2]
+            end
           end
-          value = Regexp.escape(value.to_s) unless value.is_a?(Regexp) or value.empty?
-          case type
-            when "=" then
-              # Match the attribute value in full
-              match = Regexp.new("^#{value}$")
-            when "~=" then
-              # Match a space-separated word within the attribute value
-              match = Regexp.new("(^|\s)#{value}($|\s)")
-            when "^="
-              # Match the beginning of the attribute value
-              match = Regexp.new("^#{value}")
-            when "$="
-              # Match the end of the attribute value
-              match = Regexp.new("#{value}$")
-            when "*="
-              # Match substring of the attribute value
-              match = value.is_a?(Regexp) ? value : Regexp.new(value)
-            when "|=" then
-              # Match the first space-separated item of the attribute value
-              match = Regexp.new("^#{value}($|\s)")
-            else
-              raise InvalidSelectorError, "Invalid value matching operator in #{parts[4]}" unless value.empty?
-              # Match all attributes values (existence check)
-              match = //
-          end
-          @attrs << [name, match]
+          (@attributes ||= []) << [name.downcase.strip, attribute_match(equality, value)]
+          "" # Remove
         end
+        # TODO: pseudo.
+        # TODO: negation.
+        # No match: moving on.
+        break
       end
 
-      if !parts[6].empty?
-        raise ArgumentError, "Invalid CSS expression" if statement == parts[6]
-        second = Selector.new(parts[6], *values)
-        @source.sub! parts[6], second.inspect
-        # Create a compound selector based on the remainder of the statement.
-        # This is also why we need the factory and can't call new directly.
-        case parts[5]
-          when ","
-            # Alternative selector: second statement is alternative to the first one,
-            # so no dependency.
-            @alt = second
-          when "+"
-            # Sibling selector: second statement is returned that will match element
-            # following current element.
-            @depends = lambda do |element, first|
-              if element = next_element(element)
-                second.match(element, first)
-              end
-            end
-          when "~"
-            # Sibling (indirect) selector: second statement is returned that will match
-            # element following the current element.
-            @depends = lambda do |element, first|
-              matches = []
-              while element = next_element(element)
-                if subset = second.match(element, first)
-                  if first && !subset.empty?
-                    matches << subset.first
-                    break
-                  else
-                    matches.concat subset
-                  end
-                end
-              end
-              matches.empty? ? nil : matches
-            end
-          when ">"
-            # Child selector: second statement is returned that will match element
-            # that is a child of this element.
-            @depends = lambda do |element, first|
-              matches = []
-              element.children.each do |child|
-                if child.tag? and subset = second.match(child, first)
-                  if first && !subset.empty?
-                    matches << subset.first
-                    break
-                  else
-                    matches.concat subset
-                  end
-                end
-              end
-              matches.empty? ? nil : matches
-            end
-        else
-            # Descendant selector: second statement is returned that will match all
-            # element that are children of this element.
-            @depends = lambda do |element, first|
-              matches = []
-              stack = element.children.reverse
-              while node = stack.pop
-                next unless node.tag?
-                if subset = second.match(node, first)
-                  if first && !subset.empty?
-                    matches << subset.first
-                    break
-                  else
-                    matches.concat subset
-                  end
-                elsif children = node.children
-                  stack.concat children.reverse
-                end
-              end
-              matches.empty? ? nil : matches
-            end
+      # Alternative selector.
+      if statement.sub!(/^\s*,\s*/, "")
+        second = Selector.new(statement, *values)
+        (@alternates ||= []) << second
+        # If there are alternate selectors, we group them in the top selector.
+        if alternates = second.instance_variable_get(:@alternates)
+          second.instance_variable_set(:@alternates, nil)
+          @alternates.concat alternates
         end
+        @source << " , " << second.to_s
+      # Sibling selector: create a dependency into second selector that will
+      # match element immediately following this one.
+      elsif statement.sub!(/^\s*\+\s*/, "")
+        second = next_selector(statement, *values)
+        @depends = lambda do |element, first|
+          if element = next_element(element)
+            second.match(element, first)
+          end
+        end
+        @source << " + " << second.to_s
+      # Adjacent selector: create a dependency into second selector that will
+      # match all elements following this one.
+      elsif statement.sub!(/^\s*~\s*/, "")
+        second = next_selector(statement, *values)
+        @depends = lambda do |element, first|
+          matches = []
+          while element = next_element(element)
+            if subset = second.match(element, first)
+              if first && !subset.empty?
+                matches << subset.first
+                break
+              else
+                matches.concat subset
+              end
+            end
+          end
+          matches.empty? ? nil : matches
+        end
+        @source << " ~ " << second.to_s
+      # Child selector: create a dependency into second selector that will
+      # match a child element of this one.
+      elsif statement.sub!(/^\s*>\s*/, "")
+        second = next_selector(statement, *values)
+        @depends = lambda do |element, first|
+          matches = []
+          element.children.each do |child|
+            if child.tag? and subset = second.match(child, first)
+              if first && !subset.empty?
+                matches << subset.first
+                break
+              else
+                matches.concat subset
+              end
+            end
+          end
+          matches.empty? ? nil : matches
+        end
+        @source << " > " << second.to_s
+      # Descendant selector: create a dependency into second selector that
+      # will match all descendant elements of this one.
+      elsif statement =~ /^\s*\S+/
+        second = next_selector(statement, *values)
+        @depends = lambda do |element, first|
+          matches = []
+          stack = element.children.reverse
+          while node = stack.pop
+            next unless node.tag?
+            if subset = second.match(node, first)
+              if first && !subset.empty?
+                matches << subset.first
+                break
+              else
+                matches.concat subset
+              end
+            elsif children = node.children
+              stack.concat children.reverse
+            end
+          end
+          matches.empty? ? nil : matches
+        end
+        @source << " " << second.to_s
       end
-    end
-
-
-    # :call-seq:
-    #   Selector.for_class(cls) => selector
-    #
-    # Creates a new selector for the given class name.
-    def self.for_class(cls)
-      self.new([".?", cls])
-    end
-
-
-    # :call-seq:
-    #   Selector.for_id(id) => selector
-    #
-    # Creates a new selector for the given id.
-    def self.for_id(id)
-      self.new(["#?", id])
+      # Done
     end
 
 
@@ -356,30 +339,48 @@ module HTML
     # returns an array with all matching elements, nil if no match is
     # found.
     #
-    # Use +first=true+ if you are only interested in the first element.
+    # Use +first_only=true+ if you are only interested in the first element.
     #
     # For example:
     #   if selector.match(element)
     #     puts "Element is a login form"
     #   end
-    def match(element, first = false)
+    def match(element, first_only = false)
       # Match element if no element name or element name same as element name
-      if matched = (!@tag_name or @tag_name == element.name)
+      if matched = (!@name or @name == element.name) and @attributes
         # No match if one of the attribute matches failed
-        for attr in @attrs
+        for attr in @attributes
           if element.attributes[attr[0]] !~ attr[1]
             matched = false
             break
           end
         end
       end
-      # If the element did not match, but we have an alternative match
-      # (x+y), apply the alternative match instead
-      return @alt.match(element, first) if not matched and @alt
-      # If the element did match, but depends on another match (child,
-      # sibling, etc), apply the dependent match instead.
-      return @depends.call(element, first) if matched and @depends
-      matched ? [element] : nil
+
+      # If element matched but depends on another element (child,
+      # sibling, etc), apply the dependent matches instead.
+      if matched and @depends
+        matches = @depends.call(element, first_only)
+      else
+        matches = matched ? [element] : nil
+      end
+
+      # If this selector is part of the group, try all the alternative
+      # selectors (unless first_only).
+      if @alternates and (!first_only or !matches)
+        @alternates.each do |alternate|
+          break if matches and first_only
+          if subset = alternate.match(element, first_only)
+            if matches
+              matches.concat subset
+            else
+              matches = subset
+            end
+          end
+        end
+      end
+
+      return matches
     end
 
 
@@ -430,8 +431,8 @@ module HTML
     end
 
 
-    def inspect #:nodoc:
-      @source || to_s
+    def to_s #:nodoc:
+      @source
     end
 
 
@@ -453,6 +454,48 @@ module HTML
       return nil
     end
 
+
+  protected
+
+    def attribute_match(equality, value)
+      value = Regexp.escape(value.to_s) unless value.is_a?(Regexp) or value.empty?
+      case equality
+        when "=" then
+          # Match the attribute value in full
+          Regexp.new("^#{value}$")
+        when "~=" then
+          # Match a space-separated word within the attribute value
+          Regexp.new("(^|\s)#{value}($|\s)")
+        when "^="
+          # Match the beginning of the attribute value
+          Regexp.new("^#{value}")
+        when "$="
+          # Match the end of the attribute value
+          Regexp.new("#{value}$")
+        when "*="
+          # Match substring of the attribute value
+          value.is_a?(Regexp) ? value : Regexp.new(value)
+        when "|=" then
+          # Match the first space-separated item of the attribute value
+          Regexp.new("^#{value}($|\s)")
+        else
+          raise InvalidSelectorError, "Invalid value matching operator in #{parts[4]}" unless value.empty?
+          # Match all attributes values (existence check)
+          //
+      end
+    end
+
+
+    def next_selector(statement, *values)
+      second = Selector.new(statement, *values)
+      # If there are alternate selectors, we group them in the top selector.
+      if alternates = second.instance_variable_get(:@alternates)
+        second.instance_variable_set(:@alternates, nil)
+        (@alternates ||= []).concat alternates
+      end
+      return second
+    end
+
   end
 
 
@@ -460,6 +503,5 @@ module HTML
   def self.selector(statement, *values)
     Selector.new(statement, *values)
   end
-
 
 end
