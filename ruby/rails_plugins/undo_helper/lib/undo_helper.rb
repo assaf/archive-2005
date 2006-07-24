@@ -153,15 +153,17 @@ module UndoHelper
       end
       options = args[1] || {}
       if undo
-        button = options[:button] || {}
-        button[:title] = undo[:title]
-        return @view.form_remote_tag(:url=>undo[:url], :html=>options[:form]) +
-               @view.submit_tag(args[0] || "Undo", button) +
+        form_html = options[:form] || {}
+        form_html[:class] ||= "button"
+        button_html = options[:button] || {}
+        button_html[:title] = undo[:title]
+        return @view.form_remote_tag(:url=>undo[:url], :html=>form_html) +
+               @view.submit_tag(args[0] || "Undo", button_html) +
                @view.end_form_tag
       elsif button = options[:disabled]
         button[:disabled] = true
-        return @view.form_remote_tag(:html=>options[:form]) +
-               @view.submit_tag(args[0] || "Undo", button) +
+        return @view.form_remote_tag(:html=>form_html) +
+               @view.submit_tag(args[0] || "Undo", button_html) +
                @view.end_form_tag
       else
         return ""
