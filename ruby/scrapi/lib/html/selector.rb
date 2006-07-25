@@ -146,7 +146,7 @@ module HTML
       # $3 matched value
       # Matching operation may be =, ~= or |=, etc (or nil).
       # Value may be empty.
-      ATTR_REGEX = /^([A-Za-z0-9_\-:]*)\s*((?:[~|^$*])?=)?(.*)$/ #:nodoc:
+      ATTR_REGEXP = /^\s*([A-Za-z0-9_\-]*)\s*((?:[~|^$*])?=)?\s*(.*)$/ #:nodoc:
 
       # TODO: More regular selections based on CSS3 lexical rules.
     end
@@ -185,43 +185,44 @@ module HTML
     # Throws InvalidSelectorError is the selector expression is invalid.
     def initialize(statement, *values)
       raise ArgumentError, "CSS expression cannot be empty" if statement.empty?
-      statement = statement.dup.strip
+      statement = statement.dup
       @source = ""
 
       # Get element name. Asterisk matches everything.
-      statement.sub!(/^(\*|[[:alpha:]][\w\-:]*)/) do |match|
-        @name = match unless @name == "*"
-        @source << @name
+      statement.sub!(/^\s*(\*|[[:alpha:]][\w\-]*)/) do |match|
+        match.strip!
+        @name = match unless match == "*"
+        @source << match
         "" # Remove
       end
 
+      @attributes = []
       # Get identifier, class, attribute name, pseudo or negation.
       while true
-        statement.strip!
         # Element identifier.
-        next if statement.sub!(/^#(?:\?|[\w\-:]+)/) do |match|
+        next if statement.sub!(/^#(?:\?|[\w\-]+)/) do |match|
           id = match[1..-1]
           if id == "?"
             id = values.shift
           end
           @source << "##{id}"
           id = Regexp.new("^#{Regexp.escape(id.to_s)}$") unless id.is_a?(Regexp)
-          (@attributes ||= []) << ["id", id]
+          @attributes << ["id", id]
           "" # Remove
         end
         # Class name.
-        next if statement.sub!(/^\.[\w\-:]+/) do |match|
+        next if statement.sub!(/^\.[\w\-]+/) do |match|
           class_name = match[1..-1]
           @source << ".#{class_name}"
           class_name = Regexp.new("(^|\s)#{Regexp.escape(class_name.to_s)}($|\s)") unless class_name.is_a?(Regexp)
-          (@attributes ||= []) << ["class", class_name]
+          @attributes << ["class", class_name]
           "" # Remove
         end
         # Attribute value.
-        next if statement.sub!(/^\[\s*[[:alpha:]][\w\-:]\s*[^\]]*\]/) do |match|
+        next if statement.sub!(/^\[\s*[[:alpha:]][\w\-]\s*((?:[~|^$*])?=)?\s*('[^']*'|"[^*]"|[^\]]*)\]/) do |match|
           # Parse the attribute expression and created a regular expression
           # for matching the attribute value, based on the operation.
-          name, equality, value = ATTR_REGEX.match(expr)[1..3]
+          name, equality, value = ATTR_REGEXP.match(match[1..-2])[1..3]
           if value == "?"
             value = values.shift
             @source << "[#{name}#{equality}#{value}]"
@@ -232,10 +233,35 @@ module HTML
               value = value[1..-2]
             end
           end
-          (@attributes ||= []) << [name.downcase.strip, attribute_match(equality, value)]
+          @attributes << [name.downcase.strip, attribute_match(equality, value)]
           "" # Remove
         end
-        # TODO: pseudo.
+        # Root element only.
+        next if statement.sub!(/^:root/) do |match|
+          @pseudo = lambda do |element|
+            element.parent.nil? or not element.parent.tag?
+          end
+          "" # Remove
+        end
+        # Nth-child of.
+        next if statement.sub!(/^:nth-child\((odd|even|[+\-]?\d+|-?\d*n([+\-]?\d+)?)\)/) do |match|
+          pattern = /\((.*)\)/.match(match)[1]
+          if pattern =~ /odd/
+            @pseudo = nth_child(2, 1)           # Odd
+          elsif pattern =~ /even/
+            @pseudo = nth_child(2, 2)           # Even
+          elsif pattern =~ /(-?\d+)n([+\-]?\d*)/  # an+b
+            @pseudo = nth_child($1.to_i, $2.to_i)
+          elsif pattern =~ /(-?)n([+\-]?\d*)/       # n+b (a = 1)
+            @pseudo = nth_child($1 == "-" ? -1 : 1, $2.to_i)
+          elsif pattern =~ /([+\-]?\d+)/        # b (a = 0)
+            @pseudo = nth_child(0, $1.to_i)
+          else
+            raise ArgumentError, "Invalid nth-child #{match}"
+          end
+          "" # Remove
+        end
+
         # TODO: negation.
         # No match: moving on.
         break
@@ -301,7 +327,7 @@ module HTML
         @source << " > " << second.to_s
       # Descendant selector: create a dependency into second selector that
       # will match all descendant elements of this one.
-      elsif statement =~ /^\s*\S+/
+      elsif statement =~ /^\s+\S+/
         second = next_selector(statement, *values)
         @depends = lambda do |element, first|
           matches = []
@@ -322,8 +348,13 @@ module HTML
           matches.empty? ? nil : matches
         end
         @source << " " << second.to_s
+      else
+        # The last selector is where we check that we parsed
+        # all the parts.
+        unless statement.empty? or statement.strip.empty?
+          raise ArgumentError, "Invalid selector: #{statement}"
+        end
       end
-      # Done
     end
 
 
@@ -347,7 +378,7 @@ module HTML
     #   end
     def match(element, first_only = false)
       # Match element if no element name or element name same as element name
-      if matched = (!@name or @name == element.name) and @attributes
+      if matched = (!@name or @name == element.name)
         # No match if one of the attribute matches failed
         for attr in @attributes
           if element.attributes[attr[0]] !~ attr[1]
@@ -355,6 +386,9 @@ module HTML
             break
           end
         end
+      end
+      if matched and @pseudo
+        matched = @pseudo.call(element)
       end
 
       # If element matched but depends on another element (child,
@@ -458,30 +492,57 @@ module HTML
   protected
 
     def attribute_match(equality, value)
-      value = Regexp.escape(value.to_s) unless value.is_a?(Regexp) or value.empty?
+      regexp = value.is_a?(Regexp) ? value : Regexp.escape(value.to_s)
       case equality
         when "=" then
           # Match the attribute value in full
-          Regexp.new("^#{value}$")
+          Regexp.new("^#{regexp}$")
         when "~=" then
           # Match a space-separated word within the attribute value
-          Regexp.new("(^|\s)#{value}($|\s)")
+          Regexp.new("(^|\s)#{regexp}($|\s)")
         when "^="
           # Match the beginning of the attribute value
-          Regexp.new("^#{value}")
+          Regexp.new("^#{regexp}")
         when "$="
           # Match the end of the attribute value
-          Regexp.new("#{value}$")
+          Regexp.new("#{regexp}$")
         when "*="
           # Match substring of the attribute value
-          value.is_a?(Regexp) ? value : Regexp.new(value)
+          regexp.is_a?(Regexp) ? regexp : Regexp.new(regexp)
         when "|=" then
           # Match the first space-separated item of the attribute value
-          Regexp.new("^#{value}($|\s)")
+          Regexp.new("^#{regexp}($|\s)")
         else
-          raise InvalidSelectorError, "Invalid value matching operator in #{parts[4]}" unless value.empty?
+          raise InvalidSelectorError, "Invalid operation/value" unless value.empty?
           # Match all attributes values (existence check)
           //
+      end
+    end
+
+
+    def nth_child(a, b, type = nil)
+      # a = 0 means select at index b, if b = 0 nothing selected
+      return lambda { |element| false } if a == 0 and b == 0
+      # a < 0 and b < 0 will never match against an index
+      return lambda { |element| false } if a < 0 and b < 0
+      b -= 1 unless b == 0  # b == 0 is same as b == 1
+      lambda do |element|
+        # Element must be inside parent element.
+        return false unless element.parent and element.parent.tag?
+        index = 0
+        for child in element.parent.children
+          # Skip text nodes/comments.
+          if child.tag? and (type == nil or child.name == type)
+            if a == 0
+              # Shortcut when a == 0 no need to go past count
+              break child.equal?(element) if index == b
+            else
+              # Otherwise, break if child found and count ==  an+b
+              break (index % a - b) == 0 if child.equal?(element)
+            end
+            index += 1
+          end
+        end
       end
     end
 
