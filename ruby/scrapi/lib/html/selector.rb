@@ -245,6 +245,7 @@ module HTML
         end
         # Nth-child of.
         next if statement.sub!(/^:nth-child\((odd|even|\d+|(-?\d*)?n([+\-]\d+)?)\)/) do |match|
+          # TODO: add type-of, last-child
           pattern = /\((.*)\)/.match(match)[1]
           if pattern =~ /odd/
             @pseudo = nth_child(2, 1)             # Odd
@@ -519,7 +520,7 @@ module HTML
     end
 
 
-    def nth_child(a, b, type = nil)
+    def nth_child(a, b, type = false, reverse = false)
       # a = 0 means select at index b, if b = 0 nothing selected
       return lambda { |element| false } if a == 0 and b == 0
       # a < 0 and b < 0 will never match against an index
@@ -530,9 +531,12 @@ module HTML
         # Element must be inside parent element.
         return false unless element.parent and element.parent.tag?
         index = 0
-        for child in element.parent.children
+        siblings = element.parent.children
+        siblings = siblings.reverse if reverse
+        name = type ? element.name : nil
+        for child in siblings
           # Skip text nodes/comments.
-          if child.tag? and (type == nil or child.name == type)
+          if child.tag? and (name == nil or child.name == name)
             if a == 0
               # Shortcut when a == 0 no need to go past count
               break child.equal?(element) if index == b
