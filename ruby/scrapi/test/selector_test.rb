@@ -255,7 +255,7 @@ class SelectorTest < Test::Unit::TestCase
   def test_nth_child_a_is_zero
     html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
     # Test the third child.
-    match = HTML.selector("tr:nth-child(0n3)").select(html)
+    match = HTML.selector("tr:nth-child(0n+3)").select(html)
     assert_equal 1, match.size
     assert_equal "3", match[0].attributes["id"]
     # Same but an can be omitted when zero.
@@ -263,7 +263,7 @@ class SelectorTest < Test::Unit::TestCase
     assert_equal 1, match.size
     assert_equal "3", match[0].attributes["id"]
     # Second element (but not every second element).
-    match = HTML.selector("tr:nth-child(0n2)").select(html)
+    match = HTML.selector("tr:nth-child(0n+2)").select(html)
     assert_equal 1, match.size
     assert_equal "2", match[0].attributes["id"]
   end
@@ -286,15 +286,15 @@ class SelectorTest < Test::Unit::TestCase
   def test_nth_child_b_is_zero
     html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
     # If b is zero, pick the n-th element (here each one).
-    match = HTML.selector("tr:nth-child(n0)").select(html)
+    match = HTML.selector("tr:nth-child(n+0)").select(html)
     assert_equal 4, match.size
     # If b is zero, pick the n-th element (here every second).
-    match = HTML.selector("tr:nth-child(2n0)").select(html)
+    match = HTML.selector("tr:nth-child(2n+0)").select(html)
     assert_equal 2, match.size
     assert_equal "1", match[0].attributes["id"]
     assert_equal "3", match[1].attributes["id"]
     # If a and b are both zero, no element selected.
-    match = HTML.selector("tr:nth-child(0n0)").select(html)
+    match = HTML.selector("tr:nth-child(0n+0)").select(html)
     assert_equal 0, match.size
     match = HTML.selector("tr:nth-child(0)").select(html)
     assert_equal 0, match.size
@@ -304,27 +304,40 @@ class SelectorTest < Test::Unit::TestCase
   def test_nth_child_a_is_negative
     html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
     # Since a is -1, picks the first three elements.
-    match = HTML.selector("tr:nth-child(-n3)").select(html)
+    match = HTML.selector("tr:nth-child(-n+3)").select(html)
     assert_equal 3, match.size
     assert_equal "1", match[0].attributes["id"]
     assert_equal "2", match[1].attributes["id"]
     assert_equal "3", match[2].attributes["id"]
+    # Since a is -2, picks the first in every second of first four elements.
+    match = HTML.selector("tr:nth-child(-2n+3)").select(html)
+    assert_equal 2, match.size
+    assert_equal "1", match[0].attributes["id"]
+    assert_equal "3", match[1].attributes["id"]
+    # Since a is -2, picks the first in every second of first three elements.
+    match = HTML.selector("tr:nth-child(-2n+2)").select(html)
+    assert_equal 1, match.size
+    assert_equal "1", match[0].attributes["id"]
   end
 
 
   def test_nth_child_b_is_negative
     html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    # Select last of four.
     match = HTML.selector("tr:nth-child(4n-1)").select(html)
     assert_equal 1, match.size
     assert_equal "4", match[0].attributes["id"]
+    # Select first of four.
     match = HTML.selector("tr:nth-child(4n-4)").select(html)
     assert_equal 1, match.size
     assert_equal "1", match[0].attributes["id"]
+    # Select last of every second.
     match = HTML.selector("tr:nth-child(2n-1)").select(html)
     assert_equal 2, match.size
     assert_equal "2", match[0].attributes["id"]
-    assert_equal "4", match[0].attributes["id"]
-    match = HTML.selector("tr:nth-child(-2n-1)").select(html)
+    assert_equal "4", match[1].attributes["id"]
+    # Select nothing since an+b always < 0
+    match = HTML.selector("tr:nth-child(-1n-1)").select(html)
     assert_equal 0, match.size
   end
 

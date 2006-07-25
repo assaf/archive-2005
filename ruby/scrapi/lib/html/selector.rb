@@ -244,18 +244,17 @@ module HTML
           "" # Remove
         end
         # Nth-child of.
-        next if statement.sub!(/^:nth-child\((odd|even|[+\-]?\d+|-?\d*n([+\-]?\d+)?)\)/) do |match|
+        next if statement.sub!(/^:nth-child\((odd|even|\d+|(-?\d*)?n([+\-]\d+)?)\)/) do |match|
           pattern = /\((.*)\)/.match(match)[1]
           if pattern =~ /odd/
-            @pseudo = nth_child(2, 1)           # Odd
+            @pseudo = nth_child(2, 1)             # Odd
           elsif pattern =~ /even/
-            @pseudo = nth_child(2, 2)           # Even
-          elsif pattern =~ /(-?\d+)n([+\-]?\d*)/  # an+b
-            @pseudo = nth_child($1.to_i, $2.to_i)
-          elsif pattern =~ /(-?)n([+\-]?\d*)/       # n+b (a = 1)
-            @pseudo = nth_child($1 == "-" ? -1 : 1, $2.to_i)
-          elsif pattern =~ /([+\-]?\d+)/        # b (a = 0)
-            @pseudo = nth_child(0, $1.to_i)
+            @pseudo = nth_child(2, 2)             # Even
+          elsif pattern =~ /^\d+$/                # b only
+            @pseudo = nth_child(0, pattern.to_i)
+          elsif pattern =~ /^(-?\d*)?n([+\-]\d+)?$/
+            a = $1 == "" ? 1 : $1 == "-" ? -1 : $1.to_i
+            @pseudo = nth_child(a, $2.to_i)
           else
             raise ArgumentError, "Invalid nth-child #{match}"
           end
@@ -525,7 +524,8 @@ module HTML
       return lambda { |element| false } if a == 0 and b == 0
       # a < 0 and b < 0 will never match against an index
       return lambda { |element| false } if a < 0 and b < 0
-      b -= 1 unless b == 0  # b == 0 is same as b == 1
+      b = a + b + 1 if b < 0   # b < 0 just picks last element from each group
+      b -= 1 unless b == 0  # b == 0 is same as b == 1, otherwise zero based
       lambda do |element|
         # Element must be inside parent element.
         return false unless element.parent and element.parent.tag?
@@ -536,9 +536,13 @@ module HTML
             if a == 0
               # Shortcut when a == 0 no need to go past count
               break child.equal?(element) if index == b
+            elsif a < 0
+              # Only look for first b elements
+              break false if index > b
+              break (index % a) == 0 if child.equal?(element)
             else
               # Otherwise, break if child found and count ==  an+b
-              break (index % a - b) == 0 if child.equal?(element)
+              break (index % a) == b if child.equal?(element)
             end
             index += 1
           end
