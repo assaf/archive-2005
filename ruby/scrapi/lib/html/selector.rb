@@ -187,106 +187,8 @@ module HTML
       raise ArgumentError, "CSS expression cannot be empty" if statement.empty?
       statement = statement.dup
       @source = ""
-
-      # Get element name. Asterisk matches everything.
-      statement.sub!(/^\s*(\*|[[:alpha:]][\w\-]*)/) do |match|
-        match.strip!
-        @name = match.downcase unless match == "*"
-        @source << match
-        "" # Remove
-      end
-
-      @attributes = []
-      @pseudo = []
-      # Get identifier, class, attribute name, pseudo or negation.
-      while true
-        # Element identifier.
-        next if statement.sub!(/^#(?:\?|[\w\-]+)/) do |match|
-          id = match[1..-1]
-          if id == "?"
-            id = values.shift
-          end
-          @source << "##{id}"
-          id = Regexp.new("^#{Regexp.escape(id.to_s)}$") unless id.is_a?(Regexp)
-          @attributes << ["id", id]
-          "" # Remove
-        end
-
-        # Class name.
-        next if statement.sub!(/^\.[\w\-]+/) do |match|
-          class_name = match[1..-1]
-          @source << ".#{class_name}"
-          class_name = Regexp.new("(^|\s)#{Regexp.escape(class_name.to_s)}($|\s)") unless class_name.is_a?(Regexp)
-          @attributes << ["class", class_name]
-          "" # Remove
-        end
-
-        # Attribute value.
-        next if statement.sub!(/^\[\s*[[:alpha:]][\w\-]\s*((?:[~|^$*])?=)?\s*('[^']*'|"[^*]"|[^\]]*)\]/) do |match|
-          # Parse the attribute expression and created a regular expression
-          # for matching the attribute value, based on the operation.
-          name, equality, value = ATTR_REGEXP.match(match[1..-2])[1..3]
-          if value == "?"
-            value = values.shift
-            @source << "[#{name}#{equality}#{value}]"
-          else
-            @source << "[#{name}#{equality}#{value}]"
-            value.strip!
-            if (value[0] == ?" or value[0] == ?') and value[0] == value[-1]
-              value = value[1..-2]
-            end
-          end
-          @attributes << [name.downcase.strip, attribute_match(equality, value)]
-          "" # Remove
-        end
-
-        # Root element only.
-        next if statement.sub!(/^:root/) do |match|
-          @pseudo << lambda do |element|
-            element.parent.nil? or not element.parent.tag?
-          end
-          "" # Remove
-        end
-
-        # Nth-child and variants.
-        next if statement.sub!(/^:nth-(last-)?(child|of-type)\((odd|even|(\d+|\?)|(-?\d*|\?)?n([+\-]\d+|\?)?)\)/) do |match|
-          # TODO: add type-of, last-child
-          pattern = /\((.*)\)/.match(match)[1]
-          reverse = match =~ /last-/
-          of_type = match =~ /of-type/
-          if pattern =~ /odd/
-            @pseudo << nth_child(2, 1, of_type, reverse)
-          elsif pattern =~ /even/
-            @pseudo << nth_child(2, 2, of_type, reverse)
-          elsif pattern =~ /^(\d+|\?)$/
-            b = pattern == "?" ? values.shift : pattern
-            @pseudo << nth_child(0, b.to_i, of_type, reverse)
-          elsif pattern =~ /^(-?\d*|\?)?n([+\-]\d+|\?)?$/
-            a = $1 == "?" ? values.shift :
-                $1 == "" ? 1 : $1 == "-" ? -1 : $1
-            b = $2 == "?" ? values.shift : $2
-            @pseudo << nth_child(a.to_i, b.to_i, of_type, reverse)
-          else
-            raise ArgumentError, "Invalid nth-child #{match}"
-          end
-          "" # Remove
-        end
-        next if statement.sub!(/^:(first|last)-(child|of-type)/) do |match|
-          reverse = match =~ /last-/
-          of_type = match =~ /of-type/
-          @pseudo << nth_child(0, 1, of_type, reverse)
-          "" # Remove
-        end
-        next if statement.sub!(/^:only-(child|of-type)/) do |match|
-          of_type = match =~ /of-type/
-          @pseudo << only_child(of_type)
-          "" # Remove
-        end
-
-        # TODO: negation.
-        # No match: moving on.
-        break
-      end
+      # Create a simple selector, along with negation.
+      simple_selector(statement, values).each { |name, value| instance_variable_set("@#{name}", value) }
 
       # Alternative selector.
       if statement.sub!(/^\s*,\s*/, "")
@@ -399,7 +301,7 @@ module HTML
     #   end
     def match(element, first_only = false)
       # Match element if no element name or element name same as element name
-      if matched = (!@name or @name == element.name)
+      if matched = (!@tag_name or @tag_name == element.name)
         # No match if one of the attribute matches failed
         for attr in @attributes
           if element.attributes[attr[0]] !~ attr[1]
@@ -408,11 +310,35 @@ module HTML
           end
         end
       end
+
+      # Pseudo class matches (nth-child, empty, etc).
       if matched
         for pseudo in @pseudo
           unless pseudo.call(element)
             matched = false
             break
+          end
+        end
+      end
+
+      # Negation.
+      if matched and @negation
+        if @negation[:tag_name] == element.name
+          matched = false
+        else
+          for attr in @negation[:attributes]
+            if element.attributes[attr[0]] =~ attr[1]
+              matched = false
+              break
+            end
+          end
+        end
+        if matched
+          for pseudo in @negation[:pseudo]
+            if pseudo.call(element)
+              matched = false
+              break
+            end
           end
         end
       end
@@ -516,6 +442,161 @@ module HTML
 
 
   protected
+
+
+    def simple_selector(statement, values, can_negate = true)
+      tag_name = nil
+      attributes = []
+      pseudo = []
+      negation = nil
+
+      # Element name.
+      statement.sub!(/^\s*(\*|[[:alpha:]][\w\-]*)/) do |match|
+        match.strip!
+        tag_name = match.downcase unless match == "*"
+        @source << match
+        "" # Remove
+      end
+
+      # Get identifier, class, attribute name, pseudo or negation.
+      while true
+        # Element identifier.
+        next if statement.sub!(/^#(\?|[\w\-]+)/) do |match|
+          id = $1
+          if id == "?"
+            id = values.shift
+          end
+          @source << "##{id}"
+          id = Regexp.new("^#{Regexp.escape(id.to_s)}$") unless id.is_a?(Regexp)
+          attributes << ["id", id]
+          "" # Remove
+        end
+
+        # Class name.
+        next if statement.sub!(/^\.([\w\-]+)/) do |match|
+          class_name = $1
+          @source << ".#{class_name}"
+          class_name = Regexp.new("(^|\s)#{Regexp.escape(class_name.to_s)}($|\s)") unless class_name.is_a?(Regexp)
+          attributes << ["class", class_name]
+          "" # Remove
+        end
+
+        # Attribute value.
+        next if statement.sub!(/^\[\s*([[:alpha:]][\w\-]*)\s*((?:[~|^$*])?=)?\s*('[^']*'|"[^*]"|[^\]]*)\s*\]/) do |match|
+          name, equality, value = $1, $2, $3
+          if value == "?"
+            value = values.shift
+          else
+            value.strip!
+            if (value[0] == ?" or value[0] == ?') and value[0] == value[-1]
+              value = value[1..-2]
+            end
+          end
+          @source << "[#{name}#{equality}'#{value}']"
+          attributes << [name.downcase.strip, attribute_match(equality, value)]
+          "" # Remove
+        end
+
+        # Root element only.
+        next if statement.sub!(/^:root/) do |match|
+          pseudo << lambda do |element|
+            element.parent.nil? or not element.parent.tag?
+          end
+          @source << ":root"
+          "" # Remove
+        end
+
+        # Nth-child and variants.
+        next if statement.sub!(/^:nth-(last-)?(child|of-type)\((odd|even|(\d+|\?)|(-?\d*|\?)?n([+\-]\d+|\?)?)\)/) do |match|
+          reverse = $1 == "last-"
+          of_type = $2 == "of-type"
+          @source << ":nth-#{$1}#{$2}("
+          case $3
+            when "odd"
+              pseudo << nth_child(2, 1, of_type, reverse)
+              @source << "odd)"
+            when "even"
+              pseudo << nth_child(2, 2, of_type, reverse)
+              @source << "even)"
+            when /^(\d+|\?)$/
+              b = ($1 == "?" ? values.shift : $1).to_i
+              pseudo << nth_child(0, b, of_type, reverse)
+              @source << "#{b})"
+            when /^(-?\d*|\?)?n([+\-]\d+|\?)?$/
+              a = ($1 == "?" ? values.shift :
+                   $1 == "" ? 1 : $1 == "-" ? -1 : $1).to_i
+              b = ($2 == "?" ? values.shift : $2).to_i
+              pseudo << nth_child(a, b, of_type, reverse)
+              @source << (b >= 0 ? "#{a}n+#{b})" : "#{a}n#{b})")
+            else
+              raise ArgumentError, "Invalid nth-child #{match}"
+          end
+          "" # Remove
+        end
+        next if statement.sub!(/^:(first|last)-(child|of-type)/) do |match|
+          reverse = $1 == "last"
+          of_type = $1 == "of-type"
+          pseudo << nth_child(0, 1, of_type, reverse)
+          @source << ":#{$1}-#{$2}"
+          "" # Remove
+        end
+        next if statement.sub!(/^:only-(child|of-type)/) do |match|
+          of_type = match =~ /of-type/
+          pseudo << only_child(of_type)
+          @source << ":only-#{$1}"
+          "" # Remove
+        end
+
+        # Empty and content.
+        next if statement.sub!(/^:empty/) do |match|
+          pseudo << lambda do |element|
+            empty = true
+            for child in element.children
+              if child.tag? or !child.content.strip.empty?
+                empty = false
+                break
+              end
+            end
+            return empty
+          end
+          @source << ":empty"
+          "" # Remove
+        end
+        next if statement.sub!(/^:content\(\s*('[^']*'|"[^"]*"|[^)]*)\s*\)/) do |match|
+          content = $1
+          if (content[0] == ?" or content[0] == ?') and content[0] == content[-1]
+            content = content[1..-2]
+          end
+          pseudo << lambda do |element|
+            text = ""
+            for child in element.children
+              unless child.tag?
+                text << child.content
+              end
+            end
+            return text.strip == content
+          end
+          @source << ":content('#{content}')"
+          "" # Remove
+        end
+
+        # Negation.
+        if statement.sub!(/^:not\(\s*/, "")
+          raise ArgumentError, "Double negatives are not missing feature" unless can_negate
+          @source << ":not("
+          negation = simple_selector(statement, values, false)
+          raise ArgumentError, "Negation not closed" unless statement.sub!(/^\s*\)/, "")
+          @source << ")"
+          next
+        end
+
+        # No match: moving on.
+        break
+      end
+
+      return {:tag_name=>tag_name, :attributes=>attributes, :pseudo=>pseudo, :negation=>negation}
+    end
+
 
     def attribute_match(equality, value)
       regexp = value.is_a?(Regexp) ? value : Regexp.escape(value.to_s)

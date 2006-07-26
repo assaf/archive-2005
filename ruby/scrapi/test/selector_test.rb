@@ -462,6 +462,7 @@ class SelectorTest < Test::Unit::TestCase
     assert_equal 0, match.size
   end
 
+
   def test_first_and_last
     # Only child.
     html = parse(%Q{<table><tr></tr></table>})
@@ -481,6 +482,110 @@ class SelectorTest < Test::Unit::TestCase
     match = HTML.selector("td:only-of-type").select(html)
     assert_equal 0, match.size
   end
+
+
+  def test_empty
+    html = parse(%Q{<table><tr></tr></table>})
+    match = HTML.selector("table:empty").select(html)
+    assert_equal 0, match.size
+    match = HTML.selector("tr:empty").select(html)
+    assert_equal 1, match.size
+    html = parse(%Q{<div> </div>})
+    match = HTML.selector("div:empty").select(html)
+    assert_equal 1, match.size
+  end
+
+  
+  def test_content
+    html = parse(%Q{<div> </div>})
+    match = HTML.selector("div:content()").select(html)
+    assert_equal 1, match.size
+    html = parse(%Q{<div>something </div>})
+    match = HTML.selector("div:content()").select(html)
+    assert_equal 0, match.size
+    match = HTML.selector("div:content(something)").select(html)
+    assert_equal 1, match.size
+  end
+
+
+  #
+  # Test negation.
+  #
+
+
+  def test_element_negation
+    html = parse(%Q{<p></p><div></div>})
+    match = HTML.selector("*").select(html)
+    assert_equal 2, match.size
+    match = HTML.selector("*:not(p)").select(html)
+    assert_equal 1, match.size
+    assert_equal "div", match[0].name
+    match = HTML.selector("*:not(div)").select(html)
+    assert_equal 1, match.size
+    assert_equal "p", match[0].name
+    match = HTML.selector("*:not(span)").select(html)
+    assert_equal 2, match.size
+  end
+
+
+  def test_id_negation
+    html = parse(%Q{<p id="1"></p><p id="2"></p>})
+    match = HTML.selector("p").select(html)
+    assert_equal 2, match.size
+    match = HTML.selector(":not(#1)").select(html)
+    assert_equal 1, match.size
+    assert_equal "2", match[0].attributes["id"]
+    match = HTML.selector(":not(#2)").select(html)
+    assert_equal 1, match.size
+    assert_equal "1", match[0].attributes["id"]
+  end
+
+
+  def test_class_name_negation
+    html = parse(%Q{<p class="foo"></p><p class="bar"></p>})
+    match = HTML.selector("p").select(html)
+    assert_equal 2, match.size
+    match = HTML.selector(":not(.foo)").select(html)
+    assert_equal 1, match.size
+    assert_equal "bar", match[0].attributes["class"]
+    match = HTML.selector(":not(.bar)").select(html)
+    assert_equal 1, match.size
+    assert_equal "foo", match[0].attributes["class"]
+  end
+
+
+  def test_attribute_negation
+    html = parse(%Q{<p title="foo"></p><p title="bar"></p>})
+    match = HTML.selector("p").select(html)
+    assert_equal 2, match.size
+    match = HTML.selector(":not([title=foo])").select(html)
+    assert_equal 1, match.size
+    assert_equal "bar", match[0].attributes["title"]
+    match = HTML.selector(":not([title=bar])").select(html)
+    assert_equal 1, match.size
+    assert_equal "foo", match[0].attributes["title"]
+  end
+
+  
+  def test_pseudo_class_negation
+    html = parse(%Q{<div><p id="1"></p><p id="2"></p></div>})
+    match = HTML.selector("p").select(html)
+    assert_equal 2, match.size
+    match = HTML.selector("p:not(:first-child)").select(html)
+    assert_equal 1, match.size
+    assert_equal "2", match[0].attributes["id"]
+    match = HTML.selector("p:not(:nth-child(2))").select(html)
+    assert_equal 1, match.size
+    assert_equal "1", match[0].attributes["id"]
+  end
+  
+
+  def test_negation_details
+    html = parse(%Q{<p id="1"></p><p id="2"></p>})
+    assert_raises(ArgumentError) { match = HTML.selector(":not(").select(html) }
+    assert_raises(ArgumentError) { match = HTML.selector(":not(:not())").select(html) }
+  end
+
 
 protected
 
