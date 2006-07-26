@@ -191,12 +191,13 @@ module HTML
       # Get element name. Asterisk matches everything.
       statement.sub!(/^\s*(\*|[[:alpha:]][\w\-]*)/) do |match|
         match.strip!
-        @name = match unless match == "*"
+        @name = match.downcase unless match == "*"
         @source << match
         "" # Remove
       end
 
       @attributes = []
+      @pseudo = []
       # Get identifier, class, attribute name, pseudo or negation.
       while true
         # Element identifier.
@@ -210,6 +211,7 @@ module HTML
           @attributes << ["id", id]
           "" # Remove
         end
+
         # Class name.
         next if statement.sub!(/^\.[\w\-]+/) do |match|
           class_name = match[1..-1]
@@ -218,6 +220,7 @@ module HTML
           @attributes << ["class", class_name]
           "" # Remove
         end
+
         # Attribute value.
         next if statement.sub!(/^\[\s*[[:alpha:]][\w\-]\s*((?:[~|^$*])?=)?\s*('[^']*'|"[^*]"|[^\]]*)\]/) do |match|
           # Parse the attribute expression and created a regular expression
@@ -236,29 +239,47 @@ module HTML
           @attributes << [name.downcase.strip, attribute_match(equality, value)]
           "" # Remove
         end
+
         # Root element only.
         next if statement.sub!(/^:root/) do |match|
-          @pseudo = lambda do |element|
+          @pseudo << lambda do |element|
             element.parent.nil? or not element.parent.tag?
           end
           "" # Remove
         end
-        # Nth-child of.
-        next if statement.sub!(/^:nth-child\((odd|even|\d+|(-?\d*)?n([+\-]\d+)?)\)/) do |match|
+
+        # Nth-child and variants.
+        next if statement.sub!(/^:nth-(last-)?(child|of-type)\((odd|even|(\d+|\?)|(-?\d*|\?)?n([+\-]\d+|\?)?)\)/) do |match|
           # TODO: add type-of, last-child
           pattern = /\((.*)\)/.match(match)[1]
+          reverse = match =~ /last-/
+          of_type = match =~ /of-type/
           if pattern =~ /odd/
-            @pseudo = nth_child(2, 1)             # Odd
+            @pseudo << nth_child(2, 1, of_type, reverse)
           elsif pattern =~ /even/
-            @pseudo = nth_child(2, 2)             # Even
-          elsif pattern =~ /^\d+$/                # b only
-            @pseudo = nth_child(0, pattern.to_i)
-          elsif pattern =~ /^(-?\d*)?n([+\-]\d+)?$/
-            a = $1 == "" ? 1 : $1 == "-" ? -1 : $1.to_i
-            @pseudo = nth_child(a, $2.to_i)
+            @pseudo << nth_child(2, 2, of_type, reverse)
+          elsif pattern =~ /^(\d+|\?)$/
+            b = pattern == "?" ? values.shift : pattern
+            @pseudo << nth_child(0, b.to_i, of_type, reverse)
+          elsif pattern =~ /^(-?\d*|\?)?n([+\-]\d+|\?)?$/
+            a = $1 == "?" ? values.shift :
+                $1 == "" ? 1 : $1 == "-" ? -1 : $1
+            b = $2 == "?" ? values.shift : $2
+            @pseudo << nth_child(a.to_i, b.to_i, of_type, reverse)
           else
             raise ArgumentError, "Invalid nth-child #{match}"
           end
+          "" # Remove
+        end
+        next if statement.sub!(/^:(first|last)-(child|of-type)/) do |match|
+          reverse = match =~ /last-/
+          of_type = match =~ /of-type/
+          @pseudo << nth_child(0, 1, of_type, reverse)
+          "" # Remove
+        end
+        next if statement.sub!(/^:only-(child|of-type)/) do |match|
+          of_type = match =~ /of-type/
+          @pseudo << only_child(of_type)
           "" # Remove
         end
 
@@ -387,8 +408,13 @@ module HTML
           end
         end
       end
-      if matched and @pseudo
-        matched = @pseudo.call(element)
+      if matched
+        for pseudo in @pseudo
+          unless pseudo.call(element)
+            matched = false
+            break
+          end
+        end
       end
 
       # If element matched but depends on another element (child,
@@ -520,7 +546,7 @@ module HTML
     end
 
 
-    def nth_child(a, b, type = false, reverse = false)
+    def nth_child(a, b, of_type, reverse)
       # a = 0 means select at index b, if b = 0 nothing selected
       return lambda { |element| false } if a == 0 and b == 0
       # a < 0 and b < 0 will never match against an index
@@ -533,24 +559,55 @@ module HTML
         index = 0
         siblings = element.parent.children
         siblings = siblings.reverse if reverse
-        name = type ? element.name : nil
+        name = of_type ? element.name : nil
+        found = false
         for child in siblings
           # Skip text nodes/comments.
           if child.tag? and (name == nil or child.name == name)
             if a == 0
               # Shortcut when a == 0 no need to go past count
-              break child.equal?(element) if index == b
+              if index == b
+                found = child.equal?(element)
+                break
+              end
             elsif a < 0
               # Only look for first b elements
-              break false if index > b
-              break (index % a) == 0 if child.equal?(element)
+              break if index > b
+              if child.equal?(element)
+                found = (index % a) == 0
+                break
+              end
             else
               # Otherwise, break if child found and count ==  an+b
-              break (index % a) == b if child.equal?(element)
+              if child.equal?(element)
+                found = (index % a) == b
+                break
+              end
             end
             index += 1
           end
         end
+        return found
+      end
+    end
+
+
+    def only_child(of_type)
+      lambda do |element|
+        # Element must be inside parent element.
+        return false unless element.parent and element.parent.tag?
+        name = of_type ? element.name : nil
+        other = false
+        for child in element.parent.children
+          # Skip text nodes/comments.
+          if child.tag? and (name == nil or child.name == name)
+            unless child.equal?(element)
+              other = true
+              break
+            end
+          end
+        end
+        return !other
       end
     end
 
