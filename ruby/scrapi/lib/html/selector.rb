@@ -60,10 +60,15 @@ module HTML
   # * <tt>[attr]</tt> -- Match an element that has the specified attribute.
   # * <tt>[attr=value]</tt> -- Match an element that has the specified
   #   attribute and value. (More operators are supported see below)
+  # * <tt>:pseudo-class</tt> -- Match an element based on a pseudo class,
+  #   such as <tt>:nth-child</tt> and <tt>:empty</tt>.
+  # * <tt>:not(expr)</tt> -- Match an element that does not match the
+  #   negation expression.
   #
   # When using a combination of the above, the element name comes first
-  # followed by the identifier, followed by class names followed by the
-  # attributes. Do not separate with spaces.
+  # followed by identifier, class names, attributes, pseudo classes and
+  # negation in any order. Do not seprate these parts with spaces!
+  # Space separation is used for descendant selectors.
   #
   # For example:
   #   selector = HTML::Selector.new "form.login[action=/login]"
@@ -118,6 +123,69 @@ module HTML
   # Since children and sibling selectors may match more than one element given
   # the first element, the #match method may return more than one match.
   #
+  # === Pseudo classes
+  #
+  # Pseudo classes were introduced in CSS 3. They are most often used to select
+  # elements in a given position:
+  # * <tt>:root</tt> -- Match the element only if it is the root element
+  #   (no parent element).
+  # * <tt>:empty</tt> -- Match the element only if it has no child elements,
+  #   and no text content.
+  # * <tt>:only-child</tt> -- Match the element if it is the only child (element)
+  #   of its parent element.
+  # * <tt>:only-of-type</tt> -- Match the element if it is the only child (element)
+  #   of its parent element and its type.
+  # * <tt>:first-child</tt> -- Match the element if it is the first child (element)
+  #   of its parent element.
+  # * <tt>:first-of-type</tt> -- Match the element if it is the first child (element)
+  #   of its parent element of its type.
+  # * <tt>:last-child</tt> -- Match the element if it is the last child (element)
+  #   of its parent element.
+  # * <tt>:last-of-type</tt> -- Match the element if it is the last child (element)
+  #   of its parent element of its type.
+  # * <tt>:nth-child(b)</tt> -- Match the element if it is the b-th child (element)
+  #   of its parent element. The value <tt>b</tt> specifies its index, starting with 1.
+  # * <tt>:nth-child(an+b)</tt> -- Match the element if it is the b-th child (element)
+  #   in each group of <tt>a</tt> child elements of its parent element.
+  # * <tt>:nth-child(-an+b)</tt> -- Match the element if it is the first child (element)
+  #   in each group of <tt>a</tt> child elements, up to the first <tt>b</tt> child
+  #   elements of its parent element.
+  # * <tt>:nth-child(odd)</tt> -- Match element in the odd position (i.e. first, third).
+  #   Same as <tt>:nth-child(2n+1)</tt>.
+  # * <tt>:nth-child(even)</tt> -- Match element in the even position (i.e. second,
+  #   fourth). Same as <tt>:nth-child(2n+2)</tt>.
+  # * <tt>:nth-of-type(..)</tt> -- As above, but only counts elements of its type.
+  # * <tt>:nth-last-child(..)</tt> -- As above, but counts from the last child.
+  # * <tt>:nth-last-of-type(..)</tt> -- As above, but counts from the last child and
+  #   only elements of its type.
+  # * <tt>:not(selector)</tt> -- Match the element only if the element does not
+  #   match the simple selector.
+  #
+  # As you can see, <tt>:nth-child<tt> pseudo class and its varient can get quite
+  # tricky and the CSS specification doesn't do a much better job explaining it.
+  # But after reading the examples and trying a few combinations, it's easy to
+  # figure out.
+  #
+  # For example:
+  #   table tr:nth-child(odd)
+  # Selects every second row in the table starting with the first one.
+  #
+  #   div p:nth-child(4)
+  # Selects the fourth paragraph in the +div+, but not if the +div+ contains
+  # other elements, since those are also counted.
+  #
+  #   div p:nth-of-type(4)
+  # Selects the fourth paragraph in the +div+, counting only paragraphs, and
+  # ignoring all other elements.
+  #
+  #   div p:nth-of-type(-n+4)
+  # Selects the first four paragraphs, ignoring all others.
+  #
+  # And you can always select an element that matches one set of rules but
+  # not another using <tt>:not</tt>. For example:
+  #   p:not(.post)
+  # Matches all paragraphs that do not have the class <tt>.post</tt>.
+  #   
   # === Substitution Values
   #
   # You can use substitution with identifiers, class names and element values.
@@ -251,7 +319,7 @@ module HTML
         end
         @source << " > " << second.to_s
       # Descendant selector: create a dependency into second selector that
-      # will match all descendant elements of this one.
+      # will match all descendant elements of this one. Note,
       elsif statement =~ /^\s+\S+/ and statement != selector
         second = next_selector(statement, *values)
         @depends = lambda do |element, first|
@@ -323,7 +391,7 @@ module HTML
         end
       end
 
-      # Negation.
+      # Negation. Same rules as above, but we fail if a match is made.
       if matched and @negation
         if @negation[:tag_name] == element.name
           matched = false
@@ -446,13 +514,23 @@ module HTML
   protected
 
 
+    # Creates a simple selector given the statement and array of
+    # substitution values.
+    #
+    # Returns a hash with the values +tag_name+, +attributes+,
+    # +pseudo+ (classes) and +negation+.
+    #
+    # Called the first time with +can_negate+ true to allow
+    # negation. Called a second time with false since negation
+    # cannot be negated.
     def simple_selector(statement, values, can_negate = true)
       tag_name = nil
       attributes = []
       pseudo = []
       negation = nil
 
-      # Element name.
+      # Element name. (Note that in negation, this can come at
+      # any order, but for simplicity we allow if only first).
       statement.sub!(/^(\*|[[:alpha:]][\w\-]*)/) do |match|
         match.strip!
         tag_name = match.downcase unless match == "*"
@@ -489,6 +567,7 @@ module HTML
           if value == "?"
             value = values.shift
           else
+            # Handle single and double quotes.
             value.strip!
             if (value[0] == ?" or value[0] == ?') and value[0] == value[-1]
               value = value[1..-2]
@@ -508,7 +587,7 @@ module HTML
           "" # Remove
         end
 
-        # Nth-child and variants.
+        # Nth-child including last and of-type.
         next if statement.sub!(/^:nth-(last-)?(child|of-type)\((odd|even|(\d+|\?)|(-?\d*|\?)?n([+\-]\d+|\?)?)\)/) do |match|
           reverse = $1 == "last-"
           of_type = $2 == "of-type"
@@ -520,7 +599,7 @@ module HTML
             when "even"
               pseudo << nth_child(2, 2, of_type, reverse)
               @source << "even)"
-            when /^(\d+|\?)$/
+            when /^(\d+|\?)$/  # b only
               b = ($1 == "?" ? values.shift : $1).to_i
               pseudo << nth_child(0, b, of_type, reverse)
               @source << "#{b})"
@@ -535,6 +614,7 @@ module HTML
           end
           "" # Remove
         end
+        # First/last child (of type).
         next if statement.sub!(/^:(first|last)-(child|of-type)/) do |match|
           reverse = $1 == "last"
           of_type = $1 == "of-type"
@@ -542,6 +622,7 @@ module HTML
           @source << ":#{$1}-#{$2}"
           "" # Remove
         end
+        # Only child (of type).
         next if statement.sub!(/^:only-(child|of-type)/) do |match|
           of_type = match =~ /of-type/
           pseudo << only_child(of_type)
@@ -549,7 +630,8 @@ module HTML
           "" # Remove
         end
 
-        # Empty and content.
+        # Empty: no child elements or meaningful content (whitespaces
+        # are ignored).
         next if statement.sub!(/^:empty/) do |match|
           pseudo << lambda do |element|
             empty = true
@@ -564,6 +646,8 @@ module HTML
           @source << ":empty"
           "" # Remove
         end
+        # Content: match the text content of the element, stripping
+        # leading and trailing spaces.
         next if statement.sub!(/^:content\(\s*('[^']*'|"[^"]*"|[^)]*)\s*\)/) do |match|
           content = $1
           if (content[0] == ?" or content[0] == ?') and content[0] == content[-1]
@@ -582,7 +666,7 @@ module HTML
           "" # Remove
         end
 
-        # Negation.
+        # Negation. Create another simple selector to handle it.
         if statement.sub!(/^:not\(\s*/, "")
           raise ArgumentError, "Double negatives are not missing feature" unless can_negate
           @source << ":not("
@@ -596,10 +680,13 @@ module HTML
         break
       end
 
+      # Return hash. The keys are mapped to instance variables.
       return {:tag_name=>tag_name, :attributes=>attributes, :pseudo=>pseudo, :negation=>negation}
     end
 
 
+    # Create a regular expression to match an attribute value based
+    # on the equality operator (=, ^=, |=, etc).
     def attribute_match(equality, value)
       regexp = value.is_a?(Regexp) ? value : Regexp.escape(value.to_s)
       case equality
@@ -629,6 +716,12 @@ module HTML
     end
 
 
+    # Returns a lambda that can match an element against the nth-child
+    # pseudo class, given the following arguments:
+    # * +a+ -- Value of a part.
+    # * +b+ -- Value of b part.
+    # * +of_type+ -- True to test only elements of this type (of-type).
+    # * +reverse+ -- True to count in reverse order (last-).
     def nth_child(a, b, of_type, reverse)
       # a = 0 means select at index b, if b = 0 nothing selected
       return lambda { |element| false } if a == 0 and b == 0
@@ -640,8 +733,10 @@ module HTML
         # Element must be inside parent element.
         return false unless element.parent and element.parent.tag?
         index = 0
+        # Get siblings, reverse if counting from last.
         siblings = element.parent.children
         siblings = siblings.reverse if reverse
+        # Match element name if of-type, otherwise ignore name.
         name = of_type ? element.name : nil
         found = false
         for child in siblings
@@ -675,6 +770,8 @@ module HTML
     end
 
 
+    # Creates a only child lambda. Pass +of-type+ to only look at
+    # elements of its type.
     def only_child(of_type)
       lambda do |element|
         # Element must be inside parent element.
@@ -695,6 +792,14 @@ module HTML
     end
 
 
+    # Called to create a dependent selector (sibling, descendant, etc).
+    # Passes the remainder of the statement that will be reduced to zero
+    # eventually, and array of substitution values.
+    #
+    # This method is called from four places, so it helps to put it here
+    # for resue. The only logic deals with the need to detect comma
+    # separators (alternate) and apply them to the selector group of the
+    # top selector.
     def next_selector(statement, *values)
       second = Selector.new(statement, *values)
       # If there are alternate selectors, we group them in the top selector.

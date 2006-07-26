@@ -185,6 +185,13 @@ class SelectorTest < Test::Unit::TestCase
     assert_equal 2, match.size
     assert_equal "foo", match[0].attributes["href"]
     assert_equal "baz", match[1].attributes["href"]
+    # And now for the three selector challange.
+    html = parse(%Q{<h1 id="1"><a href="foo"></a></h1><h2 id="2"><a href="bar"></a></h2><h3 id="2"><a href="baz"></a></h3>})
+    match = HTML.selector("h1 a, h2 a, h3 a").select(html)
+    assert_equal 3, match.size
+    assert_equal "foo", match[0].attributes["href"]
+    assert_equal "bar", match[1].attributes["href"]
+    assert_equal "baz", match[2].attributes["href"]
   end
 
 
