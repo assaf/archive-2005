@@ -183,10 +183,12 @@ module HTML
     # are used for value substitution.
     #
     # Throws InvalidSelectorError is the selector expression is invalid.
-    def initialize(statement, *values)
-      raise ArgumentError, "CSS expression cannot be empty" if statement.empty?
-      statement = statement.dup
+    def initialize(selector, *values)
+      raise ArgumentError, "CSS expression cannot be empty" if selector.empty?
       @source = ""
+      # We need a copy to determine if we failed to parse, and also
+      # preserve the original pass by-ref statement.
+      statement = selector.strip.dup
       # Create a simple selector, along with negation.
       simple_selector(statement, values).each { |name, value| instance_variable_set("@#{name}", value) }
 
@@ -250,7 +252,7 @@ module HTML
         @source << " > " << second.to_s
       # Descendant selector: create a dependency into second selector that
       # will match all descendant elements of this one.
-      elsif statement =~ /^\s+\S+/
+      elsif statement =~ /^\s+\S+/ and statement != selector
         second = next_selector(statement, *values)
         @depends = lambda do |element, first|
           matches = []
@@ -451,7 +453,7 @@ module HTML
       negation = nil
 
       # Element name.
-      statement.sub!(/^\s*(\*|[[:alpha:]][\w\-]*)/) do |match|
+      statement.sub!(/^(\*|[[:alpha:]][\w\-]*)/) do |match|
         match.strip!
         tag_name = match.downcase unless match == "*"
         @source << match

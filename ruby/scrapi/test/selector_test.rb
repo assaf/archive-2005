@@ -214,7 +214,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_children_selector
-    html = parse(%Q{<div><p id="1"><span id="2"></span></p></div><div><p id="3"><span id="4"></span></p></div>})
+    html = parse(%Q{<div><p id="1"><span id="2"></span></p></div><div><p id="3"><span id="4" class="foo"></span></p></div>})
     # Test child selector.
     match = HTML.selector("div>p").select(html)
     assert_equal 2, match.size
@@ -242,6 +242,11 @@ class SelectorTest < Test::Unit::TestCase
     assert_equal 1, match.size
     assert_equal "3", match[0].attributes["id"]
     match = HTML.selector("div *#4").select(html)
+    assert_equal 1, match.size
+    assert_equal "4", match[0].attributes["id"]
+    # This is here because it failed before when whitespaces
+    # were not properly stripped.
+    match = HTML.selector("div .foo").select(html)
     assert_equal 1, match.size
     assert_equal "4", match[0].attributes["id"]
   end
