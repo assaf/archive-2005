@@ -207,19 +207,6 @@ module HTML
     class InvalidSelectorError < StandardError ; end
 
 
-    unless const_defined? :REGEX
-      # Parse each attribute expression into three parts:
-      # $1 attribute name
-      # $2 matching operation
-      # $3 matched value
-      # Matching operation may be =, ~= or |=, etc (or nil).
-      # Value may be empty.
-      ATTR_REGEXP = /^\s*([A-Za-z0-9_\-]*)\s*((?:[~|^$*])?=)?\s*(.*)$/ #:nodoc:
-
-      # TODO: More regular selections based on CSS3 lexical rules.
-    end
-
-
     class << self
 
       # :call-seq:
@@ -624,7 +611,7 @@ module HTML
         end
         # Only child (of type).
         next if statement.sub!(/^:only-(child|of-type)/) do |match|
-          of_type = match =~ /of-type/
+          of_type = $1 == "of-type"
           pseudo << only_child(of_type)
           @source << ":only-#{$1}"
           "" # Remove

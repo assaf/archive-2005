@@ -5,6 +5,7 @@
 # Code and documention: http://labnotes.org
 
 
+require "test/unit"
 require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
