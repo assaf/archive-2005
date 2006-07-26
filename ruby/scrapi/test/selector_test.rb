@@ -5,7 +5,6 @@
 # Code and documention: http://labnotes.org
 
 
-require "test/unit"
 require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
@@ -83,7 +82,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_attribute
-    html = parse(%Q{<div id="1"></div><p id="2" title bar="foo"></p><div id="3" title="foo"></div>})
+    html = parse(%Q{<div id="1"></div><p id="2" title="" bar="foo"></p><div id="3" title="foo"></div>})
     # Match element with attribute.
     match = HTML.selector("div[title]").select(html)
     assert_equal 1, match.size
@@ -282,7 +281,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_odd_even
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # Test odd nth children.
     match = HTML.selector("tr:nth-child(odd)").select(html)
     assert_equal 2, match.size
@@ -297,7 +296,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_a_is_zero
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # Test the third child.
     match = HTML.selector("tr:nth-child(0n+3)").select(html)
     assert_equal 1, match.size
@@ -320,7 +319,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_a_is_one
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # a is group of one, pick every element in group.
     match = HTML.selector("tr:nth-child(1n+0)").select(html)
     assert_equal 4, match.size
@@ -334,7 +333,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_b_is_zero
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # If b is zero, pick the n-th element (here each one).
     match = HTML.selector("tr:nth-child(n+0)").select(html)
     assert_equal 4, match.size
@@ -352,7 +351,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_a_is_negative
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # Since a is -1, picks the first three elements.
     match = HTML.selector("tr:nth-child(-n+3)").select(html)
     assert_equal 3, match.size
@@ -372,7 +371,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_b_is_negative
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # Select last of four.
     match = HTML.selector("tr:nth-child(4n-1)").select(html)
     assert_equal 1, match.size
@@ -393,7 +392,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_child_substitution_values
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # Test with ?n?.
     match = HTML.selector("tr:nth-child(?n?)", 2, 1).select(html)
     assert_equal 2, match.size
@@ -416,7 +415,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_last_child
-    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # Last two elements.
     match = HTML.selector("tr:nth-last-child(-n+2)").select(html)
     assert_equal 2, match.size
@@ -431,7 +430,7 @@ class SelectorTest < Test::Unit::TestCase
 
 
   def test_nth_of_type
-    html = parse(%Q{<table><thead></thead><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><thead></thead><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # First two elements.
     match = HTML.selector("tr:nth-of-type(-n+2)").select(html)
     assert_equal 2, match.size
@@ -446,7 +445,7 @@ class SelectorTest < Test::Unit::TestCase
 
   
   def test_first_and_last
-    html = parse(%Q{<table><thead></thead><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></td></table>})
+    html = parse(%Q{<table><thead></thead><tr id="1"></tr><tr id="2"></tr><tr id="3"></tr><tr id="4"></tr></table>})
     # First child.
     match = HTML.selector("tr:first-child").select(html)
     assert_equal 0, match.size
@@ -602,7 +601,7 @@ class SelectorTest < Test::Unit::TestCase
 protected
 
   def parse(html)
-    return HTML::HTMLParser.parse(html).root
+    return HTML::Document.new(html).root
   end
 
 end
