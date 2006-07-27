@@ -56,6 +56,9 @@ class SelectorTest < Test::Unit::TestCase
     # Element name does not match ID.
     match = HTML.selector("p#?", 2).select(html)
     assert_equal 0, match.size
+    # Use regular expression.
+    match = HTML.selector("#?", /\d/).select(html)
+    assert_equal 2, match.size
   end
 
 
@@ -516,6 +519,14 @@ class SelectorTest < Test::Unit::TestCase
     match = HTML.selector("div:content()").select(html)
     assert_equal 0, match.size
     match = HTML.selector("div:content(something)").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content( 'something' )").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content( \"something\" )").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content(?)", "something").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content(?)", /something/).select(html)
     assert_equal 1, match.size
   end
 

@@ -423,7 +423,7 @@ module HTML
         end
       end
 
-      return matches
+      matches
     end
 
 
@@ -455,7 +455,7 @@ module HTML
           stack.concat children.reverse
         end
       end
-      return matches
+      matches
     end
 
 
@@ -470,7 +470,7 @@ module HTML
           stack.concat children.reverse
         end
       end
-      return nil
+      nil
     end
 
 
@@ -494,7 +494,7 @@ module HTML
           end
         end
       end
-      return nil
+      nil
     end
 
 
@@ -543,7 +543,7 @@ module HTML
         next if statement.sub!(/^\.([\w\-]+)/) do |match|
           class_name = $1
           @source << ".#{class_name}"
-          class_name = Regexp.new("(^|\s)#{Regexp.escape(class_name.to_s)}($|\s)") unless class_name.is_a?(Regexp)
+          class_name = Regexp.new("(^|\s)#{Regexp.escape(class_name)}($|\s)") unless class_name.is_a?(Regexp)
           attributes << ["class", class_name]
           "" # Remove
         end
@@ -628,18 +628,22 @@ module HTML
                 break
               end
             end
-            return empty
+            empty
           end
           @source << ":empty"
           "" # Remove
         end
         # Content: match the text content of the element, stripping
         # leading and trailing spaces.
-        next if statement.sub!(/^:content\(\s*('[^']*'|"[^"]*"|[^)]*)\s*\)/) do |match|
+        next if statement.sub!(/^:content\(\s*(\?|'[^']*'|"[^"]*"|[^)]*)\s*\)/) do |match|
           content = $1
-          if (content[0] == ?" or content[0] == ?') and content[0] == content[-1]
+          if content == "?"
+            content = values.shift
+          elsif (content[0] == ?" or content[0] == ?') and content[0] == content[-1]
             content = content[1..-2]
           end
+          @source << ":content('#{content}')"
+          content = Regexp.new("^#{Regexp.escape(content.to_s)}$") unless content.is_a?(Regexp)
           pseudo << lambda do |element|
             text = ""
             for child in element.children
@@ -647,9 +651,8 @@ module HTML
                 text << child.content
               end
             end
-            return text.strip == content
+            text.strip =~ content
           end
-          @source << ":content('#{content}')"
           "" # Remove
         end
 
@@ -668,7 +671,7 @@ module HTML
       end
 
       # Return hash. The keys are mapped to instance variables.
-      return {:tag_name=>tag_name, :attributes=>attributes, :pseudo=>pseudo, :negation=>negation}
+      {:tag_name=>tag_name, :attributes=>attributes, :pseudo=>pseudo, :negation=>negation}
     end
 
 
@@ -752,7 +755,7 @@ module HTML
             index += 1
           end
         end
-        return found
+        found
       end
     end
 
@@ -774,7 +777,7 @@ module HTML
             end
           end
         end
-        return !other
+        !other
       end
     end
 
@@ -794,7 +797,7 @@ module HTML
         second.instance_variable_set(:@alternates, nil)
         (@alternates ||= []).concat alternates
       end
-      return second
+      second
     end
 
   end

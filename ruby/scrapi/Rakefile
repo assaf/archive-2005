@@ -20,37 +20,37 @@ end
 
 desc "Run all tests"
 Rake::TestTask.new(:test) do |test|
-    test.libs << "lib"
-    test.pattern = "test/**/*_test.rb"
-    test.verbose = true
+  test.libs << "lib"
+  test.pattern = "test/**/*_test.rb"
+  test.verbose = true
 end
 
 
 desc "Package as a Gem"
 gem_spec = Gem::Specification.new do |spec|
-    spec.name = "scrapi"
-    spec.version = "1.0"
-    spec.summary = "ScrAPI toolkit for Ruby"
-    spec.description = <<-EOF
-        <Insert what are ScrAPIs here>
+  spec.name = "scrapi"
+  spec.version = "1.1.0"
+  spec.summary = "scrAPI toolkit for Ruby"
+  spec.description = <<-EOF
+A framework for writing scrapers using CSS selectors and simple
+select => extract => store processing rules.
 EOF
-    spec.author = "Assaf Arkin"
-    spec.email = "assaf@labnotes.org"
-    spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/ScrAPI4Ruby"
+  spec.author = "Assaf Arkin"
+  spec.email = "assaf.arkin@gmail.com"
+  spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/ScrAPI4Ruby"
 
-    spec.files = FileList["{test,lib}/**/*", "README", "Rakefile", "MIT-LICENSE"].to_a
-    spec.require_path = "lib"
-    spec.autorequire = "scrapi.rb"
-    spec.requirements << "Tidy"
-    # TODO: Add Tidy dependency.
-    spec.has_rdoc = true
-    spec.rdoc_options << "--main" << "README" <<
-         "--title" <<  "Microformat parser" << "--line-numbers"
-    spec.extra_rdoc_files = ["README"]
-    spec.rubyforge_project = "scrapi"
+  spec.files = FileList["{test,lib}/**/*", "README", "Rakefile", "MIT-LICENSE"].to_a
+  spec.require_path = "lib"
+  spec.autorequire = "scrapi.rb"
+  spec.requirements << "Tidy"
+  # TODO: Add Tidy dependency.
+  spec.has_rdoc = true
+  spec.rdoc_options << "--main" << "README" << "--title" <<  "scrAPI toolkit for Ruby" << "--line-numbers"
+  spec.extra_rdoc_files = ["README"]
+  spec.rubyforge_project = "scrapi"
 end
 
 gem = Rake::GemPackageTask.new(gem_spec) do |pkg|
-    pkg.need_tar = true
-    pkg.need_zip = true
+  pkg.need_tar = true
+  pkg.need_zip = true
 end

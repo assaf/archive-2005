@@ -12,13 +12,13 @@ require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 class NodeExtTest < Test::Unit::TestCase
 
-    def setup
-    end
+  def setup
+  end
 
-    def teardown
-    end
+  def teardown
+  end
 
-    def test_add_tests
-    end
+  def test_add_tests
+  end
 
 end
