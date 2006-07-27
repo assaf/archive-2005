@@ -1,9 +1,12 @@
-unless defined?(RAILS_ROOT)
-    RAILS_ROOT = ENV["RAILS_ROOT"] ||
-        File.join(File.dirname(__FILE__), "../../../../")
-end
-require File.join(RAILS_ROOT, "test", "test_helper")
-require File.join(File.dirname(__FILE__), "..", "init")
+# ScrAPI toolkit for Ruby
+#
+# Copyright (c) 2006 Assaf Arkin, under Creative Commons Attribution and/or MIT License
+# Developed for http://co.mments.com
+# Code and documention: http://labnotes.org
+
+
+require "test/unit"
+require File.join(File.dirname(__FILE__), "../lib", "scrapi")
 
 
 class SelectorTest < Test::Unit::TestCase
@@ -53,6 +56,9 @@ class SelectorTest < Test::Unit::TestCase
     # Element name does not match ID.
     match = HTML.selector("p#?", 2).select(html)
     assert_equal 0, match.size
+    # Use regular expression.
+    match = HTML.selector("#?", /\d/).select(html)
+    assert_equal 2, match.size
   end
 
 
@@ -513,6 +519,14 @@ class SelectorTest < Test::Unit::TestCase
     match = HTML.selector("div:content()").select(html)
     assert_equal 0, match.size
     match = HTML.selector("div:content(something)").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content( 'something' )").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content( \"something\" )").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content(?)", "something").select(html)
+    assert_equal 1, match.size
+    match = HTML.selector("div:content(?)", /something/).select(html)
     assert_equal 1, match.size
   end
 
