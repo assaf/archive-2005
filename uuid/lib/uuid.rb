@@ -3,11 +3,8 @@
 #
 # Author:: Assaf Arkin  assaf@labnotes.org
 # Documentation:: http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/UuidGenerator
-# Copyright:: Copyright (c) 2005 Assaf Arkin
+# Copyright:: Copyright (c) 2005,2006 Assaf Arkin
 # License:: MIT and/or Creative Commons Attribution-ShareAlike
-#
-#--
-#++
 
 
 require 'thread'
@@ -115,275 +112,281 @@ require 'logger'
 #++
 module UUID
 
-    VERSION = '1.0.0'
+  VERSION = '1.0.1'
 
-    PACKAGE = "uuid"
+  PACKAGE = "uuid"
 
-    # Default state file.
-    STATE_FILE = "uuid.state"
+  # Default state file.
+  STATE_FILE = "uuid.state"
 
-    # Clock multiplier. Converts Time (resolution: seconds) to UUID clock (resolution: 10ns)
-    CLOCK_MULTIPLIER = 10000000 #:nodoc:
+  # Clock multiplier. Converts Time (resolution: seconds) to UUID clock (resolution: 10ns)
+  CLOCK_MULTIPLIER = 10000000 #:nodoc:
 
-    # Clock gap is the number of ticks (resolution: 10ns) between two Ruby Time ticks.
-    CLOCK_GAPS = 100000 #:nodoc:
+  # Clock gap is the number of ticks (resolution: 10ns) between two Ruby Time ticks.
+  CLOCK_GAPS = 100000 #:nodoc:
 
-    # Version number stamped into the UUID to identify it as time-based.
-    VERSION_CLOCK = 0x0100 #:nodoc:
+  # Version number stamped into the UUID to identify it as time-based.
+  VERSION_CLOCK = 0x0100 #:nodoc:
 
-    # Formats supported by the UUID generator.
-    FORMATS = {:compact=>"%08x%04x%04x%04x%012x", :default=>"%08x-%04x-%04x-%04x-%012x", :urn=>"urn:uuid:%08x-%04x-%04x-%04x-%012x"} #:nodoc:
+  # Formats supported by the UUID generator.
+  FORMATS = {:compact=>"%08x%04x%04x%04x%012x", :default=>"%08x-%04x-%04x-%04x-%012x", :urn=>"urn:uuid:%08x-%04x-%04x-%04x-%012x"} #:nodoc:
 
-    # Length (in characters) of UUIDs generated for each of the formats.
-    FORMATS_LENGTHS = {:compact=>32, :default=>36, :urn=>45} #:nodoc:
+  # Length (in characters) of UUIDs generated for each of the formats.
+  FORMATS_LENGTHS = {:compact=>32, :default=>36, :urn=>45} #:nodoc:
 
-    ERROR_INVALID_SEQUENCE = "Invalid sequence number: found '%s', expected 4 hexdecimal digits" #:nodoc:
+  ERROR_INVALID_SEQUENCE = "Invalid sequence number: found '%s', expected 4 hexdecimal digits" #:nodoc:
 
-    ERROR_NOT_A_SEQUENCE = "Not a sequence number: expected integer between 0 and 0xFFFF" #:nodoc:
+  ERROR_NOT_A_SEQUENCE = "Not a sequence number: expected integer between 0 and 0xFFFF" #:nodoc:
 
-    ERROR_INVALID_MAC_ADDR = "Invalid MAC address: found '%s', expected a number in the format XX-XX-XX-XX-XX-XX" #:nodoc:
+  ERROR_INVALID_MAC_ADDR = "Invalid MAC address: found '%s', expected a number in the format XX-XX-XX-XX-XX-XX" #:nodoc:
 
-    INFO_INITIALIZED = "Initialized UUID generator with sequence number 0x%04x and MAC address %s" #:nodoc:
+  INFO_INITIALIZED = "Initialized UUID generator with sequence number 0x%04x and MAC address %s" #:nodoc:
 
-    ERROR_INITIALIZED_RANDOM_1 = "Initialized UUID generator with random sequence number/MAC address." #:nodoc:
+  ERROR_INITIALIZED_RANDOM_1 = "Initialized UUID generator with random sequence number/MAC address." #:nodoc:
 
-    ERROR_INITIALIZED_RANDOM_2 = "UUIDs are not guaranteed to be unique. Please create a uuid.state file as soon as possible." #:nodoc:
+  ERROR_INITIALIZED_RANDOM_2 = "UUIDs are not guaranteed to be unique. Please create a uuid.state file as soon as possible." #:nodoc:
 
-    IFCONFIG_PATTERN = /[^:\-](?:[0-9A-Za-z][0-9A-Za-z][:\-]){5}[0-9A-Za-z][0-9A-Za-z][^:\-]/ #:nodoc:
-
-
-    # Regular expression to identify a 36 character UUID. Can be used for a partial match.
-    REGEXP = /[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}/
-
-    # Regular expression to identify a 36 character UUID. Can only be used for a full match.
-    REGEXP_FULL = /^[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}$/
+  IFCONFIG_PATTERN = /[^:\-](?:[0-9A-Za-z][0-9A-Za-z][:\-]){5}[0-9A-Za-z][0-9A-Za-z][^:\-]/ #:nodoc:
 
 
-    @@mutex = Mutex.new
-    @@last_clock = @@logger = @@state_file = nil
+  # Regular expression to identify a 36 character UUID. Can be used for a partial match.
+  REGEXP = /[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}/
 
-    # Generates and returns a new UUID string.
-    #
-    # The argument +format+ specifies which formatting template to use:
-    # * <tt>:default</tt> -- Produces 36 characters, including hyphens separating the UUID value parts
-    # * <tt>:compact</tt> -- Produces a 32 digits (hexadecimal) value with no hyphens
-    # * <tt>:urn</tt> -- Aadds the prefix <tt>urn:uuid:</tt> to the <tt>:default</tt> format
-    #
-    # For example:
-    #  print UUID.new :default
-    # or just
-    #  print UUID.new
-    #
-    # :call-seq:
-    #   UUID.new([format])  -> string
-    #
-    def new format = nil
-        # Determine which format we're using for the UUID string.
-        template = FORMATS[format || :default] or
-            raise RuntimeError, "I don't know the format '#{format}'"
+  # Regular expression to identify a 36 character UUID. Can only be used for a full match.
+  REGEXP_FULL = /^[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}$/
 
-        # The clock must be monotonically increasing. The clock resolution is at best 100 ns
-        # (UUID spec), but practically may be lower (on my setup, around 1ms). If this method
-        # is called too fast, we don't have a monotonically increasing clock, so the solution is
-        # to just wait.
-        # It is possible for the clock to be adjusted backwards, in which case we would end up
-        # blocking for a long time. When backward clock is detected, we prevent duplicates by
-        # asking for a new sequence number and continue with the new clock.
-        clock = @@mutex.synchronize do
-            # Initialize UUID generator if not already initialized. Uninitizlied UUID generator has no
-            # last known clock.
-            next_sequence unless @@last_clock
-            clock = (Time.new.to_f * CLOCK_MULTIPLIER).to_i & 0xFFFFFFFFFFFFFFF0
-            if clock > @@last_clock
-                @@drift = 0
-                @@last_clock = clock
-            elsif clock = @@last_clock
-                drift = @@drift += 1
-                if drift < 10000
-                    @@last_clock += 1
-                else
-                    Thread.pass
-                    nil
-                end
-            else
-                next_sequence
-                @@last_clock = clock
-            end
-        end while not clock
-        sprintf template, clock & 0xFFFFFFFF, (clock >> 32)& 0xFFFF, ((clock >> 48) & 0xFFFF | VERSION_CLOCK),
-            @@sequence & 0xFFFF, @@mac_hex & 0xFFFFFFFFFFFF
-    end
 
-    alias uuid new
-    module_function :uuid, :new
+  @@mutex = Mutex.new
+  @@last_clock = @@logger = @@state_file = nil
 
-    # Configures the UUID generator. Use this method to specify the UUID state file, logger, etc.
-    #
-    # The method accepts the following options:
-    # * <tt>:state_file</tt> -- Specifies the location of the state file. If missing, the default
-    #   is <tt>uuid.state</tt>
-    # * <tt>:logger<tt> -- The UUID generator will use this logger to report the state information (optional).
-    # * <tt>:sequence</tt> -- Specifies the sequence number (0 to 0xFFFF) to use. Required to
-    #   create a new state file, ignored if the state file already exists.
-    # * <tt>:mac_addr</tt> -- Specifies the MAC address (xx-xx-xx-xx-xx) to use. Required to
-    #   create a new state file, ignored if the state file already exists.
-    #
-    # For example, to create a new state file:
-    #  UUID.config :state_file=>'my-uuid.state', :sequence=>rand(0x10000), :mac_addr=>'0C-0E-35-41-60-65'
-    # To use an existing state file and log to +STDOUT+:
-    #  UUID.config :state_file=>'my-uuid.state', :logger=>Logger.new(STDOUT)
-    #
-    # :call-seq:
-    #   UUID.config(config)
-    #
-    def self.config options
-        options ||= {}
-        @@mutex.synchronize do
-            @@logger = options[:logger]
-            next_sequence options
-        end
-    end
 
-    # Create a uuid.state file by finding the IEEE 802 NIC MAC address for this machine.
-    # Works for UNIX (ifconfig) and Windows (ipconfig). Creates the uuid.state file in the
-    # installation directory (typically the GEM's lib).
-    def self.setup
-        file = File.expand_path(File.dirname(__FILE__))
-        file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
-        file = File.expand_path(file)
-        if File.exist? file
-            puts "#{PACKAGE}: Found an existing UUID state file: #{file}"
+  # Generates and returns a new UUID string.
+  #
+  # The argument +format+ specifies which formatting template to use:
+  # * <tt>:default</tt> -- Produces 36 characters, including hyphens separating the UUID value parts
+  # * <tt>:compact</tt> -- Produces a 32 digits (hexadecimal) value with no hyphens
+  # * <tt>:urn</tt> -- Aadds the prefix <tt>urn:uuid:</tt> to the <tt>:default</tt> format
+  #
+  # For example:
+  #  print UUID.new :default
+  # or just
+  #  print UUID.new
+  #
+  # :call-seq:
+  #   UUID.new([format])  -> string
+  #
+  def new format = nil
+    # Determine which format we're using for the UUID string.
+    template = FORMATS[format || :default] or
+        raise RuntimeError, "I don't know the format '#{format}'"
+
+    # The clock must be monotonically increasing. The clock resolution is at best 100 ns
+    # (UUID spec), but practically may be lower (on my setup, around 1ms). If this method
+    # is called too fast, we don't have a monotonically increasing clock, so the solution is
+    # to just wait.
+    # It is possible for the clock to be adjusted backwards, in which case we would end up
+    # blocking for a long time. When backward clock is detected, we prevent duplicates by
+    # asking for a new sequence number and continue with the new clock.
+    clock = @@mutex.synchronize do
+      # Initialize UUID generator if not already initialized. Uninitizlied UUID generator has no
+      # last known clock.
+      next_sequence unless @@last_clock
+      clock = (Time.new.to_f * CLOCK_MULTIPLIER).to_i & 0xFFFFFFFFFFFFFFF0
+      if clock > @@last_clock
+        @@drift = 0
+        @@last_clock = clock
+      elsif clock = @@last_clock
+        drift = @@drift += 1
+        if drift < 10000
+          @@last_clock += 1
         else
-            puts "#{PACKAGE}: No UUID state file found, attempting to create one for you:"
-            # Run ifconfig for UNIX, or ipconfig for Windows.
-            config = ""
-            begin
-                Kernel.open "|ifconfig" do |input|
-                    input.each_line { |line| config << line }
-                end
-            rescue
-            end
-            begin
-                Kernel.open "|ipconfig /all" do |input|
-                    input.each_line { |line| config << line }
-                end
-            rescue
-            end
-
-            addresses = config.scan(IFCONFIG_PATTERN).collect { |addr| addr[1..-2] }
-            if addresses.empty?
-                puts "Could not find any IEEE 802 NIC MAC addresses for this machine."
-                puts "You need to create the uuid.state file manually."
-            else
-                puts "Found the following IEEE 802 NIC MAC addresses on your computer:"
-                addresses.each { |addr| puts "  #{addr}" }
-                puts "Selecting the first address #{addresses[0]} for use in your UUID state file."
-                File.open file, "w" do |output|
-                    output.puts "mac_addr: #{addresses[0]}"
-                    output.puts format("sequence: \"0x%04x\"", rand(0x10000))
-                end
-                puts "Created a new UUID state file: #{file}"
-            end
+          Thread.pass
+          nil
         end
-        file
+      else
+        next_sequence
+        @@last_clock = clock
+      end
+    end while not clock
+    sprintf template, clock & 0xFFFFFFFF, (clock >> 32)& 0xFFFF, ((clock >> 48) & 0xFFFF | VERSION_CLOCK),
+            @@sequence & 0xFFFF, @@mac_hex & 0xFFFFFFFFFFFF
+  end
+
+
+  alias uuid new
+  module_function :uuid, :new
+
+
+  # Configures the UUID generator. Use this method to specify the UUID state file, logger, etc.
+  #
+  # The method accepts the following options:
+  # * <tt>:state_file</tt> -- Specifies the location of the state file. If missing, the default
+  #   is <tt>uuid.state</tt>
+  # * <tt>:logger<tt> -- The UUID generator will use this logger to report the state information (optional).
+  # * <tt>:sequence</tt> -- Specifies the sequence number (0 to 0xFFFF) to use. Required to
+  #   create a new state file, ignored if the state file already exists.
+  # * <tt>:mac_addr</tt> -- Specifies the MAC address (xx-xx-xx-xx-xx) to use. Required to
+  #   create a new state file, ignored if the state file already exists.
+  #
+  # For example, to create a new state file:
+  #  UUID.config :state_file=>'my-uuid.state', :sequence=>rand(0x10000), :mac_addr=>'0C-0E-35-41-60-65'
+  # To use an existing state file and log to +STDOUT+:
+  #  UUID.config :state_file=>'my-uuid.state', :logger=>Logger.new(STDOUT)
+  #
+  # :call-seq:
+  #   UUID.config(config)
+  #
+  def self.config options
+    options ||= {}
+    @@mutex.synchronize do
+      @@logger = options[:logger]
+      next_sequence options
     end
+  end
+
+
+  # Create a uuid.state file by finding the IEEE 802 NIC MAC address for this machine.
+  # Works for UNIX (ifconfig) and Windows (ipconfig). Creates the uuid.state file in the
+  # installation directory (typically the GEM's lib).
+  def self.setup
+    file = File.expand_path(File.dirname(__FILE__))
+    file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
+    file = File.expand_path(file)
+    if File.exist? file
+      puts "#{PACKAGE}: Found an existing UUID state file: #{file}"
+    else
+      puts "#{PACKAGE}: No UUID state file found, attempting to create one for you:"
+      # Run ifconfig for UNIX, or ipconfig for Windows.
+      config = ""
+      begin
+        Kernel.open "|ifconfig" do |input|
+          input.each_line { |line| config << line }
+        end
+      rescue
+      end
+      begin
+        Kernel.open "|ipconfig /all" do |input|
+            input.each_line { |line| config << line }
+        end
+      rescue
+      end
+
+      addresses = config.scan(IFCONFIG_PATTERN).collect { |addr| addr[1..-2] }
+      if addresses.empty?
+        puts "Could not find any IEEE 802 NIC MAC addresses for this machine."
+        puts "You need to create the uuid.state file manually."
+      else
+        puts "Found the following IEEE 802 NIC MAC addresses on your computer:"
+        addresses.each { |addr| puts "  #{addr}" }
+        puts "Selecting the first address #{addresses[0]} for use in your UUID state file."
+        File.open file, "w" do |output|
+          output.puts "mac_addr: #{addresses[0]}"
+          output.puts format("sequence: \"0x%04x\"", rand(0x10000))
+        end
+        puts "Created a new UUID state file: #{file}"
+      end
+    end
+    file
+  end
+
 
 private
     def self.state plus_one = false
-        return nil unless @@sequence && @@mac_addr
-        {"sequence"=>sprintf("0x%04x", (plus_one ? @@sequence + 1 : @@sequence) & 0xFFFF), "last_clock"=>sprintf("0x%x", @@last_clock || (Time.new.to_f * CLOCK_MULTIPLIER).to_i),  "mac_addr" => @@mac_addr}
+      return nil unless @@sequence && @@mac_addr
+      {"sequence"=>sprintf("0x%04x", (plus_one ? @@sequence + 1 : @@sequence) & 0xFFFF), "last_clock"=>sprintf("0x%x", @@last_clock || (Time.new.to_f * CLOCK_MULTIPLIER).to_i),  "mac_addr" => @@mac_addr}
     end
 
+
     def self.next_sequence config = nil
-        # If called to advance the sequence number (config is nil), we have a state file that we're able to use.
-        # If called from configuration, use the specified or default state file.
-        state_file = (config && config[:state_file]) || @@state_file
+      # If called to advance the sequence number (config is nil), we have a state file that we're able to use.
+      # If called from configuration, use the specified or default state file.
+      state_file = (config && config[:state_file]) || @@state_file
 
-        unless state_file
-            state_file = if File.exist?(STATE_FILE)
-                STATE_FILE
-            else
-                file = File.expand_path(File.dirname(__FILE__))
-                file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
-                file = File.expand_path(file)
-                File.exist?(file) ? file : setup
-            end
+      unless state_file
+        state_file = if File.exist?(STATE_FILE)
+          STATE_FILE
+        else
+          file = File.expand_path(File.dirname(__FILE__))
+          file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
+          file = File.expand_path(file)
+          File.exist?(file) ? file : setup
         end
-        begin
-            File.open state_file, "r+" do |file|
-                # Lock the file for exclusive access, just to make sure it's not being read while we're
-                # updating its contents.
-                file.flock(File::LOCK_EX)
-                state = YAML::load file
-                # Get the sequence number. Must be a valid 16-bit hexadecimal value.
-                sequence = state['sequence']
-                if sequence
-                    raise RuntimeError, format(ERROR_INVALID_SEQUENCE, sequence) unless sequence.is_a?(String) and sequence =~ /[0-9a-fA-F]{4}/
-                    sequence = sequence.hex & 0xFFFF
-                else
-                    sequence = rand(0x10000)
-                end
-                # Get the MAC address. Must be 6 pairs of hexadecimal octets. Convert MAC address into
-                # a 48-bit value with the higher bit being zero.
-                mac_addr = state['mac_addr']
-                raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
-                mac_hex = mac_addr.scan(/[0-9a-fA-F]{2}/).join.hex & 0x7FFFFFFFFFFF
+      end
+      begin
+        File.open state_file, "r+" do |file|
+          # Lock the file for exclusive access, just to make sure it's not being read while we're
+          # updating its contents.
+          file.flock(File::LOCK_EX)
+          state = YAML::load file
+          # Get the sequence number. Must be a valid 16-bit hexadecimal value.
+          sequence = state['sequence']
+          if sequence
+            raise RuntimeError, format(ERROR_INVALID_SEQUENCE, sequence) unless sequence.is_a?(String) and sequence =~ /[0-9a-fA-F]{4}/
+            sequence = sequence.hex & 0xFFFF
+          else
+            sequence = rand(0x10000)
+          end
+          # Get the MAC address. Must be 6 pairs of hexadecimal octets. Convert MAC address into
+          # a 48-bit value with the higher bit being zero.
+          mac_addr = state['mac_addr']
+          raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
+          mac_hex = mac_addr.scan(/[0-9a-fA-F]{2}/).join.hex & 0x7FFFFFFFFFFF
 
-                # If everything is OK, proceed to the next step. Grab the sequence number and store
-                # the new state. Start at beginning of file, and truncate file when done.
-                @@mac_addr, @@mac_hex, @@sequence, @@state_file = mac_addr, mac_hex, sequence, state_file
-                file.pos = 0
-                YAML::dump state(true), file
-                file.truncate file.pos
-            end
-            # Initialized.
-            if @@logger
-                @@logger.info format(INFO_INITIALIZED, @@sequence, @@mac_addr)
-            else
-                warn "#{PACKAGE}: " + format(INFO_INITIALIZED, @@sequence, @@mac_addr)
-            end
-            @@last_clock, @@drift = (Time.new.to_f * CLOCK_MULTIPLIER).to_i, 0
-        rescue Errno::ENOENT=>error
-            if !config
-                # Generate random values.
-                @@mac_hex, @@sequence, @@state_file = rand(0x800000000000) | 0xF00000000000, rand(0x10000), nil
-                # Initialized.
-                if @@logger
-                    @@logger.error ERROR_INITIALIZED_RANDOM_1
-                    @@logger.error ERROR_INITIALIZED_RANDOM_2
-                else
-                    warn "#{PACKAGE}: " + ERROR_INITIALIZED_RANDOM_1
-                    warn "#{PACKAGE}: " + ERROR_INITIALIZED_RANDOM_2
-                end
-                @@last_clock, @@drift = (Time.new.to_f * CLOCK_MULTIPLIER).to_i, 0
-            else
-                # No state file. If we were called for configuration with valid sequence number and MAC address,
-                # attempt to create state file. See code above for how we interpret these values.
-                sequence = config[:sequence]
-                raise RuntimeError, format(ERROR_NOT_A_SEQUENCE, sequence) unless sequence.is_a?(Integer)
-                sequence &= 0xFFFF
-                mac_addr = config[:mac_addr]
-                raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
-                mac_hex = mac_addr.scan(/[0-9a-fA-F]{2}/).join.hex & 0x7FFFFFFFFFFF
-                File.open state_file, "w" do |file|
-                    file.flock(File::LOCK_EX)
-                    @@mac_addr, @@mac_hex, @@sequence, @@state_file = mac_addr, mac_hex, sequence, state_file
-                    file.pos = 0
-                    YAML::dump state(true), file
-                    file.truncate file.pos
-                end
-                # Initialized.
-                if @@logger
-                    @@logger.info format(INFO_INITIALIZED, @@sequence, @@mac_addr)
-                else
-                    warn "#{PACKAGE}: " + format(INFO_INITIALIZED, @@sequence, @@mac_addr)
-                end
-                @@last_clock, @@drift = (Time.new.to_f * CLOCK_MULTIPLIER).to_i, 0
-            end
-        rescue Exception=>error
-            @@last_clock = nil
-            raise error
+          # If everything is OK, proceed to the next step. Grab the sequence number and store
+          # the new state. Start at beginning of file, and truncate file when done.
+          @@mac_addr, @@mac_hex, @@sequence, @@state_file = mac_addr, mac_hex, sequence, state_file
+          file.pos = 0
+          YAML::dump state(true), file
+          file.truncate file.pos
         end
+        # Initialized.
+        if @@logger
+          @@logger.info format(INFO_INITIALIZED, @@sequence, @@mac_addr)
+        else
+          warn "#{PACKAGE}: " + format(INFO_INITIALIZED, @@sequence, @@mac_addr)
+        end
+        @@last_clock, @@drift = (Time.new.to_f * CLOCK_MULTIPLIER).to_i, 0
+      rescue Errno::ENOENT=>error
+        if !config
+          # Generate random values.
+          @@mac_hex, @@sequence, @@state_file = rand(0x800000000000) | 0xF00000000000, rand(0x10000), nil
+          # Initialized.
+          if @@logger
+            @@logger.error ERROR_INITIALIZED_RANDOM_1
+            @@logger.error ERROR_INITIALIZED_RANDOM_2
+          else
+            warn "#{PACKAGE}: " + ERROR_INITIALIZED_RANDOM_1
+            warn "#{PACKAGE}: " + ERROR_INITIALIZED_RANDOM_2
+          end
+          @@last_clock, @@drift = (Time.new.to_f * CLOCK_MULTIPLIER).to_i, 0
+        else
+          # No state file. If we were called for configuration with valid sequence number and MAC address,
+          # attempt to create state file. See code above for how we interpret these values.
+          sequence = config[:sequence]
+          raise RuntimeError, format(ERROR_NOT_A_SEQUENCE, sequence) unless sequence.is_a?(Integer)
+          sequence &= 0xFFFF
+          mac_addr = config[:mac_addr]
+          raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
+          mac_hex = mac_addr.scan(/[0-9a-fA-F]{2}/).join.hex & 0x7FFFFFFFFFFF
+          File.open state_file, "w" do |file|
+            file.flock(File::LOCK_EX)
+            @@mac_addr, @@mac_hex, @@sequence, @@state_file = mac_addr, mac_hex, sequence, state_file
+            file.pos = 0
+            YAML::dump state(true), file
+            file.truncate file.pos
+          end
+          # Initialized.
+          if @@logger
+            @@logger.info format(INFO_INITIALIZED, @@sequence, @@mac_addr)
+          else
+            warn "#{PACKAGE}: " + format(INFO_INITIALIZED, @@sequence, @@mac_addr)
+          end
+          @@last_clock, @@drift = (Time.new.to_f * CLOCK_MULTIPLIER).to_i, 0
+        end
+      rescue Exception=>error
+        @@last_clock = nil
+        raise error
+      end
     end
 
 end
@@ -392,13 +395,12 @@ end
 class ActiveRecord::Base
 
     def self.uuid_primary_key
-        before_create { |record| record.id = UUID.new unless record.id }
+      before_create { |record| record.id = UUID.new unless record.id }
     end
 
 end
 
 
-
 if __FILE__ == $0
-    UUID.setup
+  UUID.setup
 end
