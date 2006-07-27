@@ -156,8 +156,10 @@ module UUID
   REGEXP_FULL = /^[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}$/
 
 
-  @@mutex = Mutex.new
-  @@last_clock = @@logger = @@state_file = nil
+  @@mutex       = Mutex.new
+  @@last_clock  = nil
+  @@logger      = nil
+  @@state_file  = nil
 
 
   # Generates and returns a new UUID string.
@@ -258,18 +260,12 @@ module UUID
       puts "#{PACKAGE}: No UUID state file found, attempting to create one for you:"
       # Run ifconfig for UNIX, or ipconfig for Windows.
       config = ""
-      begin
-        Kernel.open "|ifconfig" do |input|
-          input.each_line { |line| config << line }
-        end
-      rescue
-      end
-      begin
-        Kernel.open "|ipconfig /all" do |input|
-            input.each_line { |line| config << line }
-        end
-      rescue
-      end
+      Kernel.open "|ifconfig" do |input|
+        input.each_line { |line| config << line }
+      end rescue nil
+      Kernel.open "|ipconfig /all" do |input|
+        input.each_line { |line| config << line }
+      end rescue nil
 
       addresses = config.scan(IFCONFIG_PATTERN).collect { |addr| addr[1..-2] }
       if addresses.empty?
@@ -293,7 +289,9 @@ module UUID
 private
     def self.state plus_one = false
       return nil unless @@sequence && @@mac_addr
-      {"sequence"=>sprintf("0x%04x", (plus_one ? @@sequence + 1 : @@sequence) & 0xFFFF), "last_clock"=>sprintf("0x%x", @@last_clock || (Time.new.to_f * CLOCK_MULTIPLIER).to_i),  "mac_addr" => @@mac_addr}
+      { "sequence"=>sprintf("0x%04x", (plus_one ? @@sequence + 1 : @@sequence) & 0xFFFF),
+        "last_clock"=>sprintf("0x%x", @@last_clock || (Time.new.to_f * CLOCK_MULTIPLIER).to_i),
+        "mac_addr" => @@mac_addr }
     end
 
 
@@ -303,13 +301,13 @@ private
       state_file = (config && config[:state_file]) || @@state_file
 
       unless state_file
-        state_file = if File.exist?(STATE_FILE)
-          STATE_FILE
+        if File.exist?(STATE_FILE)
+          state_file = STATE_FILE
         else
           file = File.expand_path(File.dirname(__FILE__))
           file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
           file = File.expand_path(file)
-          File.exist?(file) ? file : setup
+          state_file = File.exist?(file) ? file : setup
         end
       end
       begin
@@ -321,7 +319,8 @@ private
           # Get the sequence number. Must be a valid 16-bit hexadecimal value.
           sequence = state['sequence']
           if sequence
-            raise RuntimeError, format(ERROR_INVALID_SEQUENCE, sequence) unless sequence.is_a?(String) and sequence =~ /[0-9a-fA-F]{4}/
+            raise RuntimeError, format(ERROR_INVALID_SEQUENCE, sequence) unless
+              sequence.is_a?(String) and sequence =~ /[0-9a-fA-F]{4}/
             sequence = sequence.hex & 0xFFFF
           else
             sequence = rand(0x10000)
@@ -329,7 +328,8 @@ private
           # Get the MAC address. Must be 6 pairs of hexadecimal octets. Convert MAC address into
           # a 48-bit value with the higher bit being zero.
           mac_addr = state['mac_addr']
-          raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
+          raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless
+            mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
           mac_hex = mac_addr.scan(/[0-9a-fA-F]{2}/).join.hex & 0x7FFFFFFFFFFF
 
           # If everything is OK, proceed to the next step. Grab the sequence number and store
@@ -366,7 +366,8 @@ private
           raise RuntimeError, format(ERROR_NOT_A_SEQUENCE, sequence) unless sequence.is_a?(Integer)
           sequence &= 0xFFFF
           mac_addr = config[:mac_addr]
-          raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
+          raise RuntimeError, format(ERROR_INVALID_MAC_ADDR, mac_addr) unless
+            mac_addr.is_a?(String) and mac_addr =~ /([0-9a-fA-F]{2}[:\-]){5}[0-9a-fA-F]{2}/
           mac_hex = mac_addr.scan(/[0-9a-fA-F]{2}/).join.hex & 0x7FFFFFFFFFFF
           File.open state_file, "w" do |file|
             file.flock(File::LOCK_EX)
@@ -392,12 +393,14 @@ private
 end
 
 
-class ActiveRecord::Base
+if defined?(ActiveRecord)
+  class ActiveRecord::Base
 
-    def self.uuid_primary_key
-      before_create { |record| record.id = UUID.new unless record.id }
-    end
+      def self.uuid_primary_key
+        before_create { |record| record.id = UUID.new unless record.id }
+      end
 
+  end
 end
 
 
