@@ -37,13 +37,13 @@ select => extract => store processing rules.
 EOF
   spec.author = "Assaf Arkin"
   spec.email = "assaf.arkin@gmail.com"
-  spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/ScrAPI4Ruby"
+  spec.homepage = "http://labnotes.org/"
 
   spec.files = FileList["{test,lib}/**/*", "README", "Rakefile", "MIT-LICENSE"].to_a
   spec.require_path = "lib"
   spec.autorequire = "scrapi.rb"
   spec.requirements << "Tidy"
-  # TODO: Add Tidy dependency.
+  spec.add_dependency "tidy",  ">=1.1.0"
   spec.has_rdoc = true
   spec.rdoc_options << "--main" << "README" << "--title" <<  "scrAPI toolkit for Ruby" << "--line-numbers"
   spec.extra_rdoc_files = ["README"]
