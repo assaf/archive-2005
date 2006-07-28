@@ -113,7 +113,7 @@ require 'logger'
 module UUID
 
   unless const_defined?(:VERSION)
-    VERSION = '1.0.1'
+    VERSION = '1.0.2'
 
     PACKAGE = "uuid"
 
