@@ -112,48 +112,50 @@ require 'logger'
 #++
 module UUID
 
-  VERSION = '1.0.1'
+  unless const_defined?(:VERSION)
+    VERSION = '1.0.1'
 
-  PACKAGE = "uuid"
+    PACKAGE = "uuid"
 
-  # Default state file.
-  STATE_FILE = "uuid.state"
+    # Default state file.
+    STATE_FILE = "uuid.state"
 
-  # Clock multiplier. Converts Time (resolution: seconds) to UUID clock (resolution: 10ns)
-  CLOCK_MULTIPLIER = 10000000 #:nodoc:
+    # Clock multiplier. Converts Time (resolution: seconds) to UUID clock (resolution: 10ns)
+    CLOCK_MULTIPLIER = 10000000 #:nodoc:
 
-  # Clock gap is the number of ticks (resolution: 10ns) between two Ruby Time ticks.
-  CLOCK_GAPS = 100000 #:nodoc:
+    # Clock gap is the number of ticks (resolution: 10ns) between two Ruby Time ticks.
+    CLOCK_GAPS = 100000 #:nodoc:
 
-  # Version number stamped into the UUID to identify it as time-based.
-  VERSION_CLOCK = 0x0100 #:nodoc:
+    # Version number stamped into the UUID to identify it as time-based.
+    VERSION_CLOCK = 0x0100 #:nodoc:
 
-  # Formats supported by the UUID generator.
-  FORMATS = {:compact=>"%08x%04x%04x%04x%012x", :default=>"%08x-%04x-%04x-%04x-%012x", :urn=>"urn:uuid:%08x-%04x-%04x-%04x-%012x"} #:nodoc:
+    # Formats supported by the UUID generator.
+    FORMATS = {:compact=>"%08x%04x%04x%04x%012x", :default=>"%08x-%04x-%04x-%04x-%012x", :urn=>"urn:uuid:%08x-%04x-%04x-%04x-%012x"} #:nodoc:
 
-  # Length (in characters) of UUIDs generated for each of the formats.
-  FORMATS_LENGTHS = {:compact=>32, :default=>36, :urn=>45} #:nodoc:
+    # Length (in characters) of UUIDs generated for each of the formats.
+    FORMATS_LENGTHS = {:compact=>32, :default=>36, :urn=>45} #:nodoc:
 
-  ERROR_INVALID_SEQUENCE = "Invalid sequence number: found '%s', expected 4 hexdecimal digits" #:nodoc:
+    ERROR_INVALID_SEQUENCE = "Invalid sequence number: found '%s', expected 4 hexdecimal digits" #:nodoc:
 
-  ERROR_NOT_A_SEQUENCE = "Not a sequence number: expected integer between 0 and 0xFFFF" #:nodoc:
+    ERROR_NOT_A_SEQUENCE = "Not a sequence number: expected integer between 0 and 0xFFFF" #:nodoc:
 
-  ERROR_INVALID_MAC_ADDR = "Invalid MAC address: found '%s', expected a number in the format XX-XX-XX-XX-XX-XX" #:nodoc:
+    ERROR_INVALID_MAC_ADDR = "Invalid MAC address: found '%s', expected a number in the format XX-XX-XX-XX-XX-XX" #:nodoc:
 
-  INFO_INITIALIZED = "Initialized UUID generator with sequence number 0x%04x and MAC address %s" #:nodoc:
+    INFO_INITIALIZED = "Initialized UUID generator with sequence number 0x%04x and MAC address %s" #:nodoc:
 
-  ERROR_INITIALIZED_RANDOM_1 = "Initialized UUID generator with random sequence number/MAC address." #:nodoc:
+    ERROR_INITIALIZED_RANDOM_1 = "Initialized UUID generator with random sequence number/MAC address." #:nodoc:
 
-  ERROR_INITIALIZED_RANDOM_2 = "UUIDs are not guaranteed to be unique. Please create a uuid.state file as soon as possible." #:nodoc:
+    ERROR_INITIALIZED_RANDOM_2 = "UUIDs are not guaranteed to be unique. Please create a uuid.state file as soon as possible." #:nodoc:
 
-  IFCONFIG_PATTERN = /[^:\-](?:[0-9A-Za-z][0-9A-Za-z][:\-]){5}[0-9A-Za-z][0-9A-Za-z][^:\-]/ #:nodoc:
+    IFCONFIG_PATTERN = /[^:\-](?:[0-9A-Za-z][0-9A-Za-z][:\-]){5}[0-9A-Za-z][0-9A-Za-z][^:\-]/ #:nodoc:
 
 
-  # Regular expression to identify a 36 character UUID. Can be used for a partial match.
-  REGEXP = /[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}/
+    # Regular expression to identify a 36 character UUID. Can be used for a partial match.
+    REGEXP = /[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}/
 
-  # Regular expression to identify a 36 character UUID. Can only be used for a full match.
-  REGEXP_FULL = /^[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}$/
+    # Regular expression to identify a 36 character UUID. Can only be used for a full match.
+    REGEXP_FULL = /^[[:xdigit:]]{8}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{4}[:-][[:xdigit:]]{12}$/
+  end
 
 
   @@mutex       = Mutex.new
