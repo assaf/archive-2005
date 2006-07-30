@@ -4,6 +4,7 @@ require "rake/rdoctask"
 
 PLUGIN_NAME = "assert_select"
 
+
 desc "Default: run unit tests."
 task :default => :test
 

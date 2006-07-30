@@ -1,12 +1,15 @@
-# ScrAPI toolkit for Ruby
+# assert_select plugins for Rails
 #
 # Copyright (c) 2006 Assaf Arkin, under Creative Commons Attribution and/or MIT License
 # Developed for http://co.mments.com
 # Code and documention: http://labnotes.org
 
 
-require "test/unit"
-require File.join(File.dirname(__FILE__), "../lib", "scrapi")
+unless defined?(RAILS_ROOT)
+ RAILS_ROOT = ENV["RAILS_ROOT"]
+end
+require File.join(RAILS_ROOT, "test", "test_helper")
+require File.join(File.dirname(__FILE__), "..", "init")
 
 
 class SelectorTest < Test::Unit::TestCase

@@ -67,10 +67,25 @@ module Test #:nodoc:
       #
       # If the first argument is an element, selects all matching elements
       # starting from (and including) that element and all its children in
-      # depth-first order. Otherwise, uses the current page.
+      # depth-first order.
+      #
+      # If no element if specified, calling #assert_select will select from the
+      # response HTML. Calling #assert_select inside an #assert_select block will
+      # run the assertion for each element selected by the enclosing assertion.
+      #
+      # For example:
+      #   assert_select "ol>li" do |elements|
+      #     elements.each do |element|
+      #       assert_select element, "li"
+      #     end
+      #   end
+      # Or for short:
+      #   assert_select "ol>li" do
+      #     assert_select "li"
+      #   end
       #
       # The selector may be a CSS selector expression (+String+), an expression
-      # with substitution values (+Array+) or an HTML::Selector object.
+      # with substitution values, or an HTML::Selector object.
       #
       # === Equality Tests
       #
@@ -88,7 +103,7 @@ module Test #:nodoc:
       #   elements fit the range.
       #
       # To perform more than one equality tests, use a hash the following keys:
-      # * <tt>:text</tt> -- Assertion is true if the text value of all
+      # * <tt>:text</tt> -- Assertion is true if the text value of each
       #   selected elements equals to the value (+String+ or +Regexp+).
       # * <tt>:count</tt> -- Assertion is true if the number of matched elements
       #   is equal to the value.
@@ -121,28 +136,37 @@ module Test #:nodoc:
       #   # Test the content and style
       #   assert_select "body div.header ul.menu"
       #
+      #   # Use substitution values
+      #   assert_select "ol>li#?", /item-\d+/
+      #
       #   # All input fields in the form have a name
-      #   assert_select "form input" do |elements|
-      #     elements.each do |element|
-      #       assert not element.attributes["name"].empty?
-      #     end
+      #   assert_select "form input" do
+      #     assert_select "[name=?]", /.+/  # Not empty
       #   end
-      def assert_select(*args)
-        # Start with element and selector, or just element.
+      def assert_select(*args, &block)
+        # Start with optional element followed by mandatory selector.
         arg = args.shift
         if arg.is_a?(HTML::Tag)
           element = arg
           arg = args.shift
+        elsif arg == nil
+          raise ArgumentError, "First arugment is either selector or element to select, but nil found. Perhaps you called assert_select with an element that does not exist?"
+        elsif @selected
+          @selected.each do |selected|
+            assert_select selected, HTML::Selector.new(arg.dup, args.dup), &block
+          end
+          return @selected
         else
           element = html_document.root
         end
-
-        raise ArgumentError, "Selector missing" unless arg
         case arg
-          when String: selector = HTML::Selector.new(arg, *args)
-          when Array: selector = HTML::Selector.new(*arg)
-          when HTML::Selector: selector = arg
-          else raise ArgumentError, "Expecting a selector"
+          when String
+            selector = HTML::Selector.new(arg, args)
+          when Array
+            selector = HTML::Selector.new(*arg)
+          when HTML::Selector 
+            selector = arg
+          else raise ArgumentError, "Expecting a selector as the first argument"
         end
 
         # Next argument is used for equality tests.
@@ -177,21 +201,23 @@ module Test #:nodoc:
         equals.each do |type, value|
           case type
             when :text
-              stack = matches.clone.reverse
-              unless stack.empty?
+              for match in matches
                 text = ""
-                while node = stack.pop
-                  if node.tag?
-                    stack += node.children.reverse
-                  else
-                    text << node.content
+                stack = [match]
+                unless stack.empty?
+                  while node = stack.pop
+                    if node.tag?
+                      stack += node.children.reverse
+                    else
+                      text << node.content
+                    end
                   end
                 end
-              end
-              if value.is_a?(Regexp)
-                assert value =~ text, message
-              else
-                assert_equal value.to_s, text, message
+                if value.is_a?(Regexp)
+                  assert value =~ text, message
+                else
+                  assert_equal value.to_s, text, message
+                end
               end
             when :count
               assert_equal value, matches.size, message
@@ -203,7 +229,14 @@ module Test #:nodoc:
           end
         end
 
-        yield matches if block_given?
+        if block_given? and !matches.empty?
+          begin
+            in_scope, @selected = @selected, matches
+            yield matches
+          ensure
+            @selected = in_scope
+          end
+        end
         matches
       end
 
