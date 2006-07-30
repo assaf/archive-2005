@@ -187,6 +187,13 @@ module Test #:nodoc:
             equals[:count] = 0
           else raise ArgumentError, "I don't understand what you're trying to match"
         end
+        # If we have a text test, by default we're looking for at least one match.
+        if equals[:text]
+          equals[:minimum] ||= 1
+        end
+        if equals[:count]
+          equals[:minimum] = equals[:maximum] = equals[:count]
+        end
 
         # Last argument is the message we use if the assertion fails.
         message = args.shift
