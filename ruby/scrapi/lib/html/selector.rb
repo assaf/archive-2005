@@ -241,6 +241,7 @@ module HTML
     def initialize(selector, *values)
       raise ArgumentError, "CSS expression cannot be empty" if selector.empty?
       @source = ""
+      values = values[0] if values.size == 1 and values[0].is_a?(Array)
       # We need a copy to determine if we failed to parse, and also
       # preserve the original pass by-ref statement.
       statement = selector.strip.dup
@@ -249,7 +250,7 @@ module HTML
 
       # Alternative selector.
       if statement.sub!(/^\s*,\s*/, "")
-        second = Selector.new(statement, *values)
+        second = Selector.new(statement, values)
         (@alternates ||= []) << second
         # If there are alternate selectors, we group them in the top selector.
         if alternates = second.instance_variable_get(:@alternates)
@@ -260,7 +261,7 @@ module HTML
       # Sibling selector: create a dependency into second selector that will
       # match element immediately following this one.
       elsif statement.sub!(/^\s*\+\s*/, "")
-        second = next_selector(statement, *values)
+        second = next_selector(statement, values)
         @depends = lambda do |element, first|
           if element = next_element(element)
             second.match(element, first)
@@ -270,7 +271,7 @@ module HTML
       # Adjacent selector: create a dependency into second selector that will
       # match all elements following this one.
       elsif statement.sub!(/^\s*~\s*/, "")
-        second = next_selector(statement, *values)
+        second = next_selector(statement, values)
         @depends = lambda do |element, first|
           matches = []
           while element = next_element(element)
@@ -289,7 +290,7 @@ module HTML
       # Child selector: create a dependency into second selector that will
       # match a child element of this one.
       elsif statement.sub!(/^\s*>\s*/, "")
-        second = next_selector(statement, *values)
+        second = next_selector(statement, values)
         @depends = lambda do |element, first|
           matches = []
           element.children.each do |child|
@@ -308,7 +309,7 @@ module HTML
       # Descendant selector: create a dependency into second selector that
       # will match all descendant elements of this one. Note,
       elsif statement =~ /^\s+\S+/ and statement != selector
-        second = next_selector(statement, *values)
+        second = next_selector(statement, values)
         @depends = lambda do |element, first|
           matches = []
           stack = element.children.reverse
@@ -790,8 +791,8 @@ module HTML
     # for resue. The only logic deals with the need to detect comma
     # separators (alternate) and apply them to the selector group of the
     # top selector.
-    def next_selector(statement, *values)
-      second = Selector.new(statement, *values)
+    def next_selector(statement, values)
+      second = Selector.new(statement, values)
       # If there are alternate selectors, we group them in the top selector.
       if alternates = second.instance_variable_get(:@alternates)
         second.instance_variable_set(:@alternates, nil)

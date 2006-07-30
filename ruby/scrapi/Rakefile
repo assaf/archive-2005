@@ -39,7 +39,7 @@ EOF
   spec.email = "assaf.arkin@gmail.com"
   spec.homepage = "http://labnotes.org/"
 
-  spec.files = FileList["{test,lib}/**/*", "README", "Rakefile", "MIT-LICENSE"].to_a
+  spec.files = FileList["{test,lib}/**/*", "README", "CHANGELOG", "Rakefile", "MIT-LICENSE"].to_a
   spec.require_path = "lib"
   spec.autorequire = "scrapi.rb"
   spec.requirements << "Tidy"
