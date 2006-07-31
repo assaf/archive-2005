@@ -610,6 +610,16 @@ class SelectorTest < Test::Unit::TestCase
   end
 
 
+  def test_select_from_element
+    html = parse(%Q{<div><p id="1"></p><p id="2"></p></div>})
+    match = HTML.selector("div").select(html)[0]
+    match = match.select("p")
+    assert_equal 2, match.size
+    assert_equal "1", match[0].attributes["id"]
+    assert_equal "2", match[1].attributes["id"]
+  end
+
+
 protected
 
   def parse(html)

@@ -809,4 +809,14 @@ module HTML
     Selector.new(statement, *values)
   end
 
+
+  class Tag
+
+    def select(selector, *values)
+      selector = HTML::Selector.new(selector, values)
+      selector.select(self)
+    end
+
+  end
+
 end
