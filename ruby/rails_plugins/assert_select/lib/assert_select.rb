@@ -43,16 +43,28 @@ module Test #:nodoc:
         if arg.is_a?(HTML::Tag)
           element = arg
           arg = args.shift
+        elsif arg == nil
+          raise ArgumentError, "First arugment is either selector or element to select, but nil found. Perhaps you called assert_select with an element that does not exist?"
+        elsif @selected
+          matches = []
+          @selected.each do |selected|
+            subset = css_select(selected, HTML::Selector.new(arg.dup, args.dup))
+            subset.each do |match|
+              matches << match unless matches.any? { |m| m.equal?(match) }
+            end
+          end
+          return matches
         else
           element = html_document.root
         end
-
-        raise ArgumentError, "Selector missing" unless arg
         case arg
-          when String: selector = HTML::Selector.new(arg, *args)
-          when Array: selector = HTML::Selector.new(*arg)
-          when HTML::Selector: selector = arg
-          else raise ArgumentError, "Expecting a selector"
+          when String
+            selector = HTML::Selector.new(arg, args)
+          when Array
+            selector = HTML::Selector.new(*arg)
+          when HTML::Selector 
+            selector = arg
+          else raise ArgumentError, "Expecting a selector as the first argument"
         end
 
         selector.select(element)  
