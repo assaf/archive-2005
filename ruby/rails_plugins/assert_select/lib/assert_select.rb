@@ -164,8 +164,10 @@ module Test #:nodoc:
         elsif arg == nil
           raise ArgumentError, "First arugment is either selector or element to select, but nil found. Perhaps you called assert_select with an element that does not exist?"
         elsif @selected
+          selector = arg.dup
           @selected.each do |selected|
-            assert_select selected, HTML::Selector.new(arg.dup, args.dup), &block
+            pass_args = args.dup
+            assert_select selected, HTML::Selector.new(selector, pass_args), *pass_args, &block
           end
           return @selected
         else
@@ -193,10 +195,10 @@ module Test #:nodoc:
           when Range
             equals[:minimum] = arg.begin
             equals[:maximum] = arg.end
-          when nil, true
-            equals[:minimum] = 1
-          when false
+          when FalseClass
             equals[:count] = 0
+          when NilClass, TrueClass
+            equals[:minimum] = 1
           else raise ArgumentError, "I don't understand what you're trying to match"
         end
         # If we have a text test, by default we're looking for at least one match.
@@ -204,7 +206,7 @@ module Test #:nodoc:
           equals[:minimum] ||= 1
         end
         if equals[:count]
-          equals[:minimum] = equals[:maximum] = equals[:count]
+          equals[:minimum] = equals[:maximum] = equals.delete(:count)
         end
 
         # Last argument is the message we use if the assertion fails.
@@ -238,8 +240,6 @@ module Test #:nodoc:
                   assert_equal value.to_s, text, message
                 end
               end
-            when :count
-              assert_equal value, matches.size, message
             when :minimum
               assert matches.size >= value, message
             when :maximum
