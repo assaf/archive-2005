@@ -39,9 +39,10 @@ module Test #:nodoc:
       #     ...
       #   end
       def css_select(*args)
+        # See assert_select to understand what's going on here.
         arg = args.shift
-        if arg.is_a?(HTML::Tag)
-          element = arg
+        if arg.is_a?(HTML::Node)
+          root = arg
           arg = args.shift
         elsif arg == nil
           raise ArgumentError, "First arugment is either selector or element to select, but nil found. Perhaps you called assert_select with an element that does not exist?"
@@ -55,7 +56,7 @@ module Test #:nodoc:
           end
           return matches
         else
-          element = html_document.root
+          root = response_from_page_or_rjs
         end
         case arg
           when String
@@ -67,7 +68,7 @@ module Test #:nodoc:
           else raise ArgumentError, "Expecting a selector as the first argument"
         end
 
-        selector.select(element)  
+        selector.select(root)  
       end
 
 
@@ -158,21 +159,26 @@ module Test #:nodoc:
       def assert_select(*args, &block)
         # Start with optional element followed by mandatory selector.
         arg = args.shift
-        if arg.is_a?(HTML::Tag)
-          element = arg
+        if arg.is_a?(HTML::Node)
+          # First argument is a node (tag or text, but also HTML root),
+          # so we know what we're selecting from.
+          root = arg
           arg = args.shift
         elsif arg == nil
+          # This usually happens when passing a node/element that
+          # happens to be nil.
           raise ArgumentError, "First arugment is either selector or element to select, but nil found. Perhaps you called assert_select with an element that does not exist?"
         elsif @selected
-          selector = arg.dup
-          @selected.each do |selected|
-            pass_args = args.dup
-            assert_select selected, HTML::Selector.new(selector, pass_args), *pass_args, &block
-          end
-          return @selected
+          root = HTML::Node.new(nil)
+          root.children.concat @selected
         else
-          element = html_document.root
+          # Otherwise just operate on the response document.
+          root = response_from_page_or_rjs
         end
+
+        # First or second argument is the selector: string and we pass
+        # all remaining arguments. Array and we pass the argument. Also
+        # accepts selector itself.
         case arg
           when String
             selector = HTML::Selector.new(arg, args)
@@ -202,22 +208,24 @@ module Test #:nodoc:
           else raise ArgumentError, "I don't understand what you're trying to match"
         end
         # If we have a text test, by default we're looking for at least one match.
+        # Without this statement text tests pass even if nothing is selected.
+        # Can always override by specifying minimum or count.
         if equals[:text]
           equals[:minimum] ||= 1
         end
+        # If a count is specified, it takes precedence over minimum/maximum.
         if equals[:count]
           equals[:minimum] = equals[:maximum] = equals.delete(:count)
         end
 
         # Last argument is the message we use if the assertion fails.
         message = args.shift
-        message = "No match made with selector #{selector.inspect}" unless message
+        #- message = "No match made with selector #{selector.inspect}" unless message
         if args.shift
           raise ArgumentError, "Not expecting that last argument, you either have too many arguments, or they're the wrong type"
         end
 
-        # Select elements.
-        matches = selector.select(element)  
+        matches = selector.select(root)  
         # Equality test.
         equals.each do |type, value|
           case type
@@ -235,19 +243,21 @@ module Test #:nodoc:
                   end
                 end
                 if value.is_a?(Regexp)
-                  assert value =~ text, message
+                  assert value =~ text, message || "Text content \"#{text}\" does not match one or more selected elements"
                 else
-                  assert_equal value.to_s, text, message
+                  assert_equal value.to_s, text, message || "Text content \"#{text}\" does not match one or more selected elements"
                 end
               end
             when :minimum
-              assert matches.size >= value, message
+              assert matches.size >= value, message || "Expecting at least #{value} selected elements, found #{matches.size}"
             when :maximum
-              assert matches.size <= value, message
+              assert matches.size <= value, message || "Expecting at most #{value} selected elements, found #{matches.size}"
             else raise ArgumentError, "I don't support the equality test #{key}"
           end
         end
 
+        # If a block is given call that block. Set @selected to allow
+        # nested assert_select, which can be nested several levels deep.
         if block_given? and !matches.empty?
           begin
             in_scope, @selected = @selected, matches
@@ -256,7 +266,71 @@ module Test #:nodoc:
             @selected = in_scope
           end
         end
+
+        # Returns all matches elements.
         matches
+      end
+
+
+      def assert_select_rjs(id, *args, &block)
+        # Decide what we're looking for.
+        pattern = Regexp.new("^.*Element\\.update\\(\"#{id}\", \"")
+          
+        # Duplicate the body since the next step involves destroying it.
+        body = @response.body.dup
+        if body.sub!(pattern, "")
+          body.sub!(/^(\\"|[^"])*/m) do |html|
+            # RJS encodes double quotes and line breaks.
+            html.gsub!(/\\"/, "\"")
+            html.gsub!(/\\n/, "\n")
+            matches = HTML::Document.new(html).root.children.select { |n| n.tag? }
+            if args.empty?
+              # Call block for nested assert_select and other good stuff.
+              if block_given?
+                begin
+                  in_scope, @selected = @selected, matches
+                  yield matches
+                ensure
+                  @selected = in_scope
+                end
+              end
+            else
+              root = HTML::Node.new(nil)
+              root.children.concat matches
+              assert_select root, *args, &block
+              return [root]
+            end
+            return matches
+          end
+        end
+        # RJS statement not found.
+        flunk "No RJS update found for element #{id}"
+      end
+
+    protected
+
+      def response_from_page_or_rjs()
+        content_type = @response.headers["Content-Type"]
+        if content_type and content_type =~ /text\/javascript/
+          pattern = /^.*Element\.update\(".*", "/m
+          body = @response.body.dup
+          root = HTML::Node.new(nil)
+          while true
+            next if body.sub!(/Element\.update\("([^"]*)", "((\\"|[^"])*)/m) do |match|
+              # RJS encodes double quotes and line breaks.
+              html = $2
+              html.gsub!(/\\"/, "\"")
+              html.gsub!(/\\n/, "\n")
+              matches = HTML::Document.new(html).root.children.select { |n| n.tag? }
+              root.children.concat matches
+              ""
+            end
+            break
+          end
+          root
+        else
+          html_document.root
+        end
       end
 
     end
