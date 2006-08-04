@@ -272,53 +272,155 @@ module Test #:nodoc:
       end
 
 
-      def assert_select_rjs(id, *args, &block)
-        # Decide what we're looking for.
-        pattern = Regexp.new("^.*Element\\.update\\(\"#{id}\", \"")
+      # :call-seq:
+      #   assert_select_rjs(id?) { |elements| ... }
+      #   assert_select_rjs(statement, id?) { |elements| ... }
+      #   assert_select_rjs(:insert, position, id?) { |elements| ... }
+      #
+      # Selects content from the RJS response.
+      #
+      # === Narrowing down
+      #
+      # With no arguments, asserts that one or more elements are updated or
+      # inserted by RJS statements.
+      #
+      # Use the +id+ argument to narrow down the assertion to only statements
+      # that update or insert an element with that identifier.
+      #
+      # Use the first argument to narrow down assertions to only statements
+      # of that type. Possible values are +:replace+, +:replace_html+ and
+      # +:insert_html+.
+      #
+      # Use the argument +:insert+ followed by an insertion position to narrow
+      # down the assertion to only statements that insert elements in that
+      # position. Possible values are +:top+, +:bottom+, +:before+ and +:after+.
+      #
+      # === Using blocks
+      #
+      # Without a block, #assert_select_rjs merely asserts that the response
+      # contains one or more RJS statements that replace or update content.
+      #
+      # With a block, #assert_select_rjs also selects all elements used in
+      # these statements and passes them to the block. Nested assertions are
+      # supported.
+      #
+      # Calling #assert_select_rjs with no arguments and using nested asserts
+      # asserts that the HTML content is returned by one or more RJS statements.
+      # Using #assert_select directly makes the same assertion on the content,
+      # but without distinguishing whether the content is returned in an HTML
+      # or JavaScript.
+      #
+      # === Examples
+      #
+      #   # Updating the element foo.
+      #   assert_select_rjs :update, "foo"
+      #
+      #   # Inserting into the element bar, top position.
+      #   assert_select rjs, :insert, :top, "bar"
+      #
+      #   # Changing the element foo, with an image.
+      #   assert_select_rjs "foo" do
+      #     assert_select "img[src=/images/logo.gif""
+      #   end
+      #
+      #   # RJS inserts or updates a list with four items.
+      #   assert_select_rjs do
+      #     assert_select "ol>li", 4
+      #   end
+      #
+      #   # The same, but shorter.
+      #   assert_select "ol>li", 4
+      def assert_select_rjs(*args, &block)
+        arg = args.shift
+        # If the first argument is a symbol, it's the type of RJS statement we're looking
+        # for (update, replace, insertion, etc). Otherwise, we're looking for just about
+        # any RJS statement.
+        if arg.is_a?(Symbol)
+          if arg == :insert
+            arg = args.shift
+            insertion = "insert_#{arg}".to_sym
+            raise ArgumentError, "Unknown RJS insertion type #{arg}" unless RJS_STATEMENTS[insertion]
+            statement = "(#{RJS_STATEMENTS[insertion]})"
+          else
+            raise ArgumentError, "Unknown RJS statement type #{arg}" unless RJS_STATEMENTS[arg]
+            statement = "(#{RJS_STATEMENTS[arg]})"
+          end
+          arg = args.shift
+        else
+          statement = "#{RJS_STATEMENTS[:any]}"
+        end
+
+        # Next argument we're looking for is the element identifier. If missing, we pick
+        # any element.
+        if arg.is_a?(String)
+          id = Regexp.quote(arg)
+          arg = args.shift
+        else
+          id = "[^\"]*"
+        end
+
+        pattern = Regexp.new("#{statement}\\(\"#{id}\", #{RJS_PATTERN_HTML}\\)", Regexp::MULTILINE)
           
         # Duplicate the body since the next step involves destroying it.
-        body = @response.body.dup
-        if body.sub!(pattern, "")
-          body.sub!(/^(\\"|[^"])*/m) do |html|
-            # RJS encodes double quotes and line breaks.
-            html.gsub!(/\\"/, "\"")
-            html.gsub!(/\\n/, "\n")
-            matches = HTML::Document.new(html).root.children.select { |n| n.tag? }
-            if args.empty?
-              # Call block for nested assert_select and other good stuff.
-              if block_given?
-                begin
-                  in_scope, @selected = @selected, matches
-                  yield matches
-                ensure
-                  @selected = in_scope
-                end
-              end
-            else
-              root = HTML::Node.new(nil)
-              root.children.concat matches
-              assert_select root, *args, &block
-              return [root]
-            end
-            return matches
-          end
+        matches = nil
+        @response.body.gsub(pattern) do |match|
+          html = $2
+          # RJS encodes double quotes and line breaks.
+          html.gsub!(/\\"/, "\"")
+          html.gsub!(/\\n/, "\n")
+          matches ||= []
+          matches.concat HTML::Document.new(html).root.children.select { |n| n.tag? }
+          ""
         end
-        # RJS statement not found.
-        flunk "No RJS update found for element #{id}"
+        if matches
+          if block_given?
+            begin
+              in_scope, @selected = @selected, matches
+              yield matches
+            ensure
+              @selected = in_scope
+            end
+          end
+          matches
+        else
+          # RJS statement not found.
+          flunk args.shift || "No RJS statement that replaces or inserts HTML content."
+        end
       end
+
 
     protected
 
+      unless const_defined?(:RJS_STATEMENTS)
+        RJS_STATEMENTS = {
+          :replace      => /Element\.replace/,
+          :replace_html => /Element\.update/
+        }
+        RJS_INSERTIONS = [:top, :bottom, :before, :after]
+        RJS_INSERTIONS.each do |insertion|
+          RJS_STATEMENTS["insert_#{insertion}".to_sym] = Regexp.new(Regexp.quote("new Insertion.#{insertion.to_s.camelize}"))
+        end
+        RJS_STATEMENTS[:any] = Regexp.new("(#{RJS_STATEMENTS.values.join('|')})")
+        RJS_STATEMENTS[:insert_html] = Regexp.new(RJS_INSERTIONS.collect do |insertion|
+          Regexp.quote("new Insertion.#{insertion.to_s.camelize}")
+        end.join('|'))
+        RJS_PATTERN_HTML = /"((\\"|[^"])*)"/
+        RJS_PATTERN_EVERYTHING = Regexp.new("#{RJS_STATEMENTS[:any]}\\(\"([^\"]*)\", #{RJS_PATTERN_HTML}\\)",
+                                            Regexp::MULTILINE)
+      end
+
+
+      # #assert_select and #css_select call this to obtain the content in the HTML
+      # page, or from all the RJS statements, depending on the type of response.
       def response_from_page_or_rjs()
         content_type = @response.headers["Content-Type"]
         if content_type and content_type =~ /text\/javascript/
-          pattern = /^.*Element\.update\(".*", "/m
           body = @response.body.dup
           root = HTML::Node.new(nil)
           while true
-            next if body.sub!(/Element\.update\("([^"]*)", "((\\"|[^"])*)/m) do |match|
+            next if body.sub!(RJS_PATTERN_EVERYTHING) do |match|
               # RJS encodes double quotes and line breaks.
-              html = $2
+              html = $3
               html.gsub!(/\\"/, "\"")
               html.gsub!(/\\n/, "\n")
               matches = HTML::Document.new(html).root.children.select { |n| n.tag? }

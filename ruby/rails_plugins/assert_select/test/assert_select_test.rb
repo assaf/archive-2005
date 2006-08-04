@@ -12,13 +12,45 @@ require File.join(RAILS_ROOT, "test", "test_helper")
 require File.join(File.dirname(__FILE__), "..", "init")
 
 
+class AssertSelectController < ActionController::Base
+
+  def response=(html)
+    @html = html
+  end
+
+  def response(&block)
+    @update = block
+  end
+
+  def html()
+    render :text=>@html, :layout=>false, :content_type=>Mime::HTML
+    @html = nil
+  end
+
+  def rjs()
+    render :update do |page|
+      @update.call page
+    end
+    @update = nil
+  end
+
+  def rescue_action(e)
+    raise e
+  end
+
+end
+
+
 class AssertSelectTest < Test::Unit::TestCase
 
   AssertionFailedError = Test::Unit::AssertionFailedError
 
   def setup
-    @html = nil
+    @controller = AssertSelectController.new
+    @request    = ActionController::TestRequest.new
+    @response   = ActionController::TestResponse.new
   end
+
 
   def teardown
   end
@@ -29,7 +61,7 @@ class AssertSelectTest < Test::Unit::TestCase
   #
 
   def test_assert_select
-    html_is %Q{<div id="1"></div><div id="2"></div>}
+    render_html %Q{<div id="1"></div><div id="2"></div>}
     assert_select "div", 2
     assert_raises(AssertionFailedError) { assert_select "div", 3 }
     assert_raises(AssertionFailedError){ assert_select "p" }
@@ -37,7 +69,7 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_equality_true_false
-    html_is %Q{<div id="1"></div><div id="2"></div>}
+    render_html %Q{<div id="1"></div><div id="2"></div>}
     assert_nothing_raised               { assert_select "div" }
     assert_raises(AssertionFailedError) { assert_select "p" }
     assert_nothing_raised               { assert_select "div", true }
@@ -48,7 +80,7 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_equality_string_and_regexp
-    html_is %Q{<div id="1">foo</div><div id="2">foo</div>}
+    render_html %Q{<div id="1">foo</div><div id="2">foo</div>}
     assert_nothing_raised               { assert_select "div", "foo" }
     assert_raises(AssertionFailedError) { assert_select "div", "bar" }
     assert_nothing_raised               { assert_select "div", :text=>"foo" }
@@ -62,7 +94,7 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_equality_of_instances
-    html_is %Q{<div id="1">foo</div><div id="2">foo</div>}
+    render_html %Q{<div id="1">foo</div><div id="2">foo</div>}
     assert_nothing_raised               { assert_select "div", 2 }
     assert_raises(AssertionFailedError) { assert_select "div", 3 }
     assert_nothing_raised               { assert_select "div", 1..2 }
@@ -81,7 +113,7 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_substitution_values
-    html_is %Q{<div id="1">foo</div><div id="2">foo</div>}
+    render_html %Q{<div id="1">foo</div><div id="2">foo</div>}
     assert_select "div#?", /\d+/ do |elements|
       assert_equal 2, elements.size
     end
@@ -96,7 +128,7 @@ class AssertSelectTest < Test::Unit::TestCase
 
   
   def test_nested_assert_select
-    html_is %Q{<div id="1">foo</div><div id="2">foo</div>}
+    render_html %Q{<div id="1">foo</div><div id="2">foo</div>}
     assert_select "div" do |elements|
       assert_equal 2, elements.size
       assert_select elements[0], "#1"
@@ -117,8 +149,9 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_assert_select_from_rjs
-    # With one result.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>\\n<div id=\\"2\\">foo</div>");}
+    render_rjs do |page|
+      page.replace_html "test", "<div id=\"1\">foo</div>\n<div id=\"2\">foo</div>"
+    end
     assert_select "div" do |elements|
       assert elements.size == 2
       assert_select "#1"
@@ -129,7 +162,10 @@ class AssertSelectTest < Test::Unit::TestCase
       assert_select "#2"
     end
     # With multiple results.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>");\\nElement.update("test2", "<div id=\\"2\\">foo</div>");}
+    render_rjs do |page|
+      page.replace_html "test", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+    end
     assert_select "div" do |elements|
       assert elements.size == 2
       assert_select "#1"
@@ -144,14 +180,14 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_css_select
-    html_is %Q{<div id="1"></div><div id="2"></div>}
+    render_html %Q{<div id="1"></div><div id="2"></div>}
     assert 2, css_select("div").size
     assert 0, css_select("p").size
   end
 
 
   def test_nested_css_select
-    html_is %Q{<div id="1">foo</div><div id="2">foo</div>}
+    render_html %Q{<div id="1">foo</div><div id="2">foo</div>}
     assert_select "div#?", /\d+/ do |elements|
       assert_equal 1, css_select(elements[0], "div").size
       assert_equal 1, css_select(elements[1], "div").size
@@ -171,12 +207,17 @@ class AssertSelectTest < Test::Unit::TestCase
 
   def test_css_select_from_rjs
     # With one result.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>\\n<div id=\\"2\\">foo</div>");}
+    render_rjs do |page|
+      page.replace_html "test", "<div id=\"1\">foo</div>\n<div id=\"2\">foo</div>"
+    end
     assert_equal 2, css_select("div").size
     assert_equal 1, css_select("#1").size
     assert_equal 1, css_select("#2").size
     # With multiple results.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>");\\nElement.update("test2", "<div id=\\"2\\">foo</div>");}
+    render_rjs do |page|
+      page.replace_html "test", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+    end
     assert_equal 2, css_select("div").size
     assert_equal 1, css_select("#1").size
     assert_equal 1, css_select("#2").size
@@ -189,30 +230,139 @@ class AssertSelectTest < Test::Unit::TestCase
 
 
   def test_assert_select_rjs
-    # Simple selection from a single result.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>\\n<div id=\\"2\\">foo</div>");}
-    assert_nothing_raised               { assert_select_rjs "test" }
-    assert_nothing_raised               { assert_select_rjs "test", "div", 2 }
-    assert_raises(AssertionFailedError) { assert_select_rjs "test2" }
-    assert_raises(AssertionFailedError) { assert_select_rjs "test2", "div", 2 }
-    # Deal with two results.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>");\\nElement.update("test2", "<div id=\\"2\\">foo</div>");}
-    assert_nothing_raised               { assert_select_rjs "test", "div", 1 }
-    assert_nothing_raised               { assert_select_rjs "test2", "div", 1 }
-    assert_raises(AssertionFailedError) { assert_select_rjs "test3" }
+    # Test that we can pick up all statements in the result.
+    render_rjs do |page|
+      page.replace "test", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+      page.insert_html :top, "test3", "<div id=\"3\">foo</div>"
+    end
+    found = false
+    assert_select_rjs do
+      assert_select "#1"
+      assert_select "#2"
+      assert_select "#3"
+      found = true
+    end
+    assert found
+    # Test that we fail if there is nothing to pick.
+    render_rjs do |page|
+    end
+    assert_raises(AssertionFailedError) { assert_select_rjs }
+  end
+
+
+  def test_assert_select_rjs_with_id
+    # Test that we can pick up all statements in the result.
+    render_rjs do |page|
+      page.replace "test1", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+      page.insert_html :top, "test3", "<div id=\"3\">foo</div>"
+    end
+    assert_select_rjs "test1" do
+      assert_select "div", 1
+      assert_select "#1"
+    end
+    assert_select_rjs "test2" do
+      assert_select "div", 1
+      assert_select "#2"
+    end
+    assert_select_rjs "test3" do
+      assert_select "div", 1
+      assert_select "#3"
+    end
+    assert_raises(AssertionFailedError) { assert_select_rjs "test4" }
+  end
+
+
+  def test_assert_select_rjs_for_replace
+    render_rjs do |page|
+      page.replace "test1", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+      page.insert_html :top, "test3", "<div id=\"3\">foo</div>"
+    end
+    # Replace.
+    assert_select_rjs :replace do
+      assert_select "div", 1
+      assert_select "#1"
+    end
+    assert_select_rjs :replace, "test1" do
+      assert_select "div", 1
+      assert_select "#1"
+    end
+    assert_raises(AssertionFailedError) { assert_select_rjs :replace, "test2" }
+    # Replace HTML.
+    assert_select_rjs :replace_html do
+      assert_select "div", 1
+      assert_select "#2"
+    end
+    assert_select_rjs :replace_html, "test2" do
+      assert_select "div", 1
+      assert_select "#2"
+    end
+    assert_raises(AssertionFailedError) { assert_select_rjs :replace_html, "test1" }
+  end
+
+
+  def test_assert_select_rjs_for_insert
+    render_rjs do |page|
+      page.replace "test1", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+      page.insert_html :top, "test3", "<div id=\"3\">foo</div>"
+    end
+    # Non-positioned.
+    assert_select_rjs :insert_html do
+      assert_select "div", 1
+      assert_select "#3"
+    end
+    assert_select_rjs :insert_html, "test3" do
+      assert_select "div", 1
+      assert_select "#3"
+    end
+    assert_raises(AssertionFailedError) { assert_select_rjs :insert_html, "test1" }
+    # Positioned.
+    render_rjs do |page|
+      page.insert_html :top, "test1", "<div id=\"1\">foo</div>"
+      page.insert_html :bottom, "test2", "<div id=\"2\">foo</div>"
+      page.insert_html :before, "test3", "<div id=\"3\">foo</div>"
+      page.insert_html :after, "test4", "<div id=\"4\">foo</div>"
+    end
+    assert_select_rjs :insert, :top do
+      assert_select "div", 1
+      assert_select "#1"
+    end
+    assert_select_rjs :insert, :bottom do
+      assert_select "div", 1
+      assert_select "#2"
+    end
+    assert_select_rjs :insert, :before do
+      assert_select "div", 1
+      assert_select "#3"
+    end
+    assert_select_rjs :insert, :after do
+      assert_select "div", 1
+      assert_select "#4"
+    end
+    assert_select_rjs :insert_html do
+      assert_select "div", 4
+    end
   end
 
 
   def test_nested_assert_select_rjs
     # Simple selection from a single result.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>\\n<div id=\\"2\\">foo</div>");}
+    render_rjs do |page|
+      page.replace_html "test", "<div id=\"1\">foo</div>\n<div id=\"2\">foo</div>"
+    end
     assert_select_rjs "test" do |elements|
       assert_equal 2, elements.size
       assert_select "#1"
       assert_select "#2"
     end
     # Deal with two results.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>");\\nElement.update("test2", "<div id=\\"2\\">foo</div>");}
+    render_rjs do |page|
+      page.replace_html "test", "<div id=\"1\">foo</div>"
+      page.replace_html "test2", "<div id=\"2\">foo</div>"
+    end
     assert_select_rjs "test" do |elements|
       assert_equal 1, elements.size
       assert_select "#1"
@@ -221,56 +371,20 @@ class AssertSelectTest < Test::Unit::TestCase
       assert_equal 1, elements.size
       assert_select "#2"
     end
-    # Test with assertion and nesting.
-    rjs_is %Q{Element.update("test", "<div id=\\"1\\">foo</div>\\n<div id=\\"2\\">foo</div>");}
-    assert_select_rjs "test", "div", 2 do |elements|
-      assert_equal 2, elements.size
-      assert_select "#1"
-      assert_select "#2"
-    end
   end
-
 
 
 protected
 
-  class Response
-
-    def initialize(body)
-      @body = body
-    end
-    
-    def headers()
-      {}
-    end
-
-    def body()
-      @body
-    end
-
-  end
-
-  class RjsResponse < Response
-
-    def headers()
-      {"Content-Type"=>"text/javascript; charset=utf-8"}
-    end
-
-  end
-      
-
-  def html_is(html)
-    @response = Response.new(html)
+  def render_html(html)
+    @controller.response = html
+    get :html
   end
 
 
-  def rjs_is(javascript)
-    @response = RjsResponse.new(javascript)
-  end
-
-
-  def html_document()
-    return HTML::Document.new(@response.body)
+  def render_rjs(&block)
+    @controller.response &block
+    get :rjs
   end
 
 end
