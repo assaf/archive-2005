@@ -570,10 +570,11 @@ module Scraper
         when Class
           # A class is a scraper we run on the extracted element.
           # It must extend Scraper::Base.
-          while supercls = source.superclass
-            break if supercls == Scraper::Base
+          klass = source
+          while klass = klass.superclass
+            break if klass == Scraper::Base
           end
-          raise ArgumentError, "Class must be a scraper that extends Scraper::Base" unless supercls
+          raise ArgumentError, "Class must be a scraper that extends Scraper::Base" unless klass
           return lambda { |element| source.new(element).scrape }
         when Symbol
           # A symbol is a method we call. We pass it the element
