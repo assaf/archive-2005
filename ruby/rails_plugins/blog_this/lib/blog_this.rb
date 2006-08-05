@@ -198,8 +198,8 @@ protected
   # The first argument is the +page+ object. The second argument provides
   # the service configuration (see BlogThis::Base.to_hash) and the last
   # arguments are inputs to the post.
-  def render(page, config, inputs)
-    if klass = Services.const_get(inputs[:service].to_s.camelize)
+  def self.render(page, config, inputs)
+    if klass = Services.const_get(config[:service].to_s.camelize)
       service = klass.new(config)
       service.render page, inputs
     else
