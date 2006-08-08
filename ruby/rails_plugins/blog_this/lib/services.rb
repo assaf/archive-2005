@@ -10,66 +10,40 @@ module BlogThis #:nodoc
 
     # WordPress service.
     service :wordpress do
-      title "WordPress"
-      parameter :blog_url, "Your blog URL",
-                "Enter the URL of your blog, e.g. http://blog.co.mments.com"
-      render do |page, inputs|
-        page << <<-EOF
-(function() {
-  var content = "#{inputs[:content]}";
-  var url = "#{inputs[:url]}";
-  var title = "#{inputs[:title]}";
-  var popup = window.open('#{inputs[:blog_url]}/wp-admin/post.php?text=' + escape(content) + '&popupurl=' + escape(url) + '&popuptitle=' + escape(title),
-       'WordPress','scrollbars=no,top=175,left=75,status=yes,resizable=yes');
-  if (!document.all) T = setTimeout('popup.focus()',50);
-EOF
+      label "WordPress"
+      description "Enter your blog URL. We will the redirect you to your posting page, for example, if your blog is http://co.mments.com, we will redirect you to http://co.mments.com/wp-admin/post.php"
+
+      parameter :blog_url, "Blog URL" do |url|
+        uri = URI.parse(url.strip) rescue nil
+        if uri and not uri.scheme
+          uri = URI.parse("http://#{url.strip}") rescue nil
+        end
+        if uri and uri.host.blank?
+          uri = URI.parse("#{uri.scheme}://#{uri.opaque}") rescue nil
+        end
+        unless uri and uri.scheme =~ /^http(s?)$/i and !uri.host.blank?
+          raise ArgumentError, "Please enter a valid URL"
+        end
+        path = uri.path || "/"
+        path += "/" unless path[-1] == ?/
+        "#{uri.scheme.downcase}://#{uri.host.downcase}#{path}"
       end
-=begin
-        page << <<-EOF
-(function() {
-  var form = Object.extend(document.createElement("form"), {
-    action: "#{"%s/wp-admin/post.php" % "#{inputs[:blog_url]}"}",
-    method: "post",
-    target: "_blank"
-  });
-  form.style.display = "none";
-  var inputs = [
-    Object.extend(document.createElement("input"), {
-      type: "hidden",
-      name: "post_title",
-      value: "#{inputs[:title]}"
-    }),
-    Object.extend(document.createElement("input"), {
-      type: "hidden",
-      name: "content",
-      value: "#{inputs[:content]}"
-    })
-  ];
-  for (var i = 0, input; input = inputs[i]; ++i)
-    form.appendChild(input);
-  document.body.appendChild(form);
-  form.submit();
-})();
-EOF
+
+      request do |title, content, url|
+        { :url=>"#{self.blog_url}wp-admin/post.php?text=#{CGI.escape(content)}&popupurl=#{CGI.escape(url)}&popuptitle=#{CGI.escape(title)}",
+          :title=>"WordPress", :options=>"scrollbars=no,top=175,left=75,status=yes,resizable=yes" }
       end
-=end
     end
 
 
     # Blogger/BlogSpot service.
     service :blogger do
-      title "Blogger/BlogSpot"
-      render do |page, inputs|
-        page << <<-EOF
-(function() {
-  var content = "#{inputs[:content]}";
-  var url = "#{inputs[:url]}";
-  var title = "#{inputs[:title]}";
-  var popup = window.open('http://www.blogger.com/blog_this.pyra?t=' + escape(content) + '&u=' + escape(url) + '&n=' + escape(title),
-    'bloggerForm','scrollbars=no,width=475,height=300,top=175,left=75,status=yes,resizable=yes');
-  if (!document.all) T = setTimeout('popup.focus()',50);
-})();
-EOF
+      label "Blogger/BlogSpot"
+      description "You're all set. When you click <strong>Blog this</strong>, Blogger will check your login and redirect you to your blog."
+
+      request do |title, content, url|
+        { :url=>"http://www.blogger.com/blog_this.pyra?t=#{CGI.escape(content)}&u=#{CGI.escape(url)}&n=#{CGI.escape(title)}",
+          :title=>"Blogger", :options=>"scrollbars=no,top=175,left=75,width=475,height=300,status=yes,resizable=yes" }
       end
     end
 

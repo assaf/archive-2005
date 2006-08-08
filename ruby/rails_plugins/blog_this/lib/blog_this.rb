@@ -57,47 +57,61 @@
 # * +:url:      -- A link URL.
 module BlogThis
 
+
   # A configuration parameter. Has the following attributes:
-  # * +:name+         -- The human friendly name.
-  # * +:description+  -- More expansive description.
-  # * +:validate+     -- Optional block for validating inputs.
-  Parameter = Struct.new(:name, :description, :validate)
+  # * +:label+    -- Human readable name.
+  # * +:validate+ -- Optional proc for validating inputs.
+  Parameter = Struct.new(:label, :validate)
 
 
-  # Base class for holding meta-data about a blogging service.
+  # Base class for holding a blog service configuration.
   class Base
 
     class << self
 
-      # Specifies the title for this service. The title should be a human
-      # readable name, e.g. WordPress for the service :wordpress.
-      def title(title)
-        @title = title
+      # Specifies the label for this service. The label should be human
+      # readable, e.g. "WordPress" for the service :wordpress.
+      def label(label = nil)
+        @label = label if label
+        @label || self.class.name
       end
 
 
-      # Declare a configuration parameter.
+      # A description that is rendered when the user selects the service,
+      # and can guide the user in configuring the service.
+      def description(desc)
+        @description = desc
+      end
+
+
+      # Defines a configuration parameter.
       #
-      # A configuration parameter has a symbol by which it is known, a friendly name,
-      # an optional description and an optional validation block.
+      # A configuration parameter has a symbol for accessing and storing its value,
+      # and a human readable label (e.g. :blog_url and "Blog URL").
       #
-      # The validation block is called before setting a configuration parameter, and
-      # can raise an ArgumentError if the value is invalid. Otherwise it may modify
-      # but must return the desired parameter value.
-      def parameter(symbol, title = nil, description = nil, &block)
+      # In addition it has an optional validation proc. This proc is called with an
+      # input value and may return the same or different input value, or raise an
+      # ArgumentError if the input value is invalid.
+      def parameter(symbol, label = nil, &block)
         @params ||= {}
-        title ||= symbol.to_s.titlelize
-        @params[symbol] = Parameter.new(title, description, &block)
+        label ||= symbol.to_s.titlelize
+        @params[symbol] = Parameter.new(label, block)
       end
 
 
-      # Define what happens when rendering an RJS response to create a new post.
+      # Creates inputs for making an HTTP request to blog the specified content.
       #
-      # The block is called with two arguments. The first argument is the +page+
-      # object. The second argument are the inputs for the blog post (title,
-      # content, etc).
-      def render(&block)
-        @render = block
+      # This block is called with these three inputs:
+      # * +:title+   -- The post title.
+      # * +:content+ -- The post content.
+      # * +:url+     -- The URL associated with the post
+      #
+      # Returns a hash with the following values:
+      # * +:url+      -- URL to blog service to create a new post.
+      # * +:title+    -- Title for popup window.
+      # * +:options+  -- Other options for use with popup window.
+      def request(&block)
+        @request = block
       end
 
     end
@@ -112,49 +126,88 @@ module BlogThis
     end
 
 
-    # Returns the value of a service parameter.
-    def [](symbol)
-      @params[symbol]
+    # Returns the value of a service configuration parameter.
+    def [](name)
+      @params[name]
     end
 
 
-    # Sets the value of a service parameter. Raises ArgumentError if this service does
-    # not support the parameter, or if the parameter value is invalid.
-    def []=(symbol, value)
-      if param = parameters[symbol]
-        value = param.validate.call(value) if param.validate
-        @params[symbol] = value
+    # Sets the value of a service configuration parameter. Raises ArgumentError if
+    # this service does not support the parameter, or if the parameter value is invalid.
+    def []=(name, value)
+      params = self.class.instance_variable_get(:@params)
+      if params and param = params[name]
+        if param.validate
+          value = param.validate.call(value) rescue value
+        end
+        #value = param.validate.call(value) if param.validate
+        @params[name] = value
       else
         raise ArgumentError, "This blog service does not support the parameter #{name}"
       end
     end
 
 
-    # Retuns a hash representing this service and its configuration.
-    # You can store this and use it later on to recreate the service object.
+    def validate()
+      if params = self.class.instance_variable_get(:@params)
+        params.each do |name, param|
+          @params[name] = param.validate.call(@params[name]) if param.validate
+        end
+      end
+    end
+
+
+    # Returns a hash of this service configuration. You can use this hash to
+    # recreate the service configuration with BlogThis#recreate.
     def to_hash()
       @params.merge({:service=>self.class.instance_variable_get(:@service)})
     end
 
 
-    # Call this to render an RJS update that will create a new post on
-    def render(page, inputs)
-      self.class.instance_variable_get(:@render).call page, @params.merge(inputs)
+    # Call this to create inputs for an HTTP request that will blog the specified
+    # content.
+    #
+    # Call this method with:
+    # * +title+   -- The post title.
+    # * +content+ -- The post content.
+    # * +url+     -- The URL associated with the post
+    #
+    # Returns a hash with the following values:
+    # * +:url+      -- URL to blog service to create a new post.
+    # * +:title+    -- Title for popup window.
+    # * +:options+  -- Other options for use with popup window.
+    def request(title, content, url)
+      self.class.instance_variable_get(:@request).call title, content, url
     end
 
 
-    # Returns the human readable title for this service.
-    def title()
-      self.class.instance_variable_get(:@title) || self.class.name
+    # Returns the human readable label for this service.
+    def label()
+      self.class.label
+    end
+
+
+    # A description that is rendered when the user selects the service,
+    # and can guide the user in configuring the service.
+    def description()
+      self.class.instance_variable_get(:@description)
     end
 
 
     # Returns a description of each parameter supported by this service.
-    # Returns a hash with the parameter key and Parameter object.
+    # Returns a hash with the parameter key and its label.
     def parameters()
-      params = self.class.instance_variable_get(:@params)
-      self.class.instance_variable_set(:@params, params = []) unless params
-      params
+      if params = self.class.instance_variable_get(:@params)
+        Hash[*params.map{ |k,v| [k,v.label] }.flatten]
+      else
+        {}
+      end
+    end
+
+
+    # Return this service name (note: not #label).
+    def name()
+      self.class.instance_variable_get(:@service)
     end
 
 
@@ -176,34 +229,49 @@ protected
   #   module BlogThis::Services
   #     service :blogger do
   #       title "Blogger"
-  #       render do |page, inputs|
+  #       request do |title, content, url|
   #         . . .
   #       end
   #     end
   #   end
   module Services
 
+    @@services = {}
+
+
     def self.service(name, &block)
+      name = name.to_sym
       klass = Class.new(BlogThis::Base)
       klass.class_eval &block
       klass.instance_variable_set(:@service, name)
       const_set name.to_s.camelize, klass
+      @@services[name] = klass
+    end
+
+
+    # Returns a hash of all services, using the service ID as the key,
+    # and the service label as the value.
+    def self.list()
+      Hash[*@@services.map { |k, v| [k, v.label] }.flatten]
     end
 
   end
 
 
-  # Use this to render RJS code that will submit a new post.
-  #
-  # The first argument is the +page+ object. The second argument provides
-  # the service configuration (see BlogThis::Base.to_hash) and the last
-  # arguments are inputs to the post.
-  def self.render(page, config, inputs)
-    if klass = Services.const_get(config[:service].to_s.camelize)
-      service = klass.new(config)
-      service.render page, inputs
-    else
-      raise ArgumentError, "No such service #{inputs[:service]}"
+  # Recreate a service from its configuration. See BlogThis::Base.to_hash.
+  # Returns nil if the service could not be found, or the configuration is
+  # invalid.
+  def self.recreate(config)
+    return nil unless name = config[:service]
+    return nil unless klass = Services.const_get(name.to_s.camelize) rescue nil
+    return klass.new(config) rescue nil
+  end
+
+
+  # Returns a new unconfigured service based on the service identifier.
+  def self.service(name)
+    if klass = Services.const_get(name.to_s.camelize) rescue nil
+      return klass.new
     end
   end
 
@@ -214,7 +282,7 @@ protected
     # The magic of creating a service by calling BlogThis.service.
     # For example, BlogThis.wordpress(:blog_url=>...). Service must
     # be defined first.
-    if klass = Services.const_get(symbol.to_s.camelize)
+    if klass = Services.const_get(symbol.to_s.camelize) rescue nil
       return klass.new(*args)
     else
       super
