@@ -141,7 +141,7 @@ module UndoHelper
     #   undo.render "Undo", :form=>{:class=>"undo-form"},
     #      :button=>{:class=>"undo-button"}
     # 
-    # When called with a block, yields the undo action and title to the
+    # When called with a block, yields the undo action and arguments to
     # block and returns the result. Yields a hash with the keys
     # <tt>:url</tt> and <tt>:title</tt> for the last undo action. Yields
     # +nil+ if there is no undo action on the stack.
@@ -149,19 +149,19 @@ module UndoHelper
       undos = @session[:undos]
       undo = undos.last if undos
       if block_given?
-        return yield(undo, args[0])
+        return yield(undo, *args)
       end
       options = args[1] || {}
+      form_html = options[:form] || {}
+      form_html[:class] ||= "button"
       if undo
-        form_html = options[:form] || {}
-        form_html[:class] ||= "button"
         button_html = options[:button] || {}
         button_html[:title] = undo[:title]
         return @view.form_remote_tag(:url=>undo[:url], :html=>form_html) +
                @view.submit_tag(args[0] || "Undo", button_html) +
                @view.end_form_tag
-      elsif button = options[:disabled]
-        button[:disabled] = true
+      elsif button_html = options[:disabled]
+        button_html[:disabled] = true
         return @view.form_remote_tag(:html=>form_html) +
                @view.submit_tag(args[0] || "Undo", button_html) +
                @view.end_form_tag

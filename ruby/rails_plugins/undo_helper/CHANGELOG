@@ -1,0 +1,6 @@
+August 8, 2006:
+
+* Changed: To pass formatting arguments use :form and :button options.
+* Changed: Default class for form is "button", as used elsewhere in Rails.
+* Changed: When yielding to block, passes all arguments (name and options).
+* Fixed: Test cases, handling of disabled.
