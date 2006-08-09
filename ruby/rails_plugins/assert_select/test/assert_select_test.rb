@@ -6,7 +6,7 @@
 
 
 unless defined?(RAILS_ROOT)
- RAILS_ROOT = ENV["RAILS_ROOT"]
+ RAILS_ROOT = ENV["RAILS_ROOT"] || File.expand_path(File.join(File.dirname(__FILE__), "../../../.."))
 end
 require File.join(RAILS_ROOT, "test", "test_helper")
 require File.join(File.dirname(__FILE__), "..", "init")
