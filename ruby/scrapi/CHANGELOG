@@ -1,6 +1,7 @@
-Upcoming:
+Version 1.1.1 (August 8, 2006)
 
 * Added: select() method to each element, that selects from that element.
+* Fixed: Inheritence bug resulting in infinite loop. Credit: Andrew Turner
 
 Version 1.1.0 (July 26, 2006)
 
