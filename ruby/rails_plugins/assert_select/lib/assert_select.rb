@@ -232,20 +232,21 @@ module Test #:nodoc:
             when :text
               for match in matches
                 text = ""
-                stack = [match]
-                unless stack.empty?
-                  while node = stack.pop
-                    if node.tag?
-                      stack += node.children.reverse
-                    else
-                      text << node.content
-                    end
+                stack = match.children.reverse
+                while node = stack.pop
+                  if node.tag?
+                    stack.concat node.children.reverse
+                  else
+                    text << node.content
                   end
                 end
                 if value.is_a?(Regexp)
-                  assert value =~ text, message || "Text content \"#{text}\" does not match one or more selected elements"
+                  assert text =~ value, build_message(message, <<EOT, value, text)
+<?> expected but was
+<?>.
+EOT
                 else
-                  assert_equal value.to_s, text, message || "Text content \"#{text}\" does not match one or more selected elements"
+                  assert_equal value.to_s, text, message
                 end
               end
             when :minimum
