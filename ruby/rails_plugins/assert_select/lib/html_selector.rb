@@ -381,23 +381,26 @@ module HTML
 
       # Negation. Same rules as above, but we fail if a match is made.
       if matched and @negation
-        if @negation[:tag_name] == element.name
-          matched = false
-        else
-          for attr in @negation[:attributes]
-            if element.attributes[attr[0]] =~ attr[1]
-              matched = false
-              break
+        for negation in @negation
+          if negation[:tag_name] == element.name
+            matched = false
+          else
+            for attr in negation[:attributes]
+              if element.attributes[attr[0]] =~ attr[1]
+                matched = false
+                break
+              end
             end
           end
-        end
-        if matched
-          for pseudo in @negation[:pseudo]
-            if pseudo.call(element)
-              matched = false
-              break
+          if matched
+            for pseudo in negation[:pseudo]
+              if pseudo.call(element)
+                matched = false
+                break
+              end
             end
           end
+          break unless matched
         end
       end
 
@@ -515,7 +518,7 @@ module HTML
       tag_name = nil
       attributes = []
       pseudo = []
-      negation = nil
+      negation = []
 
       # Element name. (Note that in negation, this can come at
       # any order, but for simplicity we allow if only first).
@@ -661,7 +664,7 @@ module HTML
         if statement.sub!(/^:not\(\s*/, "")
           raise ArgumentError, "Double negatives are not missing feature" unless can_negate
           @source << ":not("
-          negation = simple_selector(statement, values, false)
+          negation << simple_selector(statement, values, false)
           raise ArgumentError, "Negation not closed" unless statement.sub!(/^\s*\)/, "")
           @source << ")"
           next
