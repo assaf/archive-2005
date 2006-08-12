@@ -1,3 +1,8 @@
+Version 1.1.2 (August 12, 2006)
+
+* Changed: Allows multiple :not pseudo classes to be used with the same
+  element (meaning, select where none of the negators match).
+
 Version 1.1.1 (August 8, 2006)
 
 * Added: select() method to each element, that selects from that element.
