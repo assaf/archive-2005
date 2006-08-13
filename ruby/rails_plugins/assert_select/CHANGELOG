@@ -4,3 +4,4 @@ August 13, 2006
 * Added: assert_select_encoded to handler HTML encoded in XML.
 * Changed: Allows multiple :not pseudo classes to be used with the same
   element (meaning, select where none of the negators match).
+* Fixed: first-of-type, last-of-type.

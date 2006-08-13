@@ -463,6 +463,9 @@ class SelectorTest < Test::Unit::TestCase
     select("tr:first-of-type")
     assert_equal 1, @matches.size
     assert_equal "1", @matches[0].attributes["id"]
+    select("thead:first-of-type")
+    assert_equal 1, @matches.size
+    assert_equal "thead", @matches[0].name
     select("div:first-of-type")
     assert_equal 0, @matches.size
     # Last child.
