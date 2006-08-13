@@ -608,7 +608,7 @@ module HTML
         # First/last child (of type).
         next if statement.sub!(/^:(first|last)-(child|of-type)/) do |match|
           reverse = $1 == "last"
-          of_type = $1 == "of-type"
+          of_type = $2 == "of-type"
           pseudo << nth_child(0, 1, of_type, reverse)
           @source << ":#{$1}-#{$2}"
           "" # Remove
