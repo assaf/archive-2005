@@ -14,8 +14,8 @@ require File.join(File.dirname(__FILE__), "..", "init")
 
 class AssertSelectController < ActionController::Base
 
-  def response=(html)
-    @html = html
+  def response=(content)
+    @content = content
   end
 
   def response(&block)
@@ -23,8 +23,8 @@ class AssertSelectController < ActionController::Base
   end
 
   def html()
-    render :text=>@html, :layout=>false, :content_type=>Mime::HTML
-    @html = nil
+    render :text=>@content, :layout=>false, :content_type=>Mime::HTML
+    @content = nil
   end
 
   def rjs()
@@ -32,6 +32,11 @@ class AssertSelectController < ActionController::Base
       @update.call page
     end
     @update = nil
+  end
+
+  def xml()
+    render :text=>@content, :layout=>false, :content_type=>Mime::XML
+    @content = nil
   end
 
   def rescue_action(e)
@@ -374,6 +379,99 @@ class AssertSelectTest < Test::Unit::TestCase
   end
 
 
+  #
+  # Test assert_select_feed and assert_select_encoded
+  #
+
+  def test_feed_versions
+    # Atom 1.0.
+    render_xml %Q{<feed xmlns="http://www.w3.org/2005/Atom"><title>test</title></feed>}
+    assert_nothing_raised               { assert_select_feed :atom }
+    assert_nothing_raised               { assert_select_feed :atom, 1.0 }
+    assert_raises(AssertionFailedError) { assert_select_feed :atom, 0.3 }
+    assert_raises(AssertionFailedError) { assert_select_feed :rss }
+    assert_select_feed(:atom, 1.0) { assert_select "feed>title", "test" }
+    # Atom 0.3.
+    render_xml %Q{<feed version="0.3"><title>test</title></feed>}
+    assert_nothing_raised               { assert_select_feed :atom, 0.3 }
+    assert_raises(AssertionFailedError) { assert_select_feed :atom }
+    assert_raises(AssertionFailedError) { assert_select_feed :atom, 1.0 }
+    assert_raises(AssertionFailedError) { assert_select_feed :rss }
+    assert_select_feed(:atom, 0.3) { assert_select "feed>title", "test" }
+    # RSS 2.0.
+    render_xml %Q{<rss version="2.0"><channel><title>test</title></channel></rss>}
+    assert_nothing_raised               { assert_select_feed :rss }
+    assert_nothing_raised               { assert_select_feed :rss, 2.0 }
+    assert_raises(AssertionFailedError) { assert_select_feed :rss, 0.92 }
+    assert_raises(AssertionFailedError) { assert_select_feed :atom }
+    assert_select_feed(:rss, 2.0) { assert_select "rss>channel>title", "test" }
+    # RSS 0.92.
+    render_xml %Q{<rss version="0.92"><channel><title>test</title></channel></rss>}
+    assert_nothing_raised               { assert_select_feed :rss, 0.92 }
+    assert_raises(AssertionFailedError) { assert_select_feed :rss }
+    assert_raises(AssertionFailedError) { assert_select_feed :rss, 2.0 }
+    assert_raises(AssertionFailedError) { assert_select_feed :atom }
+    assert_select_feed(:rss, 0.92) { assert_select "rss>channel>title", "test" }
+  end
+
+
+  def test_feed_item_encoded
+    render_xml <<-EOF
+<rss version="2.0">
+  <channel>
+    <item>
+      <description>
+        <![CDATA[
+          <p>Test 1</p>
+        ]]>
+      </description>
+    </item>
+    <item>
+      <description>
+        <![CDATA[
+          <p>Test 2</p>
+        ]]>
+      </description>
+    </item>
+  </channel>
+</rss>
+EOF
+    assert_select_feed :rss, 2.0 do
+      assert_select "channel item description" do
+        # Test element regardless of wrapper.
+        assert_select_encoded do
+          assert_select "p", :count=>2, :text=>/Test/
+        end
+        # Test through encoded wrapper.
+        assert_select_encoded do
+          assert_select "encoded p", :count=>2, :text=>/Test/
+        end
+        # Use :root instead (recommended)
+        assert_select_encoded do
+          assert_select ":root p", :count=>2, :text=>/Test/
+        end
+        # Test individually.
+        assert_select "description" do |elements|
+          assert_select_encoded elements[0] do
+            assert_select "p", "Test 1"
+          end
+          assert_select_encoded elements[1] do
+            assert_select "p", "Test 2"
+          end
+        end
+      end
+    end
+    # Test that we only un-encode element itself.
+    assert_select_feed :rss, 2.0 do
+      assert_select "channel item" do
+        assert_select_encoded do
+          assert_select "p", 0
+        end
+      end
+    end
+  end
+
+
 protected
 
   def render_html(html)
@@ -385,6 +483,12 @@ protected
   def render_rjs(&block)
     @controller.response &block
     get :rjs
+  end
+
+
+  def render_xml(xml)
+    @controller.response = xml
+    get :xml
   end
 
 end

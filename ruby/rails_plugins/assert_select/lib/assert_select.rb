@@ -390,6 +390,96 @@ EOT
       end
 
 
+      # :call-seq:
+      #   assert_select_feed(type, version?) { ... }
+      #
+      # Selects root of the feed element. Calls the block for nested assertions.
+      #
+      # The feed type may be <tt>:atom</tt> or <tt>:rss</tt>. Currently supported
+      # are versions 2.0 (default) and 0.92 for RSS and versions 0.3 and 1.0 (default)
+      # for Atom.
+      #
+      # === Example
+      #
+      #   assert_select_feed :rss, 2.0 do
+      #     assert_select "title", "My feed"
+      #     assert_select "item" do |items|
+      #       . . .
+      #     end
+      #   end
+      def assert_select_feed(type, version = nil, &block)
+        root = HTML::Document.new(@response.body, true, true).root
+        case [type.to_sym, version && version.to_s]
+          when [:rss, "2.0"], [:rss, "0.92"], [:rss, nil]
+            version = "2.0" unless version
+            selector = HTML::Selector.new("rss:root[version=?]", version)
+          when [:atom, "0.3"]
+            selector = HTML::Selector.new("feed:root[version=0.3]")
+          when [:atom, "1.0"], [:atom, nil]
+            selector = HTML::Selector.new("feed:root[xmlns='http://www.w3.org/2005/Atom']")
+          else
+            raise ArgumentError, "Unsupported feed type #{type} #{version}"
+        end
+        assert_select root, selector, &block
+      end
+
+
+      # :call-seq:
+      #   assert_select_encoded(element?) { |elements| ... }
+      #
+      # Extracts the content of an element, treats it as encoded HTML and runs
+      # nested assertion on it.
+      #
+      # You typically call this method within another assertion to operate on
+      # all currently selected elements. You can also pass an element or array
+      # of elements.
+      #
+      # The content of each element is un-encoded, and wrapped in the root
+      # element +encoded+. It then calls the block with all un-encoded elements.
+      #
+      # === Example
+      #
+      #   assert_select_feed :rss, 2.0 do
+      #     # Select description element of each feed item. 
+      #     assert_select "channel>item>description" do
+      #       # Run assertions on the encoded elements.
+      #       assert_select_encoded do
+      #         assert_select "p"
+      #       end
+      #     end
+      #   end
+      def assert_select_encoded(element = nil, &block)
+        case element
+          when Array
+            elements = element
+          when HTML::Node
+            elements = [element]
+          when nil
+            unless elements = @selected
+              raise ArgumentError, "First argument is optional, but must be called from a nested assert_select"
+            end
+          else
+            raise ArgumentError, "Argument is optional, and may be node or array of nodes"
+        end
+        fix_content = lambda do |node|
+          # Gets around a bug in the Rails 1.1 HTML parser.
+          node.content.gsub(/<!\[CDATA\[(.*)(\]\]>)?/m) { CGI.escapeHTML($1) }
+        end
+
+        selected = elements.map do |element|
+          text = element.children.select{ |c| not c.tag? }.map{ |c| fix_content[c] }.join
+          root = HTML::Document.new(CGI.unescapeHTML("<encoded>#{text}</encoded>")).root
+          css_select(root, "encoded:root", &block)[0]
+        end
+        begin
+          old_selected, @selected = @selected, selected
+          assert_select "*", &block
+        ensure
+          @selected = old_selected
+        end
+      end
+
+
     protected
 
       unless const_defined?(:RJS_STATEMENTS)
