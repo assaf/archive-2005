@@ -2,6 +2,8 @@ August 13, 2006
 
 * Added: assert_select_feed to handle Atom and RSS feeds.
 * Added: assert_select_encoded to handler HTML encoded in XML.
+* Added: :html equality test against HTML of selected element.
 * Changed: Allows multiple :not pseudo classes to be used with the same
   element (meaning, select where none of the negators match).
+* Changed: :text equality test strips the text value unless the element is pre
 * Fixed: first-of-type, last-of-type.

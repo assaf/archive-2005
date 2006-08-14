@@ -98,6 +98,25 @@ class AssertSelectTest < Test::Unit::TestCase
   end
 
 
+  def test_equality_of_html
+    render_html %Q{<p>\n<em>"This is <strong>not</strong> a big problem,"</em> he said.\n</p>}
+    text = "\"This is not a big problem,\" he said."
+    html = "<em>\"This is <strong>not</strong> a big problem,\"</em> he said."
+    assert_nothing_raised               { assert_select "p", text }
+    assert_raises(AssertionFailedError) { assert_select "p", html }
+    assert_nothing_raised               { assert_select "p", :html=>html }
+    assert_raises(AssertionFailedError) { assert_select "p", :html=>text }
+    # No stripping for pre.
+    render_html %Q{<pre>\n<em>"This is <strong>not</strong> a big problem,"</em> he said.\n</pre>}
+    text = "\n\"This is not a big problem,\" he said.\n"
+    html = "\n<em>\"This is <strong>not</strong> a big problem,\"</em> he said.\n"
+    assert_nothing_raised               { assert_select "pre", text }
+    assert_raises(AssertionFailedError) { assert_select "pre", html }
+    assert_nothing_raised               { assert_select "pre", :html=>html }
+    assert_raises(AssertionFailedError) { assert_select "pre", :html=>text }
+  end
+
+
   def test_equality_of_instances
     render_html %Q{<div id="1">foo</div><div id="2">foo</div>}
     assert_nothing_raised               { assert_select "div", 2 }

@@ -240,6 +240,7 @@ module Test #:nodoc:
                     text << node.content
                   end
                 end
+                text.strip! unless match.name == "pre"
                 if value.is_a?(Regexp)
                   assert text =~ value, build_message(message, <<EOT, value, text)
 <?> expected but was
@@ -247,6 +248,19 @@ module Test #:nodoc:
 EOT
                 else
                   assert_equal value.to_s, text, message
+                end
+              end
+            when :html
+              for match in matches
+                html = match.children.map(&:to_s).join
+                html.strip! unless match.name == "pre"
+                if value.is_a?(Regexp)
+                  assert html =~ value, build_message(message, <<EOT, value, html)
+<?> expected but was
+<?>.
+EOT
+                else
+                  assert_equal value.to_s, html, message
                 end
               end
             when :minimum
