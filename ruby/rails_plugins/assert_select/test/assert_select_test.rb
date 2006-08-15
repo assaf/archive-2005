@@ -12,52 +12,68 @@ require File.join(RAILS_ROOT, "test", "test_helper")
 require File.join(File.dirname(__FILE__), "..", "init")
 
 
-class AssertSelectController < ActionController::Base
-
-  def response=(content)
-    @content = content
-  end
-
-  def response(&block)
-    @update = block
-  end
-
-  def html()
-    render :text=>@content, :layout=>false, :content_type=>Mime::HTML
-    @content = nil
-  end
-
-  def rjs()
-    render :update do |page|
-      @update.call page
-    end
-    @update = nil
-  end
-
-  def xml()
-    render :text=>@content, :layout=>false, :content_type=>Mime::XML
-    @content = nil
-  end
-
-  def rescue_action(e)
-    raise e
-  end
-
-end
-
-
 class AssertSelectTest < Test::Unit::TestCase
 
+  class AssertSelectController < ActionController::Base
+
+    def response=(content)
+      @content = content
+    end
+
+    def response(&block)
+      @update = block
+    end
+
+    def html()
+      render :text=>@content, :layout=>false, :content_type=>Mime::HTML
+      @content = nil
+    end
+
+    def rjs()
+      render :update do |page|
+        @update.call page
+      end
+      @update = nil
+    end
+
+    def xml()
+      render :text=>@content, :layout=>false, :content_type=>Mime::XML
+      @content = nil
+    end
+
+    def rescue_action(e)
+      raise e
+    end
+
+  end
+
+
+  class AssertSelectMailer < ActionMailer::Base
+
+    def test(html)
+      recipients "test <test@test.host>"
+      from "test@test.host"
+      subject "Test e-mail"
+      part :content_type=>"text/html", :body=>html
+    end
+
+  end
+
   AssertionFailedError = Test::Unit::AssertionFailedError
+
 
   def setup
     @controller = AssertSelectController.new
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new
+    ActionMailer::Base.delivery_method = :test
+    ActionMailer::Base.perform_deliveries = true
+    ActionMailer::Base.deliveries = []
   end
 
 
   def teardown
+    ActionMailer::Base.deliveries.clear
   end
 
 
@@ -486,6 +502,22 @@ EOF
         assert_select_encoded do
           assert_select "p", 0
         end
+      end
+    end
+  end
+
+
+  #
+  # Test assert_select_email
+  #
+
+  def test_assert_select_email
+    assert_raises(AssertionFailedError) { assert_select_email {} }
+    AssertSelectMailer.deliver_test "<div><p>foo</p><p>bar</p></div>"
+    assert_select_email do
+      assert_select "div:root" do
+        assert_select "p:first-child", "foo"
+        assert_select "p:last-child", "bar"
       end
     end
   end

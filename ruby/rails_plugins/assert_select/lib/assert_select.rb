@@ -11,6 +11,22 @@ module Test #:nodoc:
     # Adds the #assert_select method for use in Rails functional
     # test cases.
     #
+    # Use #assert_select to make assertions on the response HTML of a controller
+    # action. You can also call #assert_select within another #assert_select to
+    # make assertions on elements selected by the enclosing assertion.
+    #
+    # Use #css_select to select elements without making an assertions, either
+    # from the response HTML or elements selected by the enclosing assertion.
+    #
+    # In addition to HTML responses, you can make the following assertions:
+    # * #assert_select_rjs    -- Assertions on HTML content of RJS update and
+    #     insertion operations.
+    # * #assert_select_feed   -- Assertions on the response Atom or RSS feed,
+    #     using CSS selectors to select XML elements.
+    # * #assert_select_encoded  -- Assertions on HTML encoded inside XML,
+    #     for example for dealing with feed item descriptions.
+    # * #assert_select_email    -- Assertions on the HTML body of an e-mail.
+    # 
     # Also see HTML::Selector for learning how to use selectors.
     module AssertSelect 
 
@@ -487,9 +503,32 @@ EOT
         end
         begin
           old_selected, @selected = @selected, selected
-          assert_select "*", &block
+          assert_select ":root", &block
         ensure
           @selected = old_selected
+        end
+      end
+
+
+      # :call-seq:
+      #   assert_select_email { }
+      #
+      # Extracts the body of an email and runs nested assertions on it.
+      #
+      # You must enable deliveries for this assertion to work, use:
+      #   ActionMailer::Base.perform_deliveries = true
+      #
+      # === Example
+      #
+      # assert_select_email do
+      #   assert_select "h1", "Email alert"
+      # end
+      def assert_select_email(&block)
+        deliveries = ActionMailer::Base.deliveries
+        assert !deliveries.empty?, "No e-mail in delivery list"
+        for delivery in deliveries
+          root = HTML::Document.new(delivery.body).root
+          assert_select root, ":root", &block
         end
       end
 

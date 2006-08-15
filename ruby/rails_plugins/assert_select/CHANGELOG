@@ -1,3 +1,8 @@
+August 14, 2006
+
+* Added: assert_select_email to handle HTML e-mails.
+
+
 August 13, 2006
 
 * Added: assert_select_feed to handle Atom and RSS feeds.
