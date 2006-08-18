@@ -58,237 +58,97 @@
 module BlogThis
 
 
-  # A configuration parameter. Has the following attributes:
-  # * +:label+    -- Human readable name.
-  # * +:validate+ -- Optional proc for validating inputs.
-  Parameter = Struct.new(:label, :validate)
+  def self.create(config)
+    if String === config
+      config = {:service=>config}
+    end
+    symbol = config.delete(:service)
+    if symbol and service = services[symbol.to_sym]
+      service.new(config)
+    end
+  end
 
 
-  # Base class for holding a blog service configuration.
-  class Base
+  def self.services()
+    unless @services
+      @services = {}
+      BlogThis::Services.constants.each do |const|
+        klass = BlogThis::Services.const_get(const)
+        if Class === klass
+          @services[klass.to_sym] = klass
+        end
+      end
+    end
+    @services
+  end
+
+
+  def self.list()
+    hash = services.clone
+    hash.each { |k,v| hash[k] = v.label }
+  end
+
+
+  class Service
 
     class << self
 
-      # Specifies the label for this service. The label should be human
-      # readable, e.g. "WordPress" for the service :wordpress.
-      def label(label = nil)
-        @label = label if label
-        @label || self.class.name
+      def to_sym()
+        @symbol ||= name.split("::").last.downcase.to_sym
       end
 
-
-      # A description that is rendered when the user selects the service,
-      # and can guide the user in configuring the service.
-      def description(desc)
-        @description = desc
+      def label()
+        @label ||= name.split("::").last.capitalize
       end
 
-
-      # Defines a configuration parameter.
-      #
-      # A configuration parameter has a symbol for accessing and storing its value,
-      # and a human readable label (e.g. :blog_url and "Blog URL").
-      #
-      # In addition it has an optional validation proc. This proc is called with an
-      # input value and may return the same or different input value, or raise an
-      # ArgumentError if the input value is invalid.
-      def parameter(symbol, label = nil, &block)
-        @params ||= {}
-        label ||= symbol.to_s.titlelize
-        @params[symbol] = Parameter.new(label, block)
-      end
-
-
-      # Creates inputs for making an HTTP request to blog the specified content.
-      #
-      # This block is called with these three inputs:
-      # * +:title+   -- The post title.
-      # * +:content+ -- The post content.
-      # * +:url+     -- The URL associated with the post
-      #
-      # Returns a hash with the following values:
-      # * +:url+      -- URL to blog service to create a new post.
-      # * +:title+    -- Title for popup window.
-      # * +:options+  -- Other options for use with popup window.
-      def request(&block)
-        @request = block
+      def label_as(label)
+        @label = label.to_s
       end
 
     end
 
 
-    def initialize(params = nil)
-      @params = {}
-      if params
-        params.delete :service
-        params.each { |k,v| self[k] = v }
-      end
+    def initialize(config)
+      config.each { |k, v| instance_variable_set("@#{k}", v) }
     end
 
 
-    # Returns the value of a service configuration parameter.
-    def [](name)
-      @params[name]
-    end
-
-
-    # Sets the value of a service configuration parameter. Raises ArgumentError if
-    # this service does not support the parameter, or if the parameter value is invalid.
-    def []=(name, value)
-      params = self.class.instance_variable_get(:@params)
-      if params and param = params[name]
-        if param.validate
-          value = param.validate.call(value) rescue value
-        end
-        #value = param.validate.call(value) if param.validate
-        @params[name] = value
-      else
-        raise ArgumentError, "This blog service does not support the parameter #{name}"
-      end
-    end
-
-
-    def validate()
-      if params = self.class.instance_variable_get(:@params)
-        params.each do |name, param|
-          @params[name] = param.validate.call(@params[name]) if param.validate
-        end
-      end
-    end
-
-
-    # Returns a hash of this service configuration. You can use this hash to
-    # recreate the service configuration with BlogThis#recreate.
     def to_hash()
-      @params.merge({:service=>self.class.instance_variable_get(:@service)})
+      hash = {}
+      instance_variables.each do |name|
+        value = instance_variable_get(name)
+        hash[name[1..-1].to_sym] = value if value
+      end
+      hash[:service] = to_sym
+      hash
     end
 
-
-    # Call this to create inputs for an HTTP request that will blog the specified
-    # content.
-    #
-    # Call this method with:
-    # * +title+   -- The post title.
-    # * +content+ -- The post content.
-    # * +url+     -- The URL associated with the post
-    #
-    # Returns a hash with the following values:
-    # * +:url+      -- URL to blog service to create a new post.
-    # * +:title+    -- Title for popup window.
-    # * +:options+  -- Other options for use with popup window.
-    def request(title, content, url)
-      self.class.instance_variable_get(:@request).call title, content, url
-    end
-
-
-    # Returns the human readable label for this service.
+    
     def label()
       self.class.label
     end
 
 
-    # A description that is rendered when the user selects the service,
-    # and can guide the user in configuring the service.
-    def description()
-      self.class.instance_variable_get(:@description)
+    def to_sym()
+      self.class.to_sym
     end
 
 
-    # Returns a description of each parameter supported by this service.
-    # Returns a hash with the parameter key and its label.
-    def parameters()
-      if params = self.class.instance_variable_get(:@params)
-        Hash[*params.map{ |k,v| [k,v.label] }.flatten]
-      else
-        {}
+    def update(params)
+    end
+
+    
+    def render_options()
+      template = File.expand_path(File.join(File.dirname(__FILE__), "/#{self.to_sym}.rhtml"))
+      template = File.join("../..", template.sub(File.expand_path(RAILS_ROOT), ""))
+      locals = instance_variables.inject({}) do |hash, name|
+        hash[name[1..-1].to_sym] = instance_variable_get(name)
+        hash
       end
-    end
-
-
-    # Return this service name (note: not #label).
-    def name()
-      self.class.instance_variable_get(:@service)
-    end
-
-
-protected
-
-    def method_missing(symbol, *args)
-      if symbol.to_s[-1] == ?=
-        @params[symbol.to_s[0...-1].to_sym] = args[0]
-      else
-        @params[symbol]
-      end
+      {:file=>template, :locals=>locals}
     end
 
   end
 
-
-  # To define new blogging services, use this module and the #service method.
-  # For example:
-  #   module BlogThis::Services
-  #     service :blogger do
-  #       title "Blogger"
-  #       request do |title, content, url|
-  #         . . .
-  #       end
-  #     end
-  #   end
-  module Services
-
-    @@services = {}
-
-
-    def self.service(name, &block)
-      name = name.to_sym
-      klass = Class.new(BlogThis::Base)
-      klass.class_eval &block
-      klass.instance_variable_set(:@service, name)
-      const_set name.to_s.camelize, klass
-      @@services[name] = klass
-    end
-
-
-    # Returns a hash of all services, using the service ID as the key,
-    # and the service label as the value.
-    def self.list()
-      Hash[*@@services.map { |k, v| [k, v.label] }.flatten]
-    end
-
-  end
-
-
-  # Recreate a service from its configuration. See BlogThis::Base.to_hash.
-  # Returns nil if the service could not be found, or the configuration is
-  # invalid.
-  def self.recreate(config)
-    return nil unless name = config[:service]
-    return nil unless klass = Services.const_get(name.to_s.camelize) rescue nil
-    return klass.new(config) rescue nil
-  end
-
-
-  # Returns a new unconfigured service based on the service identifier.
-  def self.service(name)
-    if klass = Services.const_get(name.to_s.camelize) rescue nil
-      return klass.new
-    end
-  end
-
-
-protected
-
-  def self.method_missing(symbol, *args)
-    # The magic of creating a service by calling BlogThis.service.
-    # For example, BlogThis.wordpress(:blog_url=>...). Service must
-    # be defined first.
-    if klass = Services.const_get(symbol.to_s.camelize) rescue nil
-      return klass.new(*args)
-    else
-      super
-    end
-  end
 
 end
-
-
