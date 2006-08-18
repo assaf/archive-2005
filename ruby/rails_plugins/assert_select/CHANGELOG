@@ -1,6 +1,7 @@
-August 14, 2006
+August 18, 2006
 
 * Added: assert_select_email to handle HTML e-mails.
+* Fixed: requires in init.rb as reported by Benjamin Birnbaum.
 
 
 August 13, 2006
