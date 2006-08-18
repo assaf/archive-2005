@@ -1,0 +1,6 @@
+<dd>We need the address of your WordPress posting page. It appears in your browser address bar when you're writing a new post.<br />
+For example, <code>http://blog.co.mments.com/wp-admin/post.php</code>.</dd>
+<dt>Blog URL:</dt>
+<dd><%= text_field_tag "blog_url", defined?(blog_url) ? blog_url : @params[:blog_url],
+                       :size=>50, :maxlength=>60, :class=>"textfield" %>
+</dd>
