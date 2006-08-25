@@ -5,46 +5,48 @@
 # Code and documention: http://labnotes.org
 
 
+# Methods in this helper include:
+# * #render_hfeed     -- Renders an hAtom feed element.
+# * #render_hentry    -- Renders an hAtom feed entry element.
+# * #hentry_title     -- Returns an hAtom feed entry title element.
+# * #hentry_content   -- Returns an hAtom feed entry content element.
+# * #hcard            -- Creates a simple hCard (name, url, photo).
+# * Time#microformat  -- Turns a time into an +abbr+ element.
+#
 # Example:
-#   <% hrender_feed do
+#   <% render_hfeed do
 #     posts.each do |post|
-#       hrender_entry "post-#{post.id}" do %>
-#         <%= post.content %>
+#       render_hentry "post-#{post.id}" do %>
+#         <%= hentry_title post.title %>
+#         <%= hentry_content post.content %>
 #         <p>Published on <%= post.created_on.microformat :published %> by
 #           <%= hcard :fn=>post.author, :url=>post.author_url, :class=>"author" %>
 #         </p><%
 #       end
 #     end
 #   end %>
+#
+# Notice that the example uses <% and not <%=. Using <% allows render_hfeed
+# to wrap the output of the block inside a feed element. <%= will break.
 module MicroformatHelper
 
-  module HAtom # :nodoc:
-
-    DATETIME_TYPES = [:published, :updated]
+  unless defined?(HATOM_CLASS)
+    # Common classes used for hAtom.
+    HATOM_CLASSES = %w{hfeed hentry hentry-title hentry-content author}
 
     # :call-seq:
     #   render_hfeed(options?) { ... }
     #
     # Called to render a feed. Creates an ordered list element with the class
     # +hfeed+ and the specified options and yields to the block.
-    #
-    # Use with rhtml like this:
-    #   <% hrender_feed do
-    #     posts.each do |post|
-    #       hrender_entry "post-#{post.id}" do %>
-    #         <%= post.content %>
-    #       end
-    #     end
-    #   end %>
-    #
-    # Notice that the example uses <% and not <%=. Using <% allows render_hfeed
-    # to wrap the output of the block inside a feed element. <%= will break.
     def render_hfeed(options = nil, &block)
-      options ||= {}
-      classes = options.delete(:class)
-      options[:class] = "hfeed"
-      options[:class] << " #{classes}" if classes 
-
+      classes = "hfeed"
+      if options
+        classes << " #{options[:class]}" if options[:class]
+        options = options.update(:class=>classes)
+      else
+        options = {:class=>classes}
+      end
       Binding.of_caller do |binding|
         concat content_tag("ol", capture(&block), options), binding
       end
@@ -57,60 +59,82 @@ module MicroformatHelper
     # Called to render a feed entry. Creates a list item element with the
     # class +hentry+, specified ID attribute and options, and yields to the
     # block.
-    #
-    # For usage example, see #render_hfeed.
     def render_hentry(id, options = nil, &block)
-      options ||= {}
-      classes = options.delete(:class)
-      options[:class] = "hentry"
-      options[:class] << " #{classes}" if classes 
-      options[:id] = id
-
+      classes = "hentry"
+      if options
+        classes << " #{options[:class]}" if options[:class]
+        options = options.update(:id=>id, :class=>classes)
+      else
+        options = {:id=>id, :class=>classes}
+      end
       Binding.of_caller do |binding|
         concat content_tag("li", capture(&block), options), binding
       end
     end
 
-  end
-
-
-  module DateTime # :nodoc:
-
     # :call-seq:
-    #   time.microformat(type, format?)
-    #   time.microformat(type) { |time| ... }
+    #   hentry_title(title, options?)
+    #   hentry_title(options?) { ... }
     #
-    # Called to microformat a #Time in the form of an +abbr+ element.
+    # Called to render the feed title element. The content is passed as
+    # a string, or returned from the block.
     #
-    # The first argument specifies the data type, e.g. :published,
-    # :updated, :dtstart, :dtend, etc. This gets translated to a class.
-    #
-    # The human readable date/time is formatted using Time#to_s, however
-    # you can also pass a format string (see Time#strftime) or a block.
-    #
-    # For example:
-    #   Time.now.microformat(:published, "%Y %m %d")
-    def microformat(type, format = nil, &block)
-      if format
-        if format.is_a?(String)
-          text = self.strftime(format)
-        elsif format.respond_to?(:call)
-          text = format.call(self)
+    # The title element is +h2+ by default. Use the +:level+ option to
+    # pick a different header level. All other options are applied to that
+    # element.
+    def hentry_title(*args, &block)
+      case arg = args.shift
+        when Hash
+          title = capture(&block)
+          options = arg
+        when nil
+          title = capture(&block)
+          options = args.shift
         else
-          raise ArgumentError, "Invalid format: expecting format string or block/proc"
-        end
-      elsif block
-        text = block.call(self)
-      else
-        text = self.to_s
+          title = arg
+          options = args.shift
       end
-      "<abbr class='#{type.to_s}' title='#{self.xmlschema}'>#{text}</abbr>"
+      classes = "entry-title"
+      if options
+        classes << " #{options[:class]}" if options[:class]
+        options = options.update(:class=>classes)
+      else
+        options = {:class=>classes}
+      end
+      content_tag("h" << (options[:level] || 2).to_s, title, options)
     end
 
-  end
-
-
-  module HCard # :nodoc:
+    # :call-seq:
+    #   hentry_content(content, options?)
+    #   hentry_content(options?) { ... }
+    #
+    # Called to render the feed content element. The content is passed as
+    # a string, or returned from the block.
+    #
+    # The content element is +p+ by default. Use the +:tag+ option to
+    # pick a different element name. All other options are applied to that
+    # element.
+    def hentry_content(*args, &block)
+      case arg = args.shift
+        when Hash
+          content = capture(&block)
+          options = arg
+        when nil
+          content = capture(&block)
+          options = args.shift
+        else
+          content = arg
+          options = args.shift
+      end
+      classes = "entry-content"
+      if options
+        classes << " #{options[:class]}" if options[:class]
+        options = options.update(:class=>classes)
+      else
+        options = {:class=>classes}
+      end
+      content_tag(options.delete(:tag) || "p", content, options)
+    end
 
     # :call-seq:
     #   hcard(values)
@@ -172,8 +196,117 @@ module MicroformatHelper
 
   end
 
+  class ::Time
 
-  Time.send :include, DateTime
-  [HAtom, HCard].each { |m| include m }
+    unless defined?(microformat)
+      # :call-seq:
+      #   microformat(type, format?)
+      #   microformat(type) { |time| ... }
+      #
+      # Called to microformat a #Time in the form of an +abbr+ element.
+      #
+      # The first argument specifies the data type, e.g. :published,
+      # :updated, :dtstart, :dtend, etc. This gets translated to a class.
+      #
+      # The human readable date/time is formatted using Time#to_s, however
+      # you can also pass a format string (see Time#strftime) or a block.
+      #
+      # For example:
+      #   Time.now.microformat(:published, "%Y %m %d")
+      def microformat(type, format = nil, &block)
+        if format
+          if format.is_a?(String)
+            text = self.strftime(format)
+          elsif format.respond_to?(:call)
+            text = format.call(self)
+          else
+            raise ArgumentError, "Invalid format: expecting format string or block/proc"
+          end
+        elsif block
+          text = block.call(self)
+        else
+          text = self.to_s
+        end
+        "<abbr class='#{type.to_s}' title='#{self.xmlschema}'>#{text}</abbr>"
+      end
+    end
+
+  end
+
+
+  module Assertions
+
+    def assert_hdatetime(time, type, format = nil, &block)
+      if format
+        if format.is_a?(String)
+          text = time.strftime(format)
+        elsif format.respond_to?(:call)
+          text = format.call(time)
+        else
+          raise ArgumentError, "Invalid format: expecting format string or block/proc"
+        end
+      elsif block
+        text = block.call(time)
+      else
+        text = time.to_s
+      end
+      assert_select "abbr.#{type.to_s}[title=?]", time.xmlschema, text, &block
+    end
+
+
+    def assert_hfeed(&block)
+      assert_select "ol.hfeed", true, "hAtom OL/feed element not matched", &block
+    end
+
+    def assert_hfeed_entry(id, &block)
+      assert_select "li.hentry#?", id, true, "hAtom LI/entry element not matched", &block
+    end
+
+    def assert_hfeed_entry_title(title = nil, &block)
+      tests = title ? {:text=>title} : true
+      assert_select ".entry-title", tests, "hAtom title element not matched", &block
+    end
+
+    def assert_hfeed_entry_content(content = nil, &block)
+      tests = content ? {:text=>content} : true
+      assert_select ".entry-content", tests, "hAtom content element not matched", &block
+    end
+
+    def assert_hcard(values)
+      classes = ".vcard.fn"
+      classes << "." << values[:class].split(' ').join('.') if values[:class]
+      fn = lambda do |element|
+        if values[:fn]
+          assert_select element, "*", {:text=>values[:fn]}, "FN value did not match"
+        else
+          if values[:given]
+            assert_select element, "span.given-name", {:text=>values[:given]}, "Given name value did not match"
+          end
+          if values[:family]
+            assert_select element, "span.family-name", {:text=>values[:family]}, "Family name value did not match"
+          end
+        end
+        if photo = values[:photo]
+          photo = photo[:src] if Hash === photo
+          assert_select element, "img.photo[src=?]", photo, {:minimum=>1}, "Image did not match"
+        end
+      end
+      if !values[:fn] and (values[:given] or values[:family])
+        classes << ".n"
+      end
+      if url = values[:url]
+        assert_select "a#{classes}.url[href=?]", url, true, "Link did not match" do |elements|
+          elements.each { |element| fn.call(element) }
+          yield elements if block_given?
+        end
+      else
+        assert_select "span#{classes}", true, "SPAN element did not match" do |elements|
+          elements.each { |element| fn.call(element) }
+          yield elements if block_given?
+        end
+      end
+    end
+
+  end
 
  end
