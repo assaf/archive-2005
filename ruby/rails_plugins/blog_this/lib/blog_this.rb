@@ -5,56 +5,6 @@
 # Code and documention: http://labnotes.org
 
 
-# == Define a blogging service
-#
-# To define a blogging service, use the BlogThis::Services module and the method
-# BlogThis::Services#service. For example:
-#   module BlogThis::Services
-#     service :blogger do
-#       title "Blogger"
-#       render do |page, inputs|
-#         . . .
-#       end
-#     end
-#   end
-#
-# == Configure to a blog
-#
-# Once you defined a blogging service, you'll want to create objects and configure
-# them with parameters, for example, the blog URL or identifier.
-#   wordpress = BlogThis.wordpress :blog_url=>"http://blog.labnotes.org"
-# or:
-#   wordpress = BlogThis.wordpress
-#   wordpress.blog_url = "http://blog.labnotes.org"
-#
-# You will then want to store these configurations, so get the configuration as
-# a hash:
-#   yaml = YAML::dump(wordpress.to_hash)
-#
-# == Render a new post
-#
-# Get the blog configuration and re-create the object:
-#   wordpress = BlogThis.wordpress(YAML::load(yaml))
-# Render from within your controller:
-#   render :update do |page|
-#     wordpress.render page, :title=>"Blogging about..."
-#   end
-# Or:
-#   config = YAML::load(yaml)
-#   render :update do |page|
-#     BlogThis.render page, config, :title=>"Blogging about..."
-#   end
-#
-# == Configuration and inputs
-#
-# Which configuration you use depends on the blog service. It may require a blog
-# URL, blog ID, etc. Some services expect the user to login and select their blog.
-#
-# Which inputs you use also depends on the blog service, but for maximum effect,
-# use the same set of inputs. The services included here use these inputs:
-# * +:title:    -- The post title (entity encoded)
-# * +:content:  -- The post content (HTML encoded)
-# * +:url:      -- A link URL.
 module BlogThis
 
 
