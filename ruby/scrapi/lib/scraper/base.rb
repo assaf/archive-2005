@@ -472,11 +472,19 @@ module Scraper
       #   process "a[href]", "urls[]"=>"@href"
       def array(*symbols)
         @arrays ||= []
-        symbols.each { |sym| @arrays << sym.to_sym }
+        symbols.each do |symbol|
+          symbol = symbol.to_sym
+          @arrays << symbol
+          begin
+            self.instance_method(symbol)
+          rescue NameError
+            attr_accessor symbol
+          end
+        end
       end
 
 
-  private
+    private
 
 
       # Called by #process and #process_first, see there for
@@ -655,6 +663,7 @@ module Scraper
           begin
             self.instance_method(target)
           rescue NameError
+            instance = "@#{target}".to_sym
             attr_accessor target
           end
           reader = "#{target}=".to_sym
@@ -740,8 +749,9 @@ module Scraper
       prepare document
       # Retrieve the document. This may raise HTTPError or HTMLParseError.
       case document
-      when Array: stack = @document.reverse # see below
-      when HTML::Node:
+      when Array
+        stack = @document.reverse # see below
+      when HTML::Node
         # If a root element is specified, start selecting from there.
         # The stack is empty if we can't find any root element (makes
         # sense). However, the node we're going to process may be
@@ -750,7 +760,8 @@ module Scraper
         root_element = option(:root_element)
         root = root_element ? @document.find(:tag=>root_element) : @document
         stack = root ? (root.tag? ? [root] : root.children.reverse) : []
-      else return
+      else
+        return
       end
       # @skip stores all the elements we want to skip (see #skip).
       # rules stores all the rules we want to process with this
@@ -801,9 +812,10 @@ module Scraper
                 # If it returns true, skip the element and if
                 # the current element, don't process any more
                 # rules. Again, pay attention to descendants.
-                skip = extractor.bind(self).call(element)
-                if (skip || @skip.delete(true)) && @skip.delete(false).nil?
+                if extractor.bind(self).call(element)
                   @extracted = true
+                end
+                if @skip.delete(true)
                   if element.equal?(node)
                     skip_this = true
                   else
@@ -824,6 +836,7 @@ module Scraper
       ensure
         @skip = nil
       end
+      collect
       return result
     end
 
@@ -895,7 +908,7 @@ module Scraper
       case elements
       when Array: @skip.concat elements
       when HTML::Node: @skip << elements
-      when nil: @skip << self.element
+      when nil: @skip << true
       when true, false: @skip << elements
       end
       # Calling skip(element) as the last statement is
@@ -917,6 +930,13 @@ module Scraper
     #
     # You can override this method to do any preparation work.
     def prepare(document)
+    end
+
+
+    # Called by #scrape scraping the document, and before calling #result.
+    # Typically used to run any validation, post-processing steps,
+    # resolving referenced elements, etc.
+    def collect()
     end
 
 

@@ -1,3 +1,11 @@
+Version 1.2.0 (August 27, 2006)
+
+* Added: collect() method called just before result().
+* Changed: Elements are not skipped when processes unless :skip=>true.
+  ! Pay attention to this one, it could affect some scrapers.
+* Fixed: Declaring an array immediately creates an accessor for it.
+* Added: Scraper::Microformat for scraping hAtom and basic hCard.
+
 Version 1.1.2 (August 13, 2006)
 
 * Changed: Allows multiple :not pseudo classes to be used with the same
