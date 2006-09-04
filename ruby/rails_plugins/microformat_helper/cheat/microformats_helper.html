@@ -1,0 +1,133 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+  <head>
+    <title>Microformats Helper Cheat Sheet</title>
+    <style type="text/css">
+body {
+  background: white;
+  font-family: Candara, Trebuchet, "Lucida Grande", Arial, Helvetica, sans-serif;
+  text-align: left;
+  margin: 2em;
+}
+h1 {
+  background: #a01010;
+  color: white;
+  padding: 0 0.5em 0.3em 0.5em;
+  font-size: 2em;
+  margin: 0;
+}
+h1.printed {
+  display: none;
+}
+h2 {
+  color: #797b7d;
+}
+dl dt {
+  font-weight: bold;
+}
+dl dd {
+  margin: 0 0 1.5em 2em;
+}
+dl[compact] dt {
+  float: left;
+  clear: both;
+  display: inline;
+  width: 15em;
+  margin: 0;
+  font-weight: normal;
+  font-family: Consolas, "Courier New";
+}
+dl[compact] dd {
+  margin: 0 0 0.3em 15em;
+}
+code, pre {
+  font-family: Consolas, "Courier New";
+}
+pre {
+  font-weight: bold;
+}
+p.copyright {
+  text-align: center;
+  font-weight: bold;
+  margin-top: 2em;
+}
+br.force-break {
+  display: none;
+}
+@media print {
+  body {
+    margin: 0 1cm 0 1cm;
+  }
+  h1 {
+    padding: 0.3cm;
+    font-size: 200%;
+    margin: 0;
+  }
+  h1.printed {
+    display: block;
+  }
+  br.force-break {
+    display: block;
+    page-break-before: always;
+  }
+  dl dd {
+    margin: 0 0 0.6cm 1cm;
+  }
+  dl[compact] dt {
+    width: 6cm;
+  }
+  dl[compact] dd {
+    margin: 0 0 0.2cm 6cm;
+  }
+  p.copyright {
+    margin-top: 0cm;
+  }
+}
+    </style>
+  </head>
+  <body>
+    <h1>Microformats Helper Cheat Sheet</h1>
+    <h2>hAtom</h2>
+    <dl>
+      <dt><code>&lt;% render_hfeed(options?) do ... end %&gt;</code></dt>
+      <dd>Renders an <code>ol</code> element with the class <code>hfeed</code>. Options are passed to the HTML element.</dd>
+      <dt><code>&lt;% render_hentry(id, options?) do ... end %&gt;</code></dt>
+      <dd>Renders a <code>li</code> element with the class <code>hentry</code>. ID and options are passed to the HTML element.</dd>
+      <dt><code>&lt;%= hentry_title(title, options?) %&gt;<br/>&lt;%= hentry_title(options?) { ... } %&gt;</code></dt>
+      <dd>Returns header with class <code>entry-title</code>. Title is passed as argument or returned from block. Use <code>:level</code> ooption to specify header level (default is 2).</dd>
+      <dt><code>&lt;%= hentry_content(content, options?) %&gt;<br/>&lt;%= hentry_content(options?) { ... } %&gt;</code></dt>
+      <dd>Returns header with class <code>entry-content</code>. Content is passed as argument or returned from block. Use <code>:tag</code> to specify the element name (default is <code>p</code>).</dd>
+    </dl>
+    <h2>Other</h2>
+    <dl>
+      <dt><code>&lt;%= hcard(values) %&gt;</code></dt>
+      <dd><p>Returns hcard element based on the values:</p>
+        <dl compact="compact">
+          <dt>:fn</dt><dd>Formal name</dd>
+          <dt>:given-name</dt><dd>Given name (alternative to <code>:fn</code>)</dd>
+          <dt>:family-name</dt><dd>Family name (alternative to <code>:fn</code>)</dd>
+          <dt>:url</dt><dd>URL of person/entity (results in link)</dd>
+          <dt>:photo</dt><dd>URL of photo, or hash of options for <code>img</code> tag</dd>
+          <dt>:html</dt><dd>Options to pass to wrapper element</dd>
+        </dl>
+      </dd>
+      <dt><code>&lt;%= Time.microformat(type, format?) %&gt;<br/>&lt;%= Time.microformat(type) { ... } %&gt;</code></dt>
+      <dd>Formats time using the date/time pattern, returns <code>abbr</code> element. First argument is date/time type (e.g. <code>:published</code>). Second argument is format (see <code>strftime</code>), default is <code>to_s</code>, or use result of block.</dd>
+    </dl>
+    <h2>Example</h2>
+    <pre>
+&lt;% render_hfeed do
+  posts.each do |post|
+    render_hentry "post-#{post.id}" do %&gt;
+      &lt;%= hentry_title post.title %&gt;
+      &lt;%= hentry_content post.content %&gt;
+      &lt;p&gt;Published on &lt;%= post.created_on.microformat :published %&gt; by
+        &lt;%= hcard :fn=&gt;post.author, :url=&gt;post.author_url, :class=&gt;"author" %&gt;
+      &lt;/p&gt;&lt;%
+    end
+  end
+end %&gt;
+    </pre>
+    <p class="copyright">&copy; 2006 Assaf Arkin <a href="http://labnotes.org">http://labnotes.org</a><br/>Released under Creative Commons Attribution</p>
+  </body>
+</html>
