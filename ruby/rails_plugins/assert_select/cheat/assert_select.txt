@@ -28,31 +28,34 @@ E > F                   an F element child of an E element
 E + F                   an F element immediately preceded by an E element
 E ~ F                   an F element preceded by an E element
 
+Substitution values
+.?                      Class name
+#?                      ID attribute
+[foo=?]                 Attribute value
+May be string or regular expression, e.g. "[foo=?]", /bar/i
+
 
 assert_select(selector, *values, equality?, message?) { |elems| ... }
 assert_select(element, selector, *values, equality?, message?) { |elems| ... }
 
-  Uses selector to select elements from response page or first argument (element), and evalute
+  Use selector to select elements from response page or first argument (element), and evalute
   equality test. Raises exception with message if equality test fails.
 
   Equality tests include:
-    true            At least one element found (:minimum=>1)
-    false           No element found (:count=>0)
-    str, :text=>str All elements found have the text contents
-    reg, :text=>reg All elements found have text contents matching the regular expression
-    n, :count=>n    Exactly n elements found
-    :minimum=>n     At least n elements found
-    :maximum=>n     At most n elements found
-    n..m            Between n and m elements found
+    true                At least one element found (:minimum=>1)
+    false               No element found (:count=>0)
+    text, :text=>text   All elements found have the text contents (string or regexp)
+    n, :count=>n        Exactly n elements found
+    :minimum=>n         At least n elements found
+    :maximum=>n         At most n elements found
+    n..m                Between n and m elements found
 
   If no count specified, :minimum=>1 assumed.
 
-  With block, calls block with all selected elements. Calling assert_select (or any of the other functions)
-  within that block will select from the element selected by the outer block.
+  If no count specified, default is :minimum=>1.
 
-  Subsitution values are string or regular expression, can be used for id, class name or attribute value,
-  e.g. "E[foo=?]", /bar/i
-
+  With block, calls block with all selected elements. Calling assert_select (or any of the other
+  functions) within that block operates on element selected by outer block.
 
 assert_select_rjs(id?) { |elems| ... }
 assert_select_rjs(statement, id?) { |elems| ... }
@@ -61,7 +64,6 @@ assert_select_rjs(:insert, position, id?) { |elems| ... }
   Asserts that RJS statement updates/inserts HTML content and allows nested assertions on the content.
   With id, selects only RJS statement affecting elements with that id. With statement, RJS statements
   that :replace, :replace_html or :insert. With :insert can limit position (:before, :after, etc).
-
 
 assert_select_email() { |elems| ... }
 
