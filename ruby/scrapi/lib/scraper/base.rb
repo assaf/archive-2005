@@ -327,7 +327,7 @@ module Scraper
       # The following options are supported for parsing the HTML:
       # * <tt>:root_element</tt> -- The root element to scrape, see
       #   also #root_elements.
-      # * <tt>:parser_options</tt> -- Specifies which parser to use.
+      # * <tt>:parser</tt> -- Specifies which parser to use.
       #   (Typically, you set this for the class).
       # * <tt>:parser_options</tt> -- Options to pass to the parser.
       #
