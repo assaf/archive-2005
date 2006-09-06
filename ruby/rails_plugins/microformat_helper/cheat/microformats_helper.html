@@ -5,43 +5,46 @@
     <style type="text/css">
 body {
   background: white;
-  font-family: Candara, Trebuchet, "Lucida Grande", Arial, Helvetica, sans-serif;
+  font-family: Verdana, "Lucida Grande", Arial, Helvetica, sans-serif;
   text-align: left;
   margin: 2em;
 }
 h1 {
-  background: #a01010;
+  background: #b90b0a;
   color: white;
   padding: 0 0.5em 0.3em 0.5em;
   font-size: 2em;
-  margin: 0;
+  margin: 0 0 0.5em 0;
 }
-h1.printed {
+h1.separator {
   display: none;
 }
 h2 {
-  color: #797b7d;
+  color: #aba9a8;
+}
+p, dl, dl dt {
+  margin: 0 0 0.5em 0;
 }
 dl dt {
   font-weight: bold;
 }
 dl dd {
-  margin: 0 0 1.5em 2em;
+  margin: 0 0 0.5em 2em;
 }
-dl[compact] dt {
+dl.compact dt {
   float: left;
   clear: both;
   display: inline;
   width: 15em;
   margin: 0;
   font-weight: normal;
-  font-family: Consolas, "Courier New";
+  font-family: "Courier New";
 }
-dl[compact] dd {
+dl.compact dd {
   margin: 0 0 0.3em 15em;
 }
 code, pre {
-  font-family: Consolas, "Courier New";
+  font-family: "Courier New";
 }
 pre {
   font-weight: bold;
@@ -55,32 +58,38 @@ br.force-break {
   display: none;
 }
 @media print {
+  @page {
+    size: 8in 8in;
+    margin: 1cm;
+  }
   body {
-    margin: 0 1cm 0 1cm;
+    font-size: 11pt;
   }
   h1 {
     padding: 0.3cm;
     font-size: 200%;
-    margin: 0;
+    margin: 0 0 0.6cm 0;
   }
-  h1.printed {
-    display: block;
-  }
-  br.force-break {
+  h1.separator {
+    border-top: 0.77cm solid white;
     display: block;
     page-break-before: always;
   }
+  p, dl, dl dt {
+    margin: 0 0 0.3cm 0;
+  }
   dl dd {
-    margin: 0 0 0.6cm 1cm;
+    margin: 0 0 0.3cm 0.6cm;
   }
-  dl[compact] dt {
+  dl.compact dt {
     width: 6cm;
+    margin: 0;
   }
-  dl[compact] dd {
-    margin: 0 0 0.2cm 6cm;
+  dl.compact dd {
+    margin: 0 0 0.15cm 6cm;
   }
   p.copyright {
-    margin-top: 0cm;
+    margin-top: 2cm;
   }
 }
     </style>
@@ -89,20 +98,16 @@ br.force-break {
     <h1>Microformats Helper Cheat Sheet</h1>
     <h2>hAtom</h2>
     <dl>
-      <dt><code>&lt;% render_hfeed(options?) do ... end %&gt;</code></dt>
-      <dd>Renders an <code>ol</code> element with the class <code>hfeed</code>. Options are passed to the HTML element.</dd>
-      <dt><code>&lt;% render_hentry(id, options?) do ... end %&gt;</code></dt>
-      <dd>Renders a <code>li</code> element with the class <code>hentry</code>. ID and options are passed to the HTML element.</dd>
-      <dt><code>&lt;%= hentry_title(title, options?) %&gt;<br/>&lt;%= hentry_title(options?) { ... } %&gt;</code></dt>
-      <dd>Returns header with class <code>entry-title</code>. Title is passed as argument or returned from block. Use <code>:level</code> ooption to specify header level (default is 2).</dd>
-      <dt><code>&lt;%= hentry_content(content, options?) %&gt;<br/>&lt;%= hentry_content(options?) { ... } %&gt;</code></dt>
-      <dd>Returns header with class <code>entry-content</code>. Content is passed as argument or returned from block. Use <code>:tag</code> to specify the element name (default is <code>p</code>).</dd>
+      <dt><code>&lt;% render_hfeed(options?) do ... end %&gt;<br/>&lt;% render_hentry(id, options?) do ... end %&gt;</code></dt>
+      <dd><p>Render <code>ol</code> with class <code>hfeed</code>, or <code>li</code> with the class <code>hentry</code> and id. Options passed to HTML element.</p></dd>
+      <dt><code>&lt;%= hentry_title(title?, options?) { ... } %&gt;<br/>&lt;%= hentry_content(content?, options?) { ... } %&gt;</code></dt>
+      <dd><p>Returns header with class <code>entry-title</code>, or element with class <code>entry-content</code>. Content pass as argument or returned from block, options passed to wrapping element. Use <code>:level</code> to specify header level (default 2), <code>:tag</code> to specify content element (default <code>p</code>).</p></dd>
     </dl>
     <h2>Other</h2>
     <dl>
       <dt><code>&lt;%= hcard(values) %&gt;</code></dt>
-      <dd><p>Returns hcard element based on the values:</p>
-        <dl compact="compact">
+      <dd><p>Values:</p>
+        <dl class="compact">
           <dt>:fn</dt><dd>Formal name</dd>
           <dt>:given-name</dt><dd>Given name (alternative to <code>:fn</code>)</dd>
           <dt>:family-name</dt><dd>Family name (alternative to <code>:fn</code>)</dd>
@@ -111,8 +116,8 @@ br.force-break {
           <dt>:html</dt><dd>Options to pass to wrapper element</dd>
         </dl>
       </dd>
-      <dt><code>&lt;%= Time.microformat(type, format?) %&gt;<br/>&lt;%= Time.microformat(type) { ... } %&gt;</code></dt>
-      <dd>Formats time using the date/time pattern, returns <code>abbr</code> element. First argument is date/time type (e.g. <code>:published</code>). Second argument is format (see <code>strftime</code>), default is <code>to_s</code>, or use result of block.</dd>
+      <dt><code>&lt;%= Time.microformat(type, format?) { ... } %&gt;</code></dt>
+      <dd><p>Formats time using the date/time pattern, returns <code>abbr</code> element. First argument is date/time type (e.g. <code>:published</code>). Human formatted: using second argument (see <code>strftime</code>), result of block, or <code>self.to_s</code>.</p></dd>
     </dl>
     <h2>Example</h2>
     <pre>
