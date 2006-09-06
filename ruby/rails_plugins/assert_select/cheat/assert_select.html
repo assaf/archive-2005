@@ -5,43 +5,46 @@
     <style type="text/css">
 body {
   background: white;
-  font-family: Candara, Trebuchet, "Lucida Grande", Arial, Helvetica, sans-serif;
+  font-family: Verdana, "Lucida Grande", Arial, Helvetica, sans-serif;
   text-align: left;
   margin: 2em;
 }
 h1 {
-  background: #a01010;
+  background: #b90b0a;
   color: white;
   padding: 0 0.5em 0.3em 0.5em;
   font-size: 2em;
-  margin: 0;
+  margin: 0 0 0.5em 0;
 }
-h1.printed {
+h1.separator {
   display: none;
 }
 h2 {
-  color: #797b7d;
+  color: #aba9a8;
+}
+p, dl, dl dt {
+  margin: 0 0 0.5em 0;
 }
 dl dt {
   font-weight: bold;
 }
 dl dd {
-  margin: 0 0 1.5em 2em;
+  margin: 0 0 0.5em 2em;
 }
-dl[compact] dt {
+dl.compact dt {
   float: left;
   clear: both;
   display: inline;
   width: 15em;
   margin: 0;
   font-weight: normal;
-  font-family: Consolas, "Courier New";
+  font-family: "Courier New";
 }
-dl[compact] dd {
+dl.compact dd {
   margin: 0 0 0.3em 15em;
 }
 code, pre {
-  font-family: Consolas, "Courier New";
+  font-family: "Courier New";
 }
 pre {
   font-weight: bold;
@@ -55,32 +58,38 @@ br.force-break {
   display: none;
 }
 @media print {
+  @page {
+    size: 8in 8in;
+    margin: 1cm;
+  }
   body {
-    margin: 0 1cm 0 1cm;
+    font-size: 11pt;
   }
   h1 {
     padding: 0.3cm;
     font-size: 200%;
-    margin: 0;
+    margin: 0 0 0.6cm 0;
   }
-  h1.printed {
-    display: block;
-  }
-  br.force-break {
+  h1.separator {
+    border-top: 0.77cm solid white;
     display: block;
     page-break-before: always;
   }
+  p, dl, dl dt {
+    margin: 0 0 0.3cm 0;
+  }
   dl dd {
-    margin: 0 0 0.6cm 1cm;
+    margin: 0 0 0.3cm 0.6cm;
   }
-  dl[compact] dt {
+  dl.compact dt {
     width: 6cm;
+    margin: 0;
   }
-  dl[compact] dd {
-    margin: 0 0 0.2cm 6cm;
+  dl.compact dd {
+    margin: 0 0 0.15cm 6cm;
   }
   p.copyright {
-    margin-top: 0;
+    margin-top: 0cm;
   }
 }
     </style>
@@ -88,7 +97,7 @@ br.force-break {
   <body>
     <h1>assert_select Cheat Sheet</h1>
     <h2>Selectors</h2>
-    <dl compact="compact">
+    <dl class="compact">
       <dt>*</dt><dd>any element</dd>
       <dt>E</dt><dd>an element of type E</dd>
       <dt>E.warning</dt><dd>an E element whose class is "warning" (the document language specifies how class is determined).</dd>
@@ -119,21 +128,20 @@ br.force-break {
       <dt>E ~ F</dt><dd>an F element preceded by an E element</dd>
     </dl>
     <h2>Substitution Values</h2>
-    <dl compact="compact">
+    <dl class="compact">
       <dt>.?</dt><dd>Class name</dd>
       <dt>#?</dt><dd>ID attribute</dd>
       <dt>[foo=?]</dt><dd>Attribute value</dd>
     </dl>
     <p>May be string or regular expression, e.g. <code>"[foo=?]", /bar/i</code>.</p>
-    <br class="force-break"/>
-    <h1 class="printed">assert_select Cheat Sheet</h1>
+    <h1 class="separator">assert_select Cheat Sheet</h1>
     <h2>Methods</h2>
     <dl>
       <dt><code>assert_select(selector, *values, equality?, message?) { |elems| ... }<br/>assert_select(element, selector, *values, equality?, message?) { |elems| ... }</code></dt>
       <dd>
         <p>Use <code>selector</code> to select elements from response page or first argument (<code>element</code>), and evalute <code>equality</code> test. Raises exception with <code>message</code> if equality tests fail.</p>
         <p>Equality tests include:</p>
-        <dl compact="compact">
+        <dl class="compact">
           <dt>true</dt><dd>At least one element found (<code>:minimum=>1</code>)</dd>
           <dt>false</dt><dd>No element found (<code>:count=>0</code>)</dd>
           <dt>text, :text=>text</dt><dd>All elements found have the text contents (string or regexp)</dd>
