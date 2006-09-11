@@ -8,6 +8,33 @@
 module HTML
 
 
+  class Document
+
+    def select(selector, *values)
+      root.select(selector, *values)
+    end
+
+  end
+
+  class Node
+
+    def select(selector, *values)
+      case selector
+        when :first
+          selector = values.shift
+          method = :select_first
+        when :all
+          selector = values.shift
+          method = :select
+        else
+          method = :select
+      end
+      selector = HTML::Selector.new(selector, *values) unless selector.is_a?(HTML::Selector)
+      selector.send method, self
+    end
+
+  end
+
   # Selects HTML elements using CSS 2 selectors.
   #
   # The +Selector+ class uses CSS selector expressions to match and select

@@ -1,8 +1,16 @@
+September 10, 2006
+
+* Added: select method on Document and Node
+* Changed: handling of text assertions, from matching all elements selected
+  to selecting all elements matched and then asserting their occurrences
+  (Thanks to Jamie van Dyke of www.fearoffish.co.uk for prompting the fix)
+* Changed: list of pre-formatted text elements now includes pre, textarea,
+  script and style.
+
 August 18, 2006
 
 * Added: assert_select_email to handle HTML e-mails.
 * Fixed: requires in init.rb as reported by Benjamin Birnbaum.
-
 
 August 13, 2006
 

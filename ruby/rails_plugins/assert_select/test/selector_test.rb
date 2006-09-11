@@ -629,6 +629,42 @@ class SelectorTest < Test::Unit::TestCase
   end
 
 
+  #
+  # Test Node.select
+  #
+
+  def test_node_select
+    html = HTML::Document.new(%Q{<div id="1"></div><p></p><div id="2"></div>})
+    matches = html.select("div")
+    assert_equal 2, matches.size
+    assert_equal "1", matches[0].attributes["id"]
+    assert_equal "2", matches[1].attributes["id"]
+    matches = matches[0].select("div")
+    assert_equal 1, matches.size
+    assert_equal "1", matches[0].attributes["id"]
+    matches = html.select("#1")
+    assert_equal 1, matches.size
+    assert_equal "1", matches[0].attributes["id"]
+  end
+
+
+  def test_node_select_first
+    html = HTML::Document.new(%Q{<div id="1"></div><p></p><div id="2"></div>})
+    matches = html.select(:all, "div")
+    assert_equal 2, matches.size
+    assert_equal "1", matches[0].attributes["id"]
+    assert_equal "2", matches[1].attributes["id"]
+    matches = html.root.select(:all, "div")
+    assert_equal 2, matches.size
+    assert_equal "1", matches[0].attributes["id"]
+    assert_equal "2", matches[1].attributes["id"]
+    match = html.select(:first, "div")
+    assert_equal "1", match.attributes["id"]
+    match = html.root.select(:first, "div")
+    assert_equal "1", match.attributes["id"]
+  end
+
+
 protected
 
   def parse(html)
