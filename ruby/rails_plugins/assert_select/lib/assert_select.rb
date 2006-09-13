@@ -393,7 +393,7 @@ module Test #:nodoc:
           
         # Duplicate the body since the next step involves destroying it.
         matches = nil
-        @response.body.gsub(pattern) do |match|
+        @response.body.dup.gsub(pattern) do |match|
           html = $2
           # RJS encodes double quotes and line breaks.
           html.gsub!(/\\"/, "\"")

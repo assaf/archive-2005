@@ -1,3 +1,9 @@
+September 13, 2006
+
+* Fixed: assert_select_rjs does not destroy response body.
+* Fixed: requires in init.rb.
+  (Thanks to Benjamin Birnbaum for the fix and Joey Geiger for reminding me)
+
 September 10, 2006
 
 * Added: select method on Document and Node
