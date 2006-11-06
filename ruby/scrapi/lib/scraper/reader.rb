@@ -153,12 +153,12 @@ module Scraper
         return Page[(options[:source_url] || uri), nil, nil,
                     options[:last_modified], options[:etag]]
       when Net::HTTPMovedPermanently
-        return read_page(response["location"], # New URL takes effect
+        return read_page((uri.merge(response["location"]) rescue nil), # New URL takes effect
                          :last_modified=>options[:last_modified],
                          :etag=>options[:etag],
                          :redirect_limit=>redirect_limit-1)
       when Net::HTTPRedirection
-        return read_page(response["location"],
+        return read_page((uri.merge(response["location"]) rescue nil),
                          :last_modified=>options[:last_modified],
                          :etag=>options[:etag],
                          :redirect_limit=>redirect_limit-1,
@@ -219,6 +219,7 @@ module Scraper
 
 
   protected
+
   module_function
 
     def find_tidy()

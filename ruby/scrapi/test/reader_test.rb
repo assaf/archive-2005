@@ -144,6 +144,25 @@ class ReaderTest < Test::Unit::TestCase
   end
 
 
+  def test_should_support_partial_location_redirection
+    # Test working redirection. Redirect only once and test response URL.
+    # Should be new URL for permanent redirect, same URL for all other redirects.
+    Net::HTTP.on_get do |address, path, headers|
+      if path == "/somewhere"
+        [Net::HTTPSuccess.new(Net::HTTP.version_1_2, 200, "OK"), ""]
+      else
+        response = Net::HTTPMovedPermanently.new(Net::HTTP.version_1_2, 301, "Moved")
+        response["location"] = "somewhere"
+        [response, ""]
+      end
+    end
+    assert_nothing_raised() do
+      response = Reader.read_page("http://localhost/path?query")
+      assert_equal "http://localhost/somewhere", response.url.to_s
+    end
+  end
+
+
   def test_should_use_cache_control
     # Test Last Modified and ETag headers. First, that they are correctly
     # returned from headers to response object. Next, that passing right

@@ -1,6 +1,8 @@
 Version 1.2.1 (Upcoming)
 
 * Added: Cheat sheets.
+* Fixed: Support for redirects that return path-only locations.
+         Credit: Rick Wargo (http://www.rickwargo.com)
 
 Version 1.2.0 (August 27, 2006)
 
