@@ -1,3 +1,8 @@
+Release 1.0.3 (Nov 8, 2006)
+
+* Fixed:    Work around YAML bug in serializing that occurs when MAC address
+            consists only of decimal digits. Credit: ebuprofen"
+
 Release 1.0.2 (Jul 28, 2006)
 
 * Changed:  Constants are not conditionally defined (removes warnings when
