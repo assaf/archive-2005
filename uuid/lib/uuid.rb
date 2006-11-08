@@ -179,7 +179,7 @@ module UUID
   # :call-seq:
   #   UUID.new([format])  -> string
   #
-  def new format = nil
+  def new(format = nil)
     # Determine which format we're using for the UUID string.
     template = FORMATS[format || :default] or
         raise RuntimeError, "I don't know the format '#{format}'"
@@ -240,7 +240,7 @@ module UUID
   # :call-seq:
   #   UUID.config(config)
   #
-  def self.config options
+  def self.config(options)
     options ||= {}
     @@mutex.synchronize do
       @@logger = options[:logger]
@@ -252,7 +252,7 @@ module UUID
   # Create a uuid.state file by finding the IEEE 802 NIC MAC address for this machine.
   # Works for UNIX (ifconfig) and Windows (ipconfig). Creates the uuid.state file in the
   # installation directory (typically the GEM's lib).
-  def self.setup
+  def self.setup()
     file = File.expand_path(File.dirname(__FILE__))
     file = File.basename(file) == 'lib' ? file = File.join(file, '..', STATE_FILE) : file = File.join(file, STATE_FILE)
     file = File.expand_path(file)
@@ -278,7 +278,7 @@ module UUID
         addresses.each { |addr| puts "  #{addr}" }
         puts "Selecting the first address #{addresses[0]} for use in your UUID state file."
         File.open file, "w" do |output|
-          output.puts "mac_addr: #{addresses[0]}"
+          output.puts "mac_addr: \"#{addresses[0]}\""
           output.puts format("sequence: \"0x%04x\"", rand(0x10000))
         end
         puts "Created a new UUID state file: #{file}"
@@ -289,15 +289,8 @@ module UUID
 
 
 private
-    def self.state plus_one = false
-      return nil unless @@sequence && @@mac_addr
-      { "sequence"=>sprintf("0x%04x", (plus_one ? @@sequence + 1 : @@sequence) & 0xFFFF),
-        "last_clock"=>sprintf("0x%x", @@last_clock || (Time.new.to_f * CLOCK_MULTIPLIER).to_i),
-        "mac_addr" => @@mac_addr }
-    end
 
-
-    def self.next_sequence config = nil
+    def self.next_sequence(config = nil)
       # If called to advance the sequence number (config is nil), we have a state file that we're able to use.
       # If called from configuration, use the specified or default state file.
       state_file = (config && config[:state_file]) || @@state_file
@@ -338,7 +331,7 @@ private
           # the new state. Start at beginning of file, and truncate file when done.
           @@mac_addr, @@mac_hex, @@sequence, @@state_file = mac_addr, mac_hex, sequence, state_file
           file.pos = 0
-          YAML::dump state(true), file
+          dump file, true
           file.truncate file.pos
         end
         # Initialized.
@@ -375,7 +368,7 @@ private
             file.flock(File::LOCK_EX)
             @@mac_addr, @@mac_hex, @@sequence, @@state_file = mac_addr, mac_hex, sequence, state_file
             file.pos = 0
-            YAML::dump state(true), file
+            dump file, true
             file.truncate file.pos
           end
           # Initialized.
@@ -392,13 +385,22 @@ private
       end
     end
 
+    def self.dump(file, plus_one)
+      # Gets around YAML weirdness, like ont storing the MAC address as a string.
+      if @@sequence && @@mac_addr
+        file.puts "mac_addr: \"#{@@mac_addr}\""
+        file.puts "sequence: \"0x%04x\"" % ((plus_one ? @@sequence + 1 : @@sequence) & 0xFFFF)
+        file.puts "last_clock: \"0x%x\"" % (@@last_clock || (Time.new.to_f * CLOCK_MULTIPLIER).to_i)
+      end
+    end
+
 end
 
 
 if defined?(ActiveRecord)
   class ActiveRecord::Base
 
-      def self.uuid_primary_key
+      def self.uuid_primary_key()
         before_create { |record| record.id = UUID.new unless record.id }
       end
 
