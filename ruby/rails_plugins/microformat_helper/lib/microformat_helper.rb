@@ -47,9 +47,7 @@ module MicroformatHelper
       else
         options = {:class=>classes}
       end
-      Binding.of_caller do |binding|
-        concat content_tag("ol", capture(&block), options), binding
-      end
+      concat(content_tag("ol", capture(&block), options), block.binding)
     end
 
 
@@ -67,9 +65,7 @@ module MicroformatHelper
       else
         options = {:id=>id, :class=>classes}
       end
-      Binding.of_caller do |binding|
-        concat content_tag("li", capture(&block), options), binding
-      end
+      concat(content_tag("li", capture(&block), options), block.binding)
     end
 
     # :call-seq:
