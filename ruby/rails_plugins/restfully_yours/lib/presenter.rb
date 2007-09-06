@@ -1,3 +1,9 @@
+# restfully_yours
+#
+# Copyright (c) 2007 Assaf Arkin, http://labnotes.org
+# In the public domain.
+
+
 # A presenter is an object that renders another object, typically a model.  It handles presentation logic
 # that you want to keep outside the model, and has access to the controller methods you can use to create
 # URLs, format content and so forth.  Where helpers complement controllers, presenters complement models.

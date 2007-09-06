@@ -1,3 +1,9 @@
+# restfully_yours
+#
+# Copyright (c) 2007 Assaf Arkin, http://labnotes.org
+# In the public domain.
+
+
 # Allows client-side caching and conditional updates using the Last-Modified and ETag headers.
 #
 # A conditional GET uses the If-Modified-Since/If-None-Match headers to determine whether the entity

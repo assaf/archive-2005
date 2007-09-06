@@ -1,3 +1,8 @@
+= restfully_yours
+
+A Rails plugin for adding much needed REST features, especially for remote API development.
+
+
 == If Modified
 
 Allows client-side caching and conditional updates using the Last-Modified and ETag headers.
@@ -65,3 +70,10 @@ Calling methods not defined in the presenter will pass the call to the model or 
 also access the controller and object directly from the presenter.
 
 Presenters go in the app/presenters directory, so this example would reside in app/presenters/item_presenter.rb.
+
+
+== License
+
+Copyright (c) 2007 Assaf Arkin, http://labnotes.org
+
+In the public domain.
