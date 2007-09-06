@@ -109,17 +109,14 @@ module IfModified
       last_modified = last_modified_from(args)
       etag = etag_from(args)
       response.headers['Last-Modified'] ||= last_modified.httpdate if last_modified
-      response.headers['ETag'] = etag ? %{"#{etag}"} : ''
-      response.headers['Vary'] ||= 'Accept'
-      caching = response.headers['Cache-Control'].split(/,\s*/)
+      response.headers['ETag'] ||= etag ? %{"#{etag}"} : ''
+      caching = (response.headers['Cache-Control'] || '').split(/,\s*/)
       caching.delete "no-cache"
       caching << "private" unless caching.include?("public")
       caching << "max-age=0" unless caching.any? { |control| control =~ /^max-age=/ }
       caching << "must-revalidate"
       response.headers['Cache-Control'] = caching.uniq.join(', ')
     end
-
-  private
 
     # Decides whether to execute a conditional request based on list of arguments and relevant HTTP headers.
     # Returns true if the request MUST execute, false otherwise.
@@ -152,6 +149,8 @@ module IfModified
       return (!match.empty? && match.include?(etag)) || (!none_match.empty? && !none_match.include?(etag))
     end
 
+  private
+
     # Returns last modified from arguments. Determines motification by calling update_on or update_at on each
     # of these objects and taking the last value.
     def last_modified_from(args)
@@ -163,7 +162,8 @@ module IfModified
     # into a hash.  Returns nil if cannot generate etag from all the arguments.
     def etag_from(args)
       return nil unless args.all? { |obj| obj.respond_to?(:etag) }
-      Digest::MD5.hexdigest args.map { |obj| obj.etag }.join("; ")
+      values = [request.format.to_s] + args.map { |obj| obj.etag }
+      Digest::MD5.hexdigest values.join("; ")
     end
 
   end

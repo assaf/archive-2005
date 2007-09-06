@@ -129,7 +129,6 @@ class IfModifiedTest < Test::Unit::TestCase
     when 200, 201
       assert @response.headers['Last-Modified'] =~ /[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT/ || @response.headers['Last-Modified'].blank?
       assert @response.headers['ETag'] =~ /[0-9a-f]{32}/ || @response.headers['ETag'].blank?
-      assert @response.headers['Vary']['Accept']
       caching = @response.headers['Cache-Control'].split(/,\s*/)
       assert !caching.include?('no-cache')
       assert caching.include?('must-revalidate')
@@ -140,13 +139,11 @@ class IfModifiedTest < Test::Unit::TestCase
       assert @response.headers['ETag'] =~ /[0-9a-f]{32}/ || @response.headers['ETag'].blank?
       # Same as before
       assert_nil @response.headers['Last-Modified']
-      assert_nil @response.headers['Vary']
       assert_nil @response.headers['Cache-Control']
     else
       # None of these is relevant.
       assert_nil @response.headers['Last-Modified']
       assert_nil @response.headers['ETag']
-      assert_nil @response.headers['Vary']
       assert @response.headers['Cache-Control']['no-cache']
     end
   end
@@ -504,6 +501,31 @@ class IfModifiedTest < Test::Unit::TestCase
     post :redirect
     assert_response 302
     assert_cache_control
+  end
+
+  def test_two_representations_do_not_conflict
+    request = lambda do |format|
+      @response = ActionController::TestResponse.new
+      @request.format = format
+      get :show
+    end
+
+    request.call Mime::XML
+    xml = @response.headers['ETag']
+    request.call Mime::JS
+    js = @response.headers['ETag']
+
+    @request.env['HTTP_IF_NONE_MATCH'] = xml
+    request.call Mime::XML
+    assert_response 304
+    request.call Mime::JS
+    assert_response 200
+    
+    @request.env['HTTP_IF_NONE_MATCH'] = js
+    request.call Mime::XML
+    assert_response 200
+    request.call Mime::JS
+    assert_response 304
   end
 
 end
