@@ -4,10 +4,11 @@
 # In the public domain.
 
 
+require 'be_ok'
+
 require 'if_modified'
 ActionController::Base.send :include, IfModified::ActionControllerMethods
 ActiveRecord::Base.send :include, IfModified::ActiveRecordMethods
-
 
 require 'presenter'
 # That way we're able to use everything in app/presenters.

@@ -3,7 +3,6 @@
 # Copyright (c) 2007 Assaf Arkin, http://labnotes.org
 # In the public domain.
 
-
 require File.dirname(__FILE__) + '/../../../rails/actionpack/test/abstract_unit'
 require File.dirname(__FILE__) + '/../../../rails/actionpack/test/active_record_unit'
 $:.unshift File.expand_path('../lib', File.dirname(__FILE__))
@@ -90,7 +89,7 @@ class IfModifiedController < ActionController::Base
   end
 
   def create()
-    render :status=>201, :text=>rand
+    render :status=>:created, :text=>rand
     modified IfModifiedTopic.find_or_create('model')
   end
 
@@ -125,7 +124,7 @@ class IfModifiedTest < Test::Unit::TestCase
   end
 
   def assert_cache_control()
-    case @response.code.to_i
+    case @response.response_code
     when 200, 201
       assert @response.headers['Last-Modified'] =~ /[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT/ || @response.headers['Last-Modified'].blank?
       assert @response.headers['ETag'] =~ /[0-9a-f]{32}/ || @response.headers['ETag'].blank?
@@ -180,326 +179,326 @@ class IfModifiedTest < Test::Unit::TestCase
 
   def test_if_modified
     get :show
-    assert_response 200
+    assert_response :ok
     get :show
-    assert_response 200
+    assert_response :ok
     assert_cache_control
   end
 
   def test_if_modified_since_no_update
     get :show
-    assert_response 200
+    assert_response :ok
     get_with_headers :show, :etags=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_since_fast_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! false
     get_with_headers :show, :etags=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_since_slow_update
     get :show
-    assert_response 200
+    assert_response :ok
     get_with_headers :show, :etags=>false
     @model.update! true
     get_with_headers :show, :etags=>false
-    assert_response 200
+    assert_response :ok
     get_with_headers :show, :etags=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_none_match_no_update
     get :show
-    assert_response 200
+    assert_response :ok
     get_with_headers :show, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
     get_with_headers :show, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_none_match_fast_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! false
     get_with_headers :show, :last_modified=>false
-    assert_response 200
+    assert_response :ok
     get_with_headers :show, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_none_match_slow_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! true
     get_with_headers :show, :last_modified=>false
-    assert_response 200
+    assert_response :ok
     get_with_headers :show, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_since_and_none_match_no_update
     get :show
-    assert_response 200
+    assert_response :ok
     get_with_headers :show
-    assert_response 304
+    assert_response :not_modified
     get_with_headers :show
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_since_and_none_match_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! false
     get_with_headers :show
-    assert_response 200
+    assert_response :ok
     get_with_headers :show
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_empty
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_none_match_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_empty, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
     get_with_headers :show_empty, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_since_and_none_match_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_empty
-    assert_response 304
+    assert_response :not_modified
     get_with_headers :show_empty
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_array
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_modified_since_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_array, :etags=>false
-    assert_response 304
+    assert_response :not_modified
     get :show_array
     @model.update! true
     get_with_headers :show_array, :etags=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_none_match_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_array, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
     get_with_headers :show_array, :last_modified=>false
-    assert_response 304
+    assert_response :not_modified
     @model.update! false
     get_with_headers :show_array, :last_modified=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_modified_since_and_none_match_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     get_with_headers :show_array
-    assert_response 304
+    assert_response :not_modified
     get_with_headers :show_array
-    assert_response 304
+    assert_response :not_modified
   end
 
   def test_if_unmodified
     put :update
-    assert_response 200
+    assert_response :ok
     put :update
-    assert_response 200
+    assert_response :ok
     assert_cache_control
   end
 
   def test_if_unmodified_since_no_update
     get :show
-    assert_response 200
+    assert_response :ok
     put_with_headers :update, :etags=>false
-    assert_response 200
+    assert_response :ok
     put_with_headers :update, :etags=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_since_fast_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! false
     put_with_headers :update, :etags=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_since_slow_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! true
     put_with_headers :update, :etags=>false
-    assert_response 412
+    assert_response :precondition_failed
   end
 
   def test_if_match_no_update
     get :show
-    assert_response 200
+    assert_response :ok
     put_with_headers :update, :last_modified=>false
-    assert_response 200
+    assert_response :ok
     put_with_headers :update, :last_modified=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_match_fast_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! false
     put_with_headers :update, :last_modified=>false
-    assert_response 412
+    assert_response :precondition_failed
   end
 
   def test_if_match_slow_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! true
     put_with_headers :update, :last_modified=>false
-    assert_response 412
+    assert_response :precondition_failed
   end
 
   def test_if_unmodified_since_and_match_no_update
     get :show
-    assert_response 200
+    assert_response :ok
     put_with_headers :update
-    assert_response 200
+    assert_response :ok
     put_with_headers :update
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_since_and_match_update
     get :show
-    assert_response 200
+    assert_response :ok
     @model.update! false
     put_with_headers :update
-    assert_response 412
+    assert_response :precondition_failed
   end
 
   def test_if_unmodified_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_since_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty, :etags=>false
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty, :etags=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if__match_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty, :last_modified=>false
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty, :last_modified=>false
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_since_and_match_no_data
     get :show_empty
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_empty
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_since_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array, :etags=>false
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array, :etags=>false
-    assert_response 200
+    assert_response :ok
     @model.update! 1.second
     put_with_headers :update_array, :etags=>false
-    assert_response 412
+    assert_response :precondition_failed
   end
 
   def test_if_match_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array, :last_modified=>false
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array, :last_modified=>false
-    assert_response 200
+    assert_response :ok
     @model.update! 0.second
     put_with_headers :update_array, :last_modified=>false
-    assert_response 412
+    assert_response :precondition_failed
   end
 
   def test_if_unmodified_since_and_match_array
     get :show_array
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array
-    assert_response 200
+    assert_response :ok
     put_with_headers :update_array
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_modified_naked
     get :show_naked
-    assert_response 200
+    assert_response :ok
     assert @response.headers['Last-Modified'].blank?
     assert @response.headers['ETag'][/("?)(.*)\1/, 2].blank?
     get_with_headers :show_naked
-    assert_response 200
+    assert_response :ok
   end
 
   def test_if_unmodified_naked
     get :show_naked
-    assert_response 200
+    assert_response :ok
     assert @response.headers['Last-Modified'].blank?
     assert @response.headers['ETag'][/("?)(.*)\1/, 2].blank?
     put_with_headers :update_naked
-    assert_response 200
+    assert_response :ok
   end
 
   def test_201_includes_etag_and_last_modified
     post :create
-    assert_response 201
+    assert_response :created
     assert_cache_control
   end
 
   def test_302_includes_etag_and_last_modified
     post :redirect
-    assert_response 302
+    assert_response :found
     assert_cache_control
   end
 
@@ -517,15 +516,15 @@ class IfModifiedTest < Test::Unit::TestCase
 
     @request.env['HTTP_IF_NONE_MATCH'] = xml
     request.call Mime::XML
-    assert_response 304
+    assert_response :not_modified
     request.call Mime::JS
-    assert_response 200
+    assert_response :ok
     
     @request.env['HTTP_IF_NONE_MATCH'] = js
     request.call Mime::XML
-    assert_response 200
+    assert_response :ok
     request.call Mime::JS
-    assert_response 304
+    assert_response :not_modified
   end
 
 end
