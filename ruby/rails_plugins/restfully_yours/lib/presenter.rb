@@ -43,8 +43,8 @@ class Presenter # < Builder::BlankSlate
     # Returns a new presenter.  The presenter class is based on the object class, for example,
     # given the model Item and object item, <code>presenting(item)</code> will use the presenter
     # ItemPresenter.
-    def presenting(object)
-      Class.const_get("#{object.class.name}Presenter").new(self, object)
+    def presenting(object, options = nil)
+      Class.const_get("#{object.class.name}Presenter").new(self, object, options)
     rescue NameError
       raise "Cannot present object of type #{object.class.name}, no #{object.class.name}Presenter."
     end
@@ -61,24 +61,25 @@ class Presenter # < Builder::BlankSlate
   # for example to url_for methods.
   attr_reader :object
 
+  attr_reader :options
+
   # Creates a new presenter using the given controller and object.
-  def initialize(controller, object) #:nodoc:
+  def initialize(controller, object, options = nil) #:nodoc:
     @controller, @object = controller, object
+    @options = options || {}
   end 
 
   # Renders the object depending on the request format.  Uses to_html, to_xml or to_json.
   # Passes options to tne controller render's method, e.g. :status or :layout.
-  def render(options = {})
-    controller.respond_to do |format|
-      format.html { controller.send :render, options.merge(:text=>to_html) }
-      format.xml  { controller.send :render, options.merge(:xml=>to_xml) }
-      format.js   { controller.send :render, options.merge(:text=>to_json) }
-    end
+  def render(render_options = {})
+    format = controller.request.parameters[:format]
+    output = { :text=>send("to_#{format}"), :content_type=>Mime::EXTENSION_LOOKUP[format] }
+    controller.send :render, render_options.merge(output)
   end
 
   # Renders using partial template derived from the object's class name (e.g. _item.rhtml for Item).
   def to_html()
-    controller.send(:render_to_string, :partial=>object.class.name.underscore, :object=>object)
+    controller.send(:render_to_string, :partial=>object.class.name.underscore, :object=>object, :locals=>{:options=>options})
   end
 
   # Converts to Hash (see #to_hash) and from there to XML using the object name as root element.
@@ -86,18 +87,22 @@ class Presenter # < Builder::BlankSlate
   #    render :json=>presenting(item).to_xml
   # It will use the root element "item" for the Item object.
   def to_xml()
-    to_hash.to_xml(:root=>object.name.dasherize)
+    to_hash(options || {}).to_xml(:root=>object.class.name.underscore.dasherize)
   end
 
   # Converts to Hash (see #to_hash) and from there to JSON.  For example, for an ActiveRecord
   # you could:
   #    render :json=>presenting(item).to_json
   def to_json()
-    to_hash.to_json
+    to_hash(options || {}).to_json
   end
 
   def respond_to?(sym) #:nodoc:
     super || object.respond_to?(sym)
+  end
+
+  def id()
+    object.id
   end
 
 protected
@@ -113,7 +118,7 @@ protected
 
   # Returns object as Hash.  Calls the attribute method on ActiveRecord objects, to_hash
   # on objects that respond to this method, or returns an empty hash.
-  def to_hash()
+  def to_hash(options)
     object.respond_to?(:attributes) ? object.attributes :
       object.respond_to?(:to_hash) ? object.to_hash : {}
   end

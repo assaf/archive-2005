@@ -16,9 +16,9 @@ end
 class IfModifiedTopic < ActiveRecord::Base
 
   class << self
-    def find_or_create(name)
+    def find_or_create(title)
       @models ||= {}
-      @models[name] ||= IfModifiedTopic.create(name)
+      @models[title] ||= IfModifiedTopic.create(title)
     end
   end
 
@@ -33,6 +33,7 @@ class IfModifiedTopic < ActiveRecord::Base
   end
 
   def record_timestamps()
+    # Either that or sleep for a second during update!(true)
     false
   end
 
@@ -47,16 +48,16 @@ end
 
 class IfModifiedController < ActionController::Base
   def show()
-    obj = IfModifiedTopic.find_or_create('model')
-    if_modified obj do
+    topic = IfModifiedTopic.find_or_create('model')
+    if_modified topic do
       render :text=>rand # Prevent Rails ETag
     end
   end
 
   def update()
-    obj = IfModifiedTopic.find_or_create('model')
-    if_unmodified obj do
-      obj.update!
+    topic = IfModifiedTopic.find_or_create('model')
+    if_unmodified topic do
+      topic.update!
       render :text=>rand # Prevent Rails ETag
     end
   end
@@ -74,16 +75,16 @@ class IfModifiedController < ActionController::Base
   end
 
   def show_array()
-    objs = ['model', 'model2'].map { |name| IfModifiedTopic.find_or_create(name) }
-    if_modified objs do
+    topics = ['model', 'model2'].map { |name| IfModifiedTopic.find_or_create(name) }
+    if_modified topics do
       render :text=>rand # Prevent Rails ETag
     end
   end
 
   def update_array()
-    objs = ['model', 'model2'].map { |name| IfModifiedTopic.find_or_create(name) }
-    if_unmodified objs do
-      objs.first.update!
+    topics = ['model', 'model2'].map { |name| IfModifiedTopic.find_or_create(name) }
+    if_unmodified topics do
+      topics.first.update!
       render :text=>rand # Prevent Rails ETag
     end
   end

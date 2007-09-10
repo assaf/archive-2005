@@ -1,0 +1,5 @@
+<h1 class='title' <%= "id=#{presenter_topic.id}" if options[:public] %>>
+  <a href='<%= url_for(:id=>presenter_topic.id) %>'><%= presenter_topic.title %></a>
+</h1>
+<div class='content'><%= presenter_topic.content %></div>
+<p>Created at <abbr class='created-at' title='<%= presenter_topic.created_at.iso8601 %>'><%= presenter_topic.created_at %></abbr></p>
