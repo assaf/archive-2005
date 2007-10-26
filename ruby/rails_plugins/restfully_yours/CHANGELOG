@@ -1,3 +1,6 @@
+10/25/2007: Presenters now support arrays and you can specify the object type by passing symbol/class as first argument.
+10/25/2007: Presenters can be used without a controller.
+10/25/2007: Added see_other method to ActionController.
 9/06/2007:  Added ok?, missing?, unauthorized? and other status codes on reponse to support RSpec be_ok, be_missing, be_unauthorized, etc.
 9/05/2007:  Added response format distinction in ETag.
 9/05/2007:  License and public announcement.

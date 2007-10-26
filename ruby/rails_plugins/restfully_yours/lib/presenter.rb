@@ -36,73 +36,105 @@
 # Presenters go in the app/presenters directory, so this example would reside in app/presenters/item_presenter.rb.
 class Presenter # < Builder::BlankSlate
 
-  module PresentingMethods
-
-  protected
+  module PresentingMethod
 
     # Returns a new presenter.  The presenter class is based on the object class, for example,
     # given the model Item and object item, <code>presenting(item)</code> will use the presenter
     # ItemPresenter.
-    def presenting(object, options = nil)
-      Class.const_get("#{object.class.name}Presenter").new(self, object, options)
+    def presenting(*args)
+      case args.first
+      when Class
+        name = args.shift.to_s
+        object = args.shift
+      when Symbol
+        name = args.shift.to_s.capitalize
+        object = args.shift
+      when Array
+        object = args.shift
+        first = object.first
+        name = first.class.name if object.all? { |e| e.is_a?(first.class) && Hash != first.class }
+        raise ArgumentError, 'Call presenting with an array of objects of same type, or specify type as first argument' unless name
+      else
+        object = args.shift
+        name = object.class.name
+      end
+
+      controller = self if ActionController::Base === self
+      Class.const_get("#{name}Presenter").new(controller, object, :name=>name)
     rescue NameError
-      raise "Cannot present object of type #{object.class.name}, no #{object.class.name}Presenter."
+      raise "Cannot present object/array of type #{name}, no #{name}Presenter."
     end
 
   end
 
+  self.extend PresentingMethod
+
   include ActionController::UrlWriter
+  default_url_options[:host] = 'test.host' if RAILS_ENV == 'test'
+
   extend Forwardable
 
   # Returns the controller.  Useful for calling methods on the controller directly.
   attr_reader :controller
 
-  # Returns the object.  Useful for calling methods on the object directly, or passing the object,
+  # Returns the value.  Useful for calling methods on the value directly, or passing the value,
   # for example to url_for methods.
-  attr_reader :object
+  attr_reader :value
 
   attr_reader :options
 
-  # Creates a new presenter using the given controller and object.
-  def initialize(controller, object, options = nil) #:nodoc:
-    @controller, @object = controller, object
+  # Creates a new presenter using the given controller and value.
+  def initialize(controller, value, options = nil) #:nodoc:
+    @controller, @value = controller, value
     @options = options || {}
   end 
 
-  # Renders the object depending on the request format.  Uses to_html, to_xml or to_json.
+  def name
+    @options[:name]
+  end
+
+  # Renders the value depending on the request format.  Uses to_html, to_xml or to_json.
   # Passes options to tne controller render's method, e.g. :status or :layout.
   def render(render_options = {})
-    format = controller.request.parameters[:format]
-    output = { :text=>send("to_#{format}"), :content_type=>Mime::EXTENSION_LOOKUP[format] }
+    format = controller.request.format
+    output = { :text=>send("to_#{format.to_sym}"), :content_type=>format }
     controller.send :render, render_options.merge(output)
   end
 
-  # Renders using partial template derived from the object's class name (e.g. _item.rhtml for Item).
-  def to_html()
-    controller.send(:render_to_string, :partial=>object.class.name.underscore, :object=>object, :locals=>{:options=>options})
+  # Renders using partial template derived from the value's class name (e.g. _item.rhtml for Item).
+  def to_html(options = {})
+    if Array === @value
+      controller.send(:render_to_string, :partial=>name.underscore, :collection=>@value, :locals=>{:options=>options})
+    else
+      controller.send(:render_to_string, :partial=>name.underscore, :object=>@value, :locals=>{:options=>options})
+    end
   end
 
-  # Converts to Hash (see #to_hash) and from there to XML using the object name as root element.
+  # Converts to Hash (see #to_hash) and from there to XML using the value name as root element.
   # For example, for an ActiveRecord you could:
   #    render :json=>presenting(item).to_xml
   # It will use the root element "item" for the Item object.
-  def to_xml()
-    to_hash(options || {}).to_xml(:root=>object.class.name.underscore.dasherize)
+  def to_xml(options = {})
+    if Array === @value
+      @value.map { |obj| to_hash(obj) }.to_xml(options.merge(:root=>name.pluralize.underscore))
+    else
+      to_hash(@value).to_xml(options.merge(:root=>name.underscore))
+    end
   end
 
   # Converts to Hash (see #to_hash) and from there to JSON.  For example, for an ActiveRecord
   # you could:
   #    render :json=>presenting(item).to_json
-  def to_json()
-    to_hash(options || {}).to_json
+  def to_json(options = {})
+    if Array === @value
+      @value.map { |obj| to_hash(obj) }.to_json(options)
+    else
+      to_hash(@value).to_json(options)
+    end
   end
 
-  def respond_to?(sym) #:nodoc:
-    super || object.respond_to?(sym)
-  end
-
-  def id()
-    object.id
+  def array?
+    Array === @value
   end
 
 protected
@@ -112,21 +144,28 @@ protected
     CGI::escapeHTML(text)
   end
 
-  def url_for(*args)
-    controller.url_for(*args)
+  def url_for_with_controller(*args)
+    if controller
+      controller.url_for(*args)
+    else
+      url_for_without_controller(*args)
+    end
   end
+  alias_method_chain :url_for, :controller
 
   # Returns object as Hash.  Calls the attribute method on ActiveRecord objects, to_hash
   # on objects that respond to this method, or returns an empty hash.
-  def to_hash(options)
+  def to_hash(object)
     object.respond_to?(:attributes) ? object.attributes :
       object.respond_to?(:to_hash) ? object.to_hash : {}
   end
 
-private
+end
 
-  def method_missing(sym, *args, &block)
-    object.send(sym, *args, &block)
-  end
 
+# That way we're able to use everything in app/presenters.
+Dependencies.load_paths += %W( #{RAILS_ROOT}/app/presenters ) if defined?(RAILS_ROOT)
+class ActionController::Base
+protected
+  include Presenter::PresentingMethod
 end
