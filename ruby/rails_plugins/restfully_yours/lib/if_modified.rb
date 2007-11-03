@@ -91,6 +91,20 @@ module IfModified
       end
     end
 
+    # Sets the ETag header.
+    def etag=(etag)
+      response.headers['ETag'] = etag ? %{"#{etag}"} : ''
+    end
+
+    # Sets the Last-Modified header.
+    def last_modified=(time)
+      if time
+        response.headers['Last-Modified'] = time.httpdate
+      else
+        response.headers.delete('Last-Modified')
+      end
+    end
+
     # Sends modification headers for later use with if_modified.  You can call this method with any number
     # of arguments, make sure to use the same arguments in if_modified (e.g. a database record or ordered
     # array of records).
@@ -123,17 +137,25 @@ module IfModified
     #
     # Matches the headers If-Modified-Since and If-Unmodified-Since against the last modification of the arguments.
     # Matches the headers If-Match and If-None-Match agains the ETag calculated from the arguments.
+    #
+    # Arguments can be a hash with the values :etag and :last_modified, or an array of objects for calculating
+    # the ETag and Last-Modified values.
     def conditional(args)
-      args = args.flatten.compact
+      if Hash === args
+        etag, last_modified = args.values_at(:etag, :last_modified)
+      else
+        objects = Array(args).flatten.compact
+      end
+
       modified_since = Time.parse(request.headers['HTTP_IF_MODIFIED_SINCE'].to_s) rescue nil if
         request.headers['HTTP_IF_MODIFIED_SINCE']
       unmodified_since = Time.parse(request.headers['HTTP_IF_UNMODIFIED_SINCE'].to_s) rescue nil unless
         request.headers['HTTP_IF_UNMODIFIED_SINCE'].blank?
-      match = request.headers['HTTP_IF_MATCH'].to_s.split(/,\s*/).map { |etag| etag[/^("?)(.*)\1$/, 2] }.reject(&:empty?)
-      none_match = request.headers['HTTP_IF_NONE_MATCH'].to_s.split(/,\s*/).map { |etag| etag[/^("?)(.*)\1/, 2] }.reject(&:empty?)
+      match = request.headers['HTTP_IF_MATCH'].to_s.split(/,\s*/).map { |tag| tag[/^("?)(.*)\1$/, 2] }.reject(&:empty?)
+      none_match = request.headers['HTTP_IF_NONE_MATCH'].to_s.split(/,\s*/).map { |tag| tag[/^("?)(.*)\1/, 2] }.reject(&:empty?)
 
       if modified_since || unmodified_since
-        last_modified = last_modified_from(args)
+        last_modified ||= last_modified_from(objects || [])
         # Perform if modified-since/unmodified-since conditional fails.
         return true if (modified_since && last_modified.to_i > modified_since.to_i) ||
           (unmodified_since && last_modified.to_i < unmodified_since.to_i)
@@ -142,10 +164,15 @@ module IfModified
           (unmodified_since && unmodified_since.to_i == last_modified.to_i) if match.empty? && none_match.empty?
       end
       # Conditional fails if '*' matches anything or does not match nothing.
-      return true if (none_match.delete('*') && !args.empty?) || (match.delete('*') && args.empty?)
+      if objects
+        return true if (none_match.delete('*') && !objects.empty?) || (match.delete('*') && objects.empty?)
+      else
+        return !etag if none_match.delete('*')
+        return !!tag if match.delete('*')
+      end
       # Always perform without conditional.
       return true if match.empty? && none_match.empty?
-      etag = etag_from(args)
+      etag ||= etag_from(objects)
       return (!match.empty? && match.include?(etag)) || (!none_match.empty? && !none_match.include?(etag))
     end
 
@@ -187,3 +214,6 @@ module IfModified
   end
 
 end
+
+ActionController::Base.send :include, IfModified::ActionControllerMethods
+ActiveRecord::Base.send :include, IfModified::ActiveRecordMethods

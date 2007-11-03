@@ -1,3 +1,6 @@
+10/30/2007: Added JSON request parsing.
+10/30/2007: Experimental created and see_other methods.
+10/27/2007: Presenter to_html now uses template unless instructed to use partial.
 10/25/2007: Presenters now support arrays and you can specify the object type by passing symbol/class as first argument.
 10/25/2007: Presenters can be used without a controller.
 10/25/2007: Added see_other method to ActionController.

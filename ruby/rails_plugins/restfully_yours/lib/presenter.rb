@@ -70,22 +70,22 @@ class Presenter # < Builder::BlankSlate
   self.extend PresentingMethod
 
   include ActionController::UrlWriter
-  default_url_options[:host] = 'test.host' if RAILS_ENV == 'test'
+  default_url_options[:host] = 'test.host' if defined?(RAILS_ENV) && RAILS_ENV == 'test'
 
   extend Forwardable
 
   # Returns the controller.  Useful for calling methods on the controller directly.
   attr_reader :controller
 
-  # Returns the value.  Useful for calling methods on the value directly, or passing the value,
-  # for example to url_for methods.
-  attr_reader :value
+  # Returns the object.  Useful for calling methods on the object directly, or passing the object,
+  # for example to url_for methods.  The object may be an array.
+  attr_reader :object
 
   attr_reader :options
 
-  # Creates a new presenter using the given controller and value.
-  def initialize(controller, value, options = nil) #:nodoc:
-    @controller, @value = controller, value
+  # Creates a new presenter using the given controller and object.
+  def initialize(controller, object, options = nil) #:nodoc:
+    @controller, @object = controller, object
     @options = options || {}
   end 
 
@@ -93,7 +93,7 @@ class Presenter # < Builder::BlankSlate
     @options[:name]
   end
 
-  # Renders the value depending on the request format.  Uses to_html, to_xml or to_json.
+  # Renders the object depending on the request format.  Uses to_html, to_xml or to_json.
   # Passes options to tne controller render's method, e.g. :status or :layout.
   def render(render_options = {})
     format = controller.request.format
@@ -101,24 +101,31 @@ class Presenter # < Builder::BlankSlate
     controller.send :render, render_options.merge(output)
   end
 
-  # Renders using partial template derived from the value's class name (e.g. _item.rhtml for Item).
-  def to_html(options = {})
-    if Array === @value
-      controller.send(:render_to_string, :partial=>name.underscore, :collection=>@value, :locals=>{:options=>options})
+  # Renders using partial template derived from the object's class name (e.g. _item.rhtml for Item).
+  def to_html(options = nil)
+    options = options ? options.dup : {}
+    if options[:partial]
+      options[:partial] = name.underscore if options[:partial] == true
     else
-      controller.send(:render_to_string, :partial=>name.underscore, :object=>@value, :locals=>{:options=>options})
+      options[:template] ||= name.underscore
     end
+    if Array === @object
+      options.update(:collection=>object)
+    else
+      options.update(:object=>object)
+    end
+    controller.send(:render_to_string, options)
   end
 
-  # Converts to Hash (see #to_hash) and from there to XML using the value name as root element.
+  # Converts to Hash (see #to_hash) and from there to XML using the object name as root element.
   # For example, for an ActiveRecord you could:
   #    render :json=>presenting(item).to_xml
   # It will use the root element "item" for the Item object.
   def to_xml(options = {})
-    if Array === @value
-      @value.map { |obj| to_hash(obj) }.to_xml(options.merge(:root=>name.pluralize.underscore))
+    if Array === @object
+      @object.map { |obj| to_hash(obj) }.to_xml(options.merge(:root=>name.pluralize.underscore))
     else
-      to_hash(@value).to_xml(options.merge(:root=>name.underscore))
+      to_hash(@object).to_xml(options.merge(:root=>name.underscore))
     end
   end
 
@@ -126,15 +133,15 @@ class Presenter # < Builder::BlankSlate
   # you could:
   #    render :json=>presenting(item).to_json
   def to_json(options = {})
-    if Array === @value
-      @value.map { |obj| to_hash(obj) }.to_json(options)
+    if Array === @object
+      @object.map { |obj| to_hash(obj) }.to_json(options)
     else
-      to_hash(@value).to_json(options)
+      to_hash(@object).to_json(options)
     end
   end
 
   def array?
-    Array === @value
+    Array === @object
   end
 
 protected

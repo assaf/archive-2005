@@ -110,6 +110,24 @@ class IfModifiedController < ActionController::Base
     end
   end
 
+  def etag
+    self.etag = 'magical'
+    render :nothing=>true
+  end
+
+  def last_modified
+    self.last_modified = Time.now
+    render :nothing=>true
+  end
+
+  def on_condition
+    if conditional(:etag=>'magical', :last_modified=>Time.now - 1.minute)
+      render :nothing=>true
+    else
+      head :not_modified
+    end
+  end
+
   def rescue_action(e) raise end
 end
 
@@ -508,24 +526,71 @@ class IfModifiedTest < Test::Unit::TestCase
       @response = ActionController::TestResponse.new
       @request.format = format
       get :show
+      @request  = ActionController::TestRequest.new
     end
 
     request.call Mime::XML
     xml = @response.headers['ETag']
-    request.call Mime::JS
-    js = @response.headers['ETag']
+    request.call Mime::JSON
+    json = @response.headers['ETag']
 
     @request.env['HTTP_IF_NONE_MATCH'] = xml
     request.call Mime::XML
     assert_response :not_modified
-    request.call Mime::JS
+    @request.env['HTTP_IF_NONE_MATCH'] = xml
+    request.call Mime::JSON
     assert_response :ok
     
-    @request.env['HTTP_IF_NONE_MATCH'] = js
+    @request.env['HTTP_IF_NONE_MATCH'] = json
     request.call Mime::XML
     assert_response :ok
-    request.call Mime::JS
+    @request.env['HTTP_IF_NONE_MATCH'] = json
+    request.call Mime::JSON
     assert_response :not_modified
+  end
+
+  def test_etag_setter
+    get :etag
+    assert @response.headers['ETag'] == %{"magical"}
+  end
+
+  def test_last_modified_setter
+    get :last_modified
+    assert @response.headers['Last-Modified'] =~ /[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT/
+  end
+
+  def test_conditional_etag
+    get :on_condition
+    assert_response :ok
+
+    @request.env['HTTP_IF_NONE_MATCH'] = 'magical'
+    get :on_condition
+    assert_response :not_modified
+
+    @request.env['HTTP_IF_NONE_MATCH'] = 'foo'
+    get :on_condition
+    assert_response :ok
+
+    @request.env['HTTP_IF_NONE_MATCH'] = '*'
+    get :on_condition
+    assert_response :not_modified
+
+    @request.env['HTTP_IF_MATCH'] = '*'
+    get :on_condition
+    assert_response :not_modified
+  end
+
+  def test_conditional_last_modified
+    get :on_condition
+    assert_response :ok
+
+    @request.env['HTTP_IF_UNMODIFIED_SINCE'] = Time.now - 10.minute
+    get :on_condition
+    assert_response :not_modified
+
+    @request.env['HTTP_IF_UNMODIFIED_SINCE'] = Time.now 
+    get :on_condition
+    assert_response :ok
   end
 
 end

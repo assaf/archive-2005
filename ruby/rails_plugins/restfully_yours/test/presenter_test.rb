@@ -24,9 +24,8 @@ end
 
 
 class PresenterTopicPresenter < Presenter
-  def to_hash(options)
-    hash = options[:public] ? super : super.except("id")
-    hash.merge("url"=>url_for(:id=>id))
+  def to_hash(object)
+    super.update("url"=>url_for(object))
   end
 end
 
@@ -39,11 +38,6 @@ class PresenterTestController < ActionController::Base
   def show()
     topic = PresenterTopic.find(params[:id])
     presenting(topic).render
-  end
-
-  def using_options()
-    topic = PresenterTopic.find(params[:id])
-    presenting(topic, :public=>true).render
   end
 end
 
@@ -67,20 +61,6 @@ class PresenterTest < Test::Unit::TestCase
     assert @model == @presenter.object
   end
 
-  def test_respond_to_model_methods
-    assert @presenter.respond_to?(:content)
-    assert !@presenter.respond_to?(:context)
-  end
-
-  def test_forward_to_model_methods
-    assert_equal @model.content, @presenter.content
-    assert_equal @model.created_at, @presenter.created_at
-  end
-
-  def test_presenter_id
-    assert_equal @model.id, @presenter.id
-  end
-    
   def test_presenter_h
     assert_equal '&lt;bracket&gt;', @presenter.send(:h, '<bracket>')
   end
@@ -103,7 +83,7 @@ class PresenterTest < Test::Unit::TestCase
     json = ActiveSupport::JSON.decode(@response.body)
     assert_equal 'presenting presenters', json['title']
     assert_nil json['content']
-    assert_match /\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2} \w{3}/, json['created_at']
+    assert_match /\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2} (-?)\d{4}/, json['created_at']
     assert_nil json['id']
     assert_equal "http://test.host/topics/show/#{@model.to_param}", json['url']
   end
