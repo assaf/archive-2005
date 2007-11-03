@@ -204,11 +204,16 @@ module IfModified
     # records have the same value for all their attributes.  For optimistic locking, calculates the ETag
     # using only the record identifier and lock_version.  Includes loaded associations for both.
     def etag()
-      unique = locking_enabled? ? ["id=#{id}", "lock_version=#{send(self.class.locking_column)}"] :
-        attributes.map { |n,v| "#{n}=#{v}" }
-      unique += self.class.reflect_on_all_associations.map { |reflect| reflect.name }.
-        map { |name| [name, Array(send(name)).map { |obj| obj.etag }.join(";")] }.flatten
-      Digest::MD5.hexdigest(unique.join(";"))
+      attrs_for_etag = (locking_enabled? ? [ :id, self.class.locking_column ] : attributes.keys).inject({}) do | attrs,name|
+        attrs.update name => send(name)
+      end
+
+      self.class.reflect_on_all_associations.map(&:name).each do |name|
+        next unless (association = send(name)).loaded?
+        attrs_for_etag.update name => Array(association).map(&:etag)
+      end
+
+      Digest::MD5.hexdigest(attrs_for_etag.to_query)
     end
 
   end
