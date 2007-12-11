@@ -1,5 +1,6 @@
-require File.dirname(__FILE__) + '/../../../rails/actionpack/test/abstract_unit'
-require File.dirname(__FILE__) + '/../../../rails/actionpack/test/active_record_unit'
+$:.unshift File.expand_path('../../../rails', File.dirname(__FILE__))
+require 'actionpack/test/abstract_unit'
+require 'activerecord/lib/activerecord'
 $:.unshift File.expand_path('../lib', File.dirname(__FILE__))
 require File.dirname(__FILE__) + '/../init'
 
@@ -14,7 +15,7 @@ class IfModifiedController < ActionController::Base
   end
 
   def update
-    instance.etag = "modified-from-#{instance.etag}" unless instance.etag.empty?
+    instance.etag = "modified-from-#{instance.etag}" unless instance.etag.blank?
     render :text=>'updated'
   end
 
@@ -38,6 +39,8 @@ class IfModifiedTest < Test::Unit::TestCase
 
   end
 
+  Entity = ActionController::IfModified::Entity
+
   def setup
     @request    = ActionController::TestRequest.new
     @response   = ActionController::TestResponse.new
@@ -57,112 +60,112 @@ class IfModifiedTest < Test::Unit::TestCase
 
   def test_conditional_with_no_headers
     # No conditions => true.
-    assert @request.conditional?({})
-    assert @request.conditional?(:last_modified=>@time)
-    assert @request.conditional?(:etag=>@etag)
-    assert @request.conditional?(:last_modified=>@time, :etag=>@etag)
+    assert Entity.new(@request, {}).conditional?
+    assert Entity.new(@request, :last_modified=>@time).conditional?
+    assert Entity.new(@request, :etag=>@etag).conditional?
+    assert Entity.new(@request, :last_modified=>@time, :etag=>@etag).conditional?
   end
 
   def test_conditional_with_unmodified_since
     # Not modified since => true.
     @request.headers['HTTP_IF_UNMODIFIED_SINCE'] = @time.httpdate
-    assert @request.conditional?(:last_modified=>@time)
+    assert Entity.new(@request, :last_modified=>@time).conditional?
     @request.headers['HTTP_IF_UNMODIFIED_SINCE'] = @time.httpdate
-    assert @request.conditional?(:last_modified=>@time - 1.second)
+    assert Entity.new(@request, :last_modified=>@time - 1.second).conditional?
     # Modified since => false
     @request.headers['HTTP_IF_UNMODIFIED_SINCE'] = @time.httpdate
-    assert !@request.conditional?(:last_modified=>@time + 1.second)
+    assert !Entity.new(@request, :last_modified=>@time + 1.second).conditional?
   end
 
   def test_conditional_with_modified_since
     # Not modified since => false
     @request.headers['HTTP_IF_MODIFIED_SINCE'] = @time.httpdate
-    assert !@request.conditional?(:last_modified=>@time)
+    assert !Entity.new(@request, :last_modified=>@time).conditional?
     @request.headers['HTTP_IF_MODIFIED_SINCE'] = @time.httpdate
-    assert !@request.conditional?(:last_modified=>@time - 1.second)
+    assert !Entity.new(@request, :last_modified=>@time - 1.second).conditional?
     # Modified since => true
     @request.headers['HTTP_IF_MODIFIED_SINCE'] = @time.httpdate
-    assert @request.conditional?(:last_modified=>@time + 1.second)
+    assert Entity.new(@request, :last_modified=>@time + 1.second).conditional?
   end
   
   def test_conditional_with_match
     # Same ETag => true
     @request.headers['HTTP_IF_MATCH'] = 'foo'
-    assert @request.conditional?(:etag=>'foo')
+    assert Entity.new(@request, :etag=>'foo').conditional?
     @request.headers['HTTP_IF_MATCH'] = '"bar", "foo"'
-    assert @request.conditional?(:etag=>'foo')
+    assert Entity.new(@request, :etag=>'foo').conditional?
     # Different ETag => false
     @request.headers['HTTP_IF_MATCH'] = 'bar'
-    assert !@request.conditional?(:etag=>'foo')
+    assert !Entity.new(@request, :etag=>'foo').conditional?
   end
 
   def test_conditional_with_match_star
     # Can't decide => true
     @request.headers['HTTP_IF_MATCH'] = '*'
-    assert @request.conditional?({})
+    assert Entity.new(@request, {}).conditional?
     # Empty ETag => false
-    assert !@request.conditional?(:etag=>'')
+    assert !Entity.new(@request, :etag=>'').conditional?
     # Any ETag => true
-    assert @request.conditional?(:etag=>'foo')
-    assert @request.conditional?(:etag=>'bar')
+    assert Entity.new(@request, :etag=>'foo').conditional?
+    assert Entity.new(@request, :etag=>'bar').conditional?
   end
 
   def test_conditional_with_none_match
     # Same ETag => false
     @request.headers['HTTP_IF_NONE_MATCH'] = 'foo'
-    assert !@request.conditional?(:etag=>'foo')
+    assert !Entity.new(@request, :etag=>'foo').conditional?
     @request.headers['HTTP_IF_NONE_MATCH'] = '"bar", "foo"'
-    assert !@request.conditional?(:etag=>'foo')
+    assert !Entity.new(@request, :etag=>'foo').conditional?
     # Different ETag => true
     @request.headers['HTTP_IF_NONE_MATCH'] = 'bar'
-    assert @request.conditional?(:etag=>'foo')
+    assert Entity.new(@request, :etag=>'foo').conditional?
   end
 
   def test_conditional_with_none_match_star
     # Can't decide => true
     @request.headers['HTTP_IF_NONE_MATCH'] = '*'
-    assert @request.conditional?({})
+    assert Entity.new(@request, {}).conditional?
     # Empty ETag => true
-    assert @request.conditional?(:etag=>'')
+    assert Entity.new(@request, :etag=>'').conditional?
     # Any ETag => false
-    assert !@request.conditional?(:etag=>'foo')
-    assert !@request.conditional?(:etag=>'bar')
+    assert !Entity.new(@request, :etag=>'foo').conditional?
+    assert !Entity.new(@request, :etag=>'bar').conditional?
   end
 
   def test_conditional_modified
     @request.headers['HTTP_IF_MODIFIED_SINCE'] = @time.httpdate
     @request.headers['HTTP_IF_NONE_MATCH'] = '"foo"'
     # Same entity, unmodified => false
-    assert !@request.conditional?(:last_modified=>@time, :etag=>'foo')
+    assert !Entity.new(@request, :last_modified=>@time, :etag=>'foo').conditional?
     # Same entity, modified since => true
-    assert @request.conditional?(:last_modified=>@time + 1.second, :etag=>'foo')
+    assert Entity.new(@request, :last_modified=>@time + 1.second, :etag=>'foo').conditional?
     # Different entity, unmodified => true
-    assert @request.conditional?(:last_modified=>@time, :etag=>'bar')
+    assert Entity.new(@request, :last_modified=>@time, :etag=>'bar').conditional?
     # Either one.
-    assert @request.conditional?(:last_modified=>@time + 1.second, :etag=>'bar')
+    assert Entity.new(@request, :last_modified=>@time + 1.second, :etag=>'bar').conditional?
   end
 
   def test_conditional_unmodified
     @request.headers['HTTP_IF_UNMODIFIED_SINCE'] = @time.httpdate
     @request.headers['HTTP_IF_MATCH'] = '"foo"'
     # Same entity, unmodified => true
-    assert @request.conditional?(:last_modified=>@time, :etag=>'foo')
+    assert Entity.new(@request, :last_modified=>@time, :etag=>'foo').conditional?
     # Same entity, modified since => false
-    assert !@request.conditional?(:last_modified=>@time + 1.second, :etag=>'foo')
+    assert !Entity.new(@request, :last_modified=>@time + 1.second, :etag=>'foo').conditional?
     # Different entity, unmodified => true
-    assert !@request.conditional?(:last_modified=>@time, :etag=>'bar')
+    assert !Entity.new(@request, :last_modified=>@time, :etag=>'bar').conditional?
     # Either one.
-    assert !@request.conditional?(:last_modified=>@time + 1.second, :etag=>'bar')
+    assert !Entity.new(@request, :last_modified=>@time + 1.second, :etag=>'bar').conditional?
   end
 
   def test_conditional_with_no_values
     @request.headers['HTTP_IF_MODIFIED_SINCE'] = @time.httpdate
     @request.headers['HTTP_IF_NONE_MATCH'] = '"foo"'
-    assert @request.conditional?({})
+    assert Entity.new(@request, {}).conditional?
     @request.headers.clear
     @request.headers['HTTP_IF_UNMODIFIED_SINCE'] = @time.httpdate
     @request.headers['HTTP_IF_MATCH'] = '"foo"'
-    assert @request.conditional?({})
+    assert Entity.new(@request, {}).conditional?
   end
 
 
@@ -204,7 +207,7 @@ class IfModifiedTest < Test::Unit::TestCase
   end
 
   def test_get_etag_match_against_empty
-    @instance.etag = ''
+    @instance.etag = nil
     @request.headers['HTTP_IF_MATCH'] = '"*"'
     get :show
     assert_response :not_modified
@@ -223,12 +226,6 @@ class IfModifiedTest < Test::Unit::TestCase
     assert_match etag_from(@etag), @response.headers['ETag']
     assert_nil @response.headers['Last-Modified']
     assert @response.body.blank?
-  end
-
-  def test_get_etag_for_empty
-    @instance.etag = ''
-    get :show
-    assert_equal '', @response.headers['ETag']
   end
 
 
@@ -264,14 +261,14 @@ class IfModifiedTest < Test::Unit::TestCase
   end
 
   def test_put_etag_match_against_empty
-    @instance.etag = ''
+    @instance.etag = nil
     @request.headers['HTTP_IF_MATCH'] = '"foo"'
     put :update
     assert_response :precondition_failed
   end
 
   def test_put_etag_match_empty
-    @instance.etag = ''
+    @instance.etag = nil
     @request.headers['HTTP_IF_NONE_MATCH'] = '"*"'
     put :update
     assert_response :ok
@@ -292,65 +289,58 @@ class IfModifiedTest < Test::Unit::TestCase
     assert @response.body.blank?
   end
 
-  def test_put_etag_for_empty
-    @instance.etag = ''
-    put :update
-    assert_equal '', @response.headers['ETag']
-  end
-
 
   # Test ETag/Last-Modified calculation.
 
   def test_last_modified_from_empty
-    assert_equal nil, @controller.send(:last_modified_from, nil)
-    assert_equal nil, @controller.send(:last_modified_from, [])
-    assert_equal nil, @controller.send(:last_modified_from, [nil])
+    assert_equal nil, Entity.last_modified_from([nil])
+    assert_equal nil, Entity.last_modified_from([])
+    assert_equal nil, Entity.last_modified_from([[nil]])
   end
 
   def test_last_modified_from_regular_objects
-    assert_equal nil, @controller.send(:last_modified_from, Object.new)
-    assert_equal nil, @controller.send(:last_modified_from, [Object.new])
-    assert_equal nil, @controller.send(:last_modified_from, [Object.new, Object.new])
+    assert_equal nil, Entity.last_modified_from([Object.new])
+    assert_equal nil, Entity.last_modified_from([[Object.new]])
+    assert_equal nil, Entity.last_modified_from([Object.new, Object.new])
   end
 
   def test_last_modified_from_objects_with_updated_at
-    assert_equal nil, @controller.send(:last_modified_from, Modified.new)
-    assert_equal @time, @controller.send(:last_modified_from, Modified.new(@time))
-    assert_equal @time, @controller.send(:last_modified_from, Modified.new(@time - 1.minute), Modified.new(@time))
+    assert_equal nil, Entity.last_modified_from([Modified.new])
+    assert_equal @time, Entity.last_modified_from([Modified.new(@time)])
+    assert_equal @time, Entity.last_modified_from([Modified.new(@time - 1.minute), Modified.new(@time)])
   end
 
   def test_etag_from_empty
-    assert_equal nil, @controller.send(:etag_from, nil)
-    assert_equal '', @controller.send(:etag_from, [])
-    assert_equal nil, @controller.send(:etag_from, [nil])
+    assert_equal nil, Entity.etag_from(@request, [nil])
+    assert_equal '', Entity.etag_from(@request, [])
+    assert_equal nil, Entity.etag_from(@request, [[nil]])
   end
 
   def test_etag_from_regular_objects
-    assert_equal nil, @controller.send(:etag_from, Object.new)
-    assert_equal nil, @controller.send(:etag_from, [Object.new])
-    assert_equal nil, @controller.send(:etag_from, [Object.new, Object.new])
+    assert_equal nil, Entity.etag_from(@request, [Object.new])
+    assert_equal nil, Entity.etag_from(@request, [[Object.new]])
+    assert_equal nil, Entity.etag_from(@request, [Object.new, Object.new])
   end
 
   def test_etag_from_objects_with_etag
     get :show # sets up request for controller
-    assert_equal nil, @controller.send(:etag_from, Modified.new)
-    assert_equal etag_from(@etag), @controller.send(:etag_from, Modified.new(nil, @etag))
-    assert_equal '', @controller.send(:etag_from, Modified.new(nil, ''))
+    assert_equal '', Entity.etag_from(@request, [Modified.new])
+    assert_equal etag_from(@etag), Entity.etag_from(@request, [Modified.new(nil, @etag)])
   end
 
   def test_etag_from_equivalence
     get :show # sets up request for controller
     foo, bar = Modified.new(nil, 'foo'), Modified.new(nil, 'bar')
-    assert_equal @controller.send(:etag_from, foo), @controller.send(:etag_from, Modified.new(nil, 'foo'))
-    assert_equal @controller.send(:etag_from, bar), @controller.send(:etag_from, Modified.new(nil, 'bar'))
-    assert_not_equal @controller.send(:etag_from, foo), @controller.send(:etag_from, bar)
+    assert_equal Entity.etag_from(@request, [foo]), Entity.etag_from(@request, [Modified.new(nil, 'foo')])
+    assert_equal Entity.etag_from(@request, [bar]), Entity.etag_from(@request, [Modified.new(nil, 'bar')])
+    assert_not_equal Entity.etag_from(@request, [foo]), Entity.etag_from(@request, [bar])
   end
 
   def test_etag_from_for_array
     get :show # sets up request for controller
     foo, bar = Modified.new(nil, 'foo'), Modified.new(nil, 'bar')
-    assert_equal @controller.send(:etag_from, foo, bar), @controller.send(:etag_from, foo, bar)
-    assert_not_equal @controller.send(:etag_from, foo, bar), @controller.send(:etag_from, bar, foo)
+    assert_equal Entity.etag_from(@request, [foo, bar]), Entity.etag_from(@request, [foo, bar])
+    assert_not_equal Entity.etag_from(@request, [foo, bar]), Entity.etag_from(@request, [bar, foo])
   end
   
 end

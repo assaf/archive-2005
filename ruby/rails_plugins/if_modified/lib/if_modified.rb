@@ -1,12 +1,92 @@
 require 'md5'
 
 module ActionController #:nodoc:
+  # Support for conditional GET (caching) and conditional PUT (conflict detection).
+  #
+  # Start by adding filters for your GET and PUT actions, for example:
+  #   if_modified :@item, :only=>:show
+  #   if_unmodified :@item, :only=>:update
+  #
+  # == Conditional GET
   module IfModified
 
     def self.included(mod)
       mod.extend ClassMethods
-      mod.parent::AbstractRequest.send :include, RequestMethods
     end
+
+
+    class Entity #:nodoc:
+    
+      class << self
+
+        # Create new entity representation from request and arguments.
+        def from(request, args)
+          new(request, :last_modified=>last_modified_from(args), :etag=>etag_from(request, args))
+        end
+
+        # Calculates Last-Modified from arguments.  If all the arguments respond to updated_at, returns the
+        # highest (most recent) time.  Otherwise, returns nil (unknown).
+        def last_modified_from(args)
+          times = args.flatten.map { |obj| obj.updated_at if obj.respond_to?(:updated_at) }
+          times.max unless times.any?(&:nil?)
+        end
+
+        # Calculates ETag from arguments.  If all the arguments respond to etag, calculates and returns an
+        # ETag from that combination, otherwise returns nil (unknown).
+        #
+        # The resulting ETag is a hash calculated by combining all the returned etags and the request format.
+        # Order of arguments is important and different orders result in different ETags (intentional).
+        # The request format is use to calculate different ETags for different representations (e.g. HTML page
+        # and AJAX request made to the same URL).
+        #
+        # Returns the special value '' if all the ETags are nil -- used to detect no entity when performing
+        # conditional PUT.
+        def etag_from(request, args)
+          return nil unless args.all? { |obj| obj.respond_to?(:etag) }
+          tags = args.map(&:etag)
+          return '' if tags.all?(&:nil?)
+          tags.unshift request.format.to_s
+          Digest::MD5.hexdigest(tags.join(';'))
+        end
+
+      end
+      
+      def initialize(request, args)
+        @request = request
+        @last_modified, @etag = args.values_at(:last_modified, :etag)
+      end
+
+      # Last-Modified Time.
+      attr_reader :last_modified
+
+      # ETag value.
+      attr_reader :etag
+
+      # Header value for ETag.
+      def etag_header
+        %{"#{@etag}"}
+      end
+
+      # Determines whether or not to perform a conditional request by comparing the
+      # ETag and Last-Modified values (supplied as arguments) with the HTTP conditional
+      # headers (supplied in the request).
+      def conditional?
+        return true unless last_modified || etag # Can't decide.
+        unmodified_since = @request.headers['HTTP_IF_UNMODIFIED_SINCE'] &&
+          Time.httpdate(@request.headers['HTTP_IF_UNMODIFIED_SINCE']) rescue nil
+        return false if unmodified_since && (last_modified.nil? || last_modified > unmodified_since)
+        match = @request.headers['HTTP_IF_MATCH'].to_s.split(/,/).map { |tag| tag.strip[/^("?)(.*)\1$/, 2] }.reject(&:blank?)
+        return false unless match.blank? || (match.include?('*') && !etag.blank?) || match.include?(etag)
+        modified_since = @request.headers['HTTP_IF_MODIFIED_SINCE'] &&
+          Time.httpdate(@request.headers['HTTP_IF_MODIFIED_SINCE']) rescue nil
+        return true if modified_since && last_modified && last_modified > modified_since
+        none_match = @request.headers['HTTP_IF_NONE_MATCH'].to_s.split(/,/).map { |tag| tag.strip[/^("?)(.*)\1$/, 2] }.reject(&:blank?)
+        return true unless etag.nil? || (none_match.include?('*') && !etag.blank?) || none_match.include?(etag)
+        return none_match.blank? && !modified_since
+      end
+
+    end
+
 
     # Use this method to perform a conditional GET. 
     #
@@ -26,18 +106,16 @@ module ActionController #:nodoc:
     #     end
     #   end
     def if_modified(*args)
-      etag, last_modified = etag_from(args), last_modified_from(args)
-      returning request.conditional?(:etag=>etag, :last_modified=>last_modified) do |perform|
+      entity = Entity.from(request, args)
+      returning entity.conditional? do |perform|
         if perform
           yield
-          response.headers['ETag'] ||= etag.blank? ? '' : %{"#{etag}"}
-          response.headers['Last-Modified'] ||= last_modified.httpdate if last_modified
+          etag! entity
         else
-          response.headers['ETag'] ||= etag.blank? ? '' : %{"#{etag}"}
+          response.headers['ETag'] ||= entity.etag_header
           head :not_modified
         end
       end
-      # TODO: Vary: Content-Type, JSON REQUEST
     end
 
     # Use this method to perform a conditional PUT. 
@@ -59,43 +137,24 @@ module ActionController #:nodoc:
     #     end
     #   end
     def if_unmodified(*args)
-      etag, last_modified = etag_from(args), last_modified_from(args)
-      returning request.conditional?(:etag=>etag, :last_modified=>last_modified) do |perform|
+      returning Entity.from(request, args).conditional? do |perform|
         if perform
           yield
-          etag, last_modified = etag_from(args), last_modified_from(args)
-          response.headers['ETag'] ||= etag.blank? ? '' : %{"#{etag}"}
-          response.headers['Last-Modified'] ||= last_modified.httpdate if last_modified
+          etag! Entity.from(request, args)
         else
           head :precondition_failed
         end
       end
     end
 
-  protected
+  private
 
-    # Calculates Last-Modified from arguments.  If all the arguments respond to updated_at, returns the
-    # highest (most recent) time.  Otherwise, returns nil (unknown).
-    def last_modified_from(*args)
-      times = args.flatten.map { |obj| obj.updated_at if obj.respond_to?(:updated_at) }
-      times.max unless times.any?(&:nil?)
-    end
-
-    # Calculates ETag from arguments.  If all the arguments respond to etag, calculates and returns an
-    # ETag from that combination, otherwise returns nil (unknown).
-    #
-    # The resulting ETag is a hash calculated by combining all the returned etags and the request format.
-    # Order of arguments is important and different orders result in different ETags (intentional).
-    # The request format is use to calculate different ETags for different representations (e.g. HTML page
-    # and AJAX request made to the same URL).
-    #
-    # Returns the special value '' if the arguments list is empty or all the etags are ''.
-    def etag_from(*args)
-      tags = args.flatten.map { |obj| obj.etag if obj.respond_to?(:etag) }
-      return nil if tags.any?(&:nil?)
-      return '' if tags.all?(&:empty?)
-      tags.unshift request.format.to_s
-      Digest::MD5.hexdigest(tags.join(';'))
+    def etag!(*args)
+      if response.headers["Status"] =~ /^20[01]/
+        entity = args.size == 1 && Entity === args.first ? args.first : Entity.from(request, args)
+        response.headers['ETag'] ||= entity.etag_header if entity.etag
+        response.headers['Last-Modified'] ||= entity.last_modified.httpdate if entity.last_modified
+      end
     end
 
 
@@ -162,6 +221,8 @@ module ActionController #:nodoc:
         end
       end
 
+    private
+
       def if_modified_extractor(extract) #:nodoc:
         case extract
         when Symbol, String
@@ -176,31 +237,6 @@ module ActionController #:nodoc:
         end 
       end
       private :if_modified_extractor
-
-    end
-
-    module RequestMethods
-
-      # Determines whether or not to perform a conditional request by comparing the
-      # ETag and Last-Modified values (supplied as arguments) with the HTTP conditional
-      # headers (supplied in the request).
-      #
-      # The :last_modified argument provides the last-modified time instance, if known.
-      # The :etag argument provides the calculated etag, if known, using the empty string
-      # to denote 'no entity'.
-      def conditional?(options)
-        last_modified, etag = options.values_at(:last_modified, :etag)
-        return true unless last_modified || etag # Can't decide.
-        unmodified_since = headers['HTTP_IF_UNMODIFIED_SINCE'] && Time.httpdate(headers['HTTP_IF_UNMODIFIED_SINCE']) rescue nil
-        return false if unmodified_since && (last_modified.nil? || last_modified > unmodified_since)
-        match = headers['HTTP_IF_MATCH'].to_s.split(/,/).map { |tag| tag.strip[/^("?)(.*)\1$/, 2] }.reject(&:blank?)
-        return false unless match.blank? || (match.include?('*') && !etag.blank?) || match.include?(etag)
-        modified_since = headers['HTTP_IF_MODIFIED_SINCE'] && Time.httpdate(headers['HTTP_IF_MODIFIED_SINCE']) rescue nil
-        return true if modified_since && last_modified && last_modified > modified_since
-        none_match = headers['HTTP_IF_NONE_MATCH'].to_s.split(/,/).map { |tag| tag.strip[/^("?)(.*)\1$/, 2] }.reject(&:blank?)
-        return true unless etag.nil? || (none_match.include?('*') && !etag.blank?) || none_match.include?(etag)
-        return none_match.blank? && !modified_since
-      end
 
     end
 
