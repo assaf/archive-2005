@@ -1,0 +1,14 @@
+Use this to handle JSON requests.  Adds a MIME handler for requests with the
+content type +application/json+, and maps an incoming request to the proper
+parameter.
+
+All controllers inherit this bahavior using the controller name to determine
+the parameter name.  For example, the ItemsController will store the JSON
+request in the parameter 'item'.
+
+You can also configure this as a filter and specify a specific parameter name,
+for example:
+
+  class FooController < ActionController::Base
+    json_request :bar, :only=>[:update]
+  end
