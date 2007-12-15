@@ -3,8 +3,10 @@
 # Copyright (c) 2007 Assaf Arkin, http://labnotes.org
 # In the public domain.
 
+require 'rubygems'
 require File.dirname(__FILE__) + '/../../../rails/actionpack/test/abstract_unit'
 require File.dirname(__FILE__) + '/../../../rails/actionpack/test/active_record_unit'
+require 'action_controller'
 $:.unshift File.expand_path('../lib', File.dirname(__FILE__))
 require File.dirname(__FILE__) + '/../init'
 

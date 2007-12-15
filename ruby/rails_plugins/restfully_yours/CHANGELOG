@@ -1,3 +1,4 @@
+12/14/2007: if_modified and JSON request moved to their own plugin.
 11/1/2007:  Fixed tag generation for associations (Dan Kubb).
 10/30/2007: Added JSON request parsing.
 10/30/2007: Experimental created and see_other methods.
