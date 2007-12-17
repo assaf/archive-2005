@@ -23,7 +23,11 @@ class ApplicationController < ActionController::Base
   # Reads attributes values from the XML document <attributes>, JSON hash (requires json_request plugin),
   # or query parameters.  Returns a hash using the ever so annoying Attribute.n.Name/Attribute.n.Value.
   def attributes(param = nil)
-    attributes = param || params['attributes'] || request.request_parameters.merge(request.query_parameters)
+    if param
+      attributes = param
+    else
+      attributes = params['attributes'] || request.request_parameters.merge(request.query_parameters)
+    end
     attributes.inject({}) { |hash, (name, value)|
       hash.update("Attribute.#{hash.size >> 1}.Name"=>name, "Attribute.#{hash.size >> 1}.Value"=>value) }
   end
