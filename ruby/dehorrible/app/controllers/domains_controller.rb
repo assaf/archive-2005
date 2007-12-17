@@ -61,6 +61,22 @@ class DomainsController < ApplicationController
     end
   end
 
+
+  # GET to /domains/:domain_id/items/:item_id/
+  #
+  # JSON:  Returns { name: [values]* }
+  # XML:   Returns <attributes><name>values</name></attributes>
+  def append
+    response = getsify('Action'=>'GetAttributes')
+    attributes = response.get_elements('/GetAttributesResponse/GetAttributesResult/Attribute').
+      map { |elem| [elem.get_text('Name').to_s, elem.get_text('Value').to_s ] }.
+      inject({}) { |hash, (name, value)| hash.update(name=>Array(hash[name]) << value) }
+    respond_to do |format|
+      format.json { render :json=>attributes }
+      format.xml  { render :xml=>attributes.to_xml(:root=>'attributes') }
+    end
+  end
+
   # DELETE to /domains/:domain_id
   def destroy
     getsify 'Action'=>'DeleteDomain'
