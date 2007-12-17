@@ -1,5 +1,7 @@
 class AttributesController < ApplicationController
 
+  json_request 'item', :only=>'append'
+
   # GET to /domains/:domain_id/items/:item_id/attributes
   #
   # JSON:  Returns { name: [values]* }

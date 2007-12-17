@@ -1,5 +1,7 @@
 class DomainsController < ApplicationController
 
+  json_request 'item', :only=>'append'
+
   # GET to /domains/?limit=&token=
   #
   # Query parameters:

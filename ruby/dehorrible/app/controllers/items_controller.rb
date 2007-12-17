@@ -1,5 +1,7 @@
 class ItemsController < ApplicationController
 
+  json_request 'attributes'
+
   # GET to /domains/:domain_id/items/:item_id/
   #
   # JSON:  Returns { name: [values]* }
