@@ -9,7 +9,7 @@ ActionController::Routing::Routes.draw do |map|
     end
     domains.connect 'items/:id', :conditions=>{ :method=>:post }, :controller=>'items', :action=>'append'
   end
-  map.connect 'domains/:id', :conditions=>{ :method=>:post }, :controller=>'items', :action=>'append'
+  map.connect 'domains/:id', :conditions=>{ :method=>:post }, :controller=>'domains', :action=>'append'
 
   # The priority is based upon order of creation: first created -> highest priority.
 

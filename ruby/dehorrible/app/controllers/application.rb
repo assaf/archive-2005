@@ -22,8 +22,8 @@ class ApplicationController < ActionController::Base
   # Returns a hash of attributes parsed from the request, useful for making a GETSful request.
   # Reads attributes values from the XML document <attributes>, JSON hash (requires json_request plugin),
   # or query parameters.  Returns a hash using the ever so annoying Attribute.n.Name/Attribute.n.Value.
-  def attributes
-    attributes = params['attributes'] || request.request_parameters.merge(request.query_parameters)
+  def attributes(param = nil)
+    attributes = param || params['attributes'] || request.request_parameters.merge(request.query_parameters)
     attributes.inject({}) { |hash, (name, value)|
       hash.update("Attribute.#{hash.size >> 1}.Name"=>name, "Attribute.#{hash.size >> 1}.Value"=>value) }
   end

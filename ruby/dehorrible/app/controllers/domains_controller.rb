@@ -61,20 +61,14 @@ class DomainsController < ApplicationController
     end
   end
 
-
-  # GET to /domains/:domain_id/items/:item_id/
+  # POST to /domains/:domain_id/
   #
-  # JSON:  Returns { name: [values]* }
-  # XML:   Returns <attributes><name>values</name></attributes>
+  # JSON:  { name: name, attributes: { name: [values]* }
+  # XML:   Returns <item><attributes><name>values</name></attributes>
   def append
-    response = getsify('Action'=>'GetAttributes')
-    attributes = response.get_elements('/GetAttributesResponse/GetAttributesResult/Attribute').
-      map { |elem| [elem.get_text('Name').to_s, elem.get_text('Value').to_s ] }.
-      inject({}) { |hash, (name, value)| hash.update(name=>Array(hash[name]) << value) }
-    respond_to do |format|
-      format.json { render :json=>attributes }
-      format.xml  { render :xml=>attributes.to_xml(:root=>'attributes') }
-    end
+    name = params['item']['name']
+    getsify attributes(params['item']['attributes']), 'Action'=>'PutAttributes', 'ItemName'=>name 
+    render :status=>:created, :location=>domain_item_url(params['id'], name), :nothing=>true
   end
 
   # DELETE to /domains/:domain_id
