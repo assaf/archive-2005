@@ -36,8 +36,8 @@ end
 
 # Create the documentation.
 Rake::RDocTask.new do |rdoc|
-    rdoc.main = "README"
-    rdoc.rdoc_files.include("README", "lib/**/*.rb")
+    rdoc.main = "README.rdoc"
+    rdoc.rdoc_files.include("README.rdoc", "lib/**/*.rb")
     rdoc.title = "Reliable Messaging"
 end
 
@@ -115,7 +115,7 @@ EOF
     spec.email = "assaf@labnotes.org"
     spec.homepage = "http://trac.labnotes.org/cgi-bin/trac.cgi/wiki/Ruby/ReliableMessaging"
 
-    spec.files = FileList["{bin,test,lib,docs}/**/*", "README", "MIT-LICENSE", "Rakefile", "changelog.txt"].to_a
+    spec.files = FileList["{bin,test,lib,docs}/**/*", "README.rdoc", "MIT-LICENSE", "Rakefile", "changelog.txt"].to_a
     spec.require_path = "lib"
     spec.autorequire = "reliable-msg.rb"
     spec.bindir = "bin"
@@ -123,8 +123,8 @@ EOF
     spec.default_executable = "queues"
     spec.requirements << "MySQL for database store, otherwise uses the file system"
     spec.has_rdoc = true
-    spec.rdoc_options << "--main" << "README" << "--title" <<  "Reliable Messaging for Ruby" << "--line-numbers"
-    spec.extra_rdoc_files = ["README"]
+    spec.rdoc_options << "--main" << "README.rdoc" << "--title" <<  "Reliable Messaging for Ruby" << "--line-numbers"
+    spec.extra_rdoc_files = ["README.rdoc"]
     spec.rubyforge_project = "reliable-msg"
     spec.add_dependency(%q<uuid>, [">= 1.0.0"])
 end
